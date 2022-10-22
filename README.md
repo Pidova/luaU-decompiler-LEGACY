@@ -1,5 +1,9 @@
 # luaU-decompiler
 
+# Description
+
+  * This is a luaU decompiler for transpiler::transpiler_config
+  
 # Usage
 
   Code:
@@ -15,7 +19,12 @@
  
  # Help
  
-  * if you find a bug with it or something that can be added let me know in Issues.
+    * if you find a bug with it or something that can be added let me know in Issues.
   
+  # Modifications
   
-  
+    * Some stuff has been changed with luaU to make it easier to decompile and represent in the ast.
+    
+  # Changes
+    
+     * Will somewhat try to keep the decompiler up to date whit the recent ISA changes for luaU.
