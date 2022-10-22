@@ -17,14 +17,14 @@
 
   * Configs for the decompiler are transpiler::transpiler_config
  
- # Help
+# Help
  
-    * if you find a bug with it or something that can be added let me know in Issues.
+  * if you find a bug with it or something that can be added let me know in Issues.
   
-  # Modifications
+# Modifications
   
-    * Some stuff has been changed with luaU to make it easier to decompile and represent in the ast.
+  * Some stuff has been changed with luaU to make it easier to decompile and represent in the ast.
     
-  # Changes
+# Changes
     
-     * Will somewhat try to keep the decompiler up to date whit the recent ISA changes for luaU.
+  * Will somewhat try to keep the decompiler up to date whit the recent ISA changes for luaU.
