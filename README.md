@@ -2,7 +2,7 @@
 
 # Description
 
-  * This is a luaU decompiler for transpiler::transpiler_config
+  * This is a luaU decompiler for https://github.com/Roblox/luau/
   
 # Usage
 
