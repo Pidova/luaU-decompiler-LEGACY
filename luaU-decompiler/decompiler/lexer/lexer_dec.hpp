@@ -1,9 +1,7 @@
 #pragma once
-#include "../../luau-master/VM/include/lua.h"
-#include "../../luau-master/Compiler/include/luacode.h"
-#include "../../luau-master/VM/include/lualib.h"
+#include "../../luau-master/Common/include/Luau/Bytecode.h"
+#include "../../luau-master/VM/src/lobject.h"
 #include "../../luau-master/VM/src/lstate.h"
-#include "../../luau-master/VM/src/lapi.h"
 #include "../../dissassembler/Dissassembler.hpp"
 
 /* 
@@ -12,7 +10,7 @@
 
 */
 
-namespace lexer {
+namespace lexer_dec {
 
 	enum class operand_types : std::uint8_t {
 		reg, /* Normal register not a dest. */
@@ -31,16 +29,18 @@ namespace lexer {
 	};
 
 	enum class inst_type : std::uint8_t {
+		nothing, /* Nop and Break opcodes. */
 		arith, /* Arith opcodes add, sub, and, or, etc. */
+		branch_condition, /* Condition branching opcodes. */
 		branch, /* Branching opcodes. */
 		load, /* Load opcodes. */
 		fastcall, /* Fastcall opcodes. */
 		for_, /* For loop opcodes. */
-		nothing, /* Nop and Break opcodes. */
 		unary, /* Minus, Not, and Lenght. */
 		table_gs, /* Table get/set. */
 		upvalue_gs, /* Table get/set. */
-		expression /* Everything else. */
+		expression, /* Everything else. */
+		call /* Call */
 	};
 
 	struct lexerme {

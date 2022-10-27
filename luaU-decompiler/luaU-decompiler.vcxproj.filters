@@ -159,13 +159,13 @@
     <ClCompile Include="luau-master\Compiler\src\ValueTracking.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\lexer\lexer.cpp">
+    <ClCompile Include="decompiler\lexer\lexer_dec.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="decompiler\decompiler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast.cpp">
+    <ClCompile Include="decompiler\ast\ast_dec.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="decompiler\emitter\emitter.cpp">
@@ -308,19 +308,22 @@
     <ClInclude Include="luau-master\Common\include\Luau\ExperimentalFlags.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="decompiler\lexer\lexer.hpp">
+    <ClInclude Include="decompiler\lexer\lexer_dec.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="decompiler\decompiler.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="decompiler\ast\ast.hpp">
+    <ClInclude Include="decompiler\ast\ast_dec.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="decompiler\emitter\emitter.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="decompiler\transpiler\transpiler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="decompiler\ast\ast_config.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

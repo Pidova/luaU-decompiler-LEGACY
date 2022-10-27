@@ -1,6 +1,6 @@
 #include "../luau-master/VM/src/lstate.h"
 #include "Dissassembler.hpp"
-
+#include <iostream>
 enum set_action : std::uint8_t {
 	instruction, /* Sets all instruction info, op, mnenomic, hint. */
 	operands /* Sets all operands including details about it. */
@@ -14,7 +14,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 		case set_action::instruction: {
 
 			buffer->op = op_table.op;
-
+		
 			switch (op_table.op) {
 
 				case LuauOpcode::LOP_ADD: {
@@ -78,6 +78,18 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 				}
 
 				case LuauOpcode::LOP_DEP_FORGLOOP_NEXT: {
+					buffer->mnenomic = "forgloop_next";
+					buffer->hint = "For loop with next (Depricated).";
+					break;
+				}
+
+				case LuauOpcode::LOP_FORGPREP_INEXT: {
+					buffer->mnenomic = "forgloop_inext";
+					buffer->hint = "For loop with (i)next (Depricated).";
+					break;
+				}
+
+				case LuauOpcode::LOP_FORGPREP_NEXT: {
 					buffer->mnenomic = "forgloop_next";
 					buffer->hint = "For loop with next (Depricated).";
 					break;
@@ -473,6 +485,9 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 					break;
 				}
 
+				default: {
+					throw std::exception("Unkown opcode in dissassembler.");
+				}
 			}
 
 			break;
@@ -524,6 +539,12 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 					case op_table::operands::AUX: {
 						buffer->code += 1u;
 						operand_value = buffer->code[0];
+						break;
+					}
+
+					case op_table::operands::AUX_24: {
+						buffer->code += 1u;
+						operand_value = buffer->code[0] & 0xffffff;
 						break;
 					}
 
@@ -599,6 +620,12 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						break;
 					}
 
+					case op_table::type::jmp: {
+						buffer->data += std::to_string(operand_value) + split;
+						current_operand->jmp = operand_value;
+						break;
+					}
+
 					case op_table::type::reg: {
 						buffer->data += 'r' + std::to_string(operand_value) + split;
 						current_operand->reg = std::uint8_t(operand_value);
@@ -662,7 +689,10 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 							}
 
 							case LUA_TNUMBER: {
-								current_operand->k_value = std::to_string(kv.value.n);
+								if (std::floor(kv.value.n) == kv.value.n)
+									current_operand->k_value = std::to_string(std::intptr_t(kv.value.n));
+								else
+									current_operand->k_value = std::to_string(kv.value.n);
 								break;
 							}
 
@@ -736,6 +766,6 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 
 	/* Calulate lenght. */
 	buffer->len = (std::uint8_t(reinterpret_cast<const std::uintptr_t>(buffer->code) - reinterpret_cast<const std::uintptr_t>(start_pc)) / sizeof(Instruction)) + 1u;
-
+	std::cout << buffer->data << std::endl;
 	return;
 }

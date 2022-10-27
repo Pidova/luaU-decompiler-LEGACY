@@ -1,5 +1,5 @@
 #pragma once
-#include "../ast/ast.hpp"
+#include "../ast/ast_dec.hpp"
 
 /*
 
@@ -27,5 +27,5 @@ namespace transpiler {
 
 	};
 
-	std::string transpile(const std::shared_ptr<ast::ast>& main_ast, const std::shared_ptr<transpiler_config>& config);
+	std::string transpile(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_config>& config);
 }

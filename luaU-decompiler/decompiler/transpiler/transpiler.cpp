@@ -10,7 +10,7 @@ namespace instruction_handler {
 
 			/* Emit inst data to decompiled. */
 			template<LuauOpcode o>
-			void emit_inst(std::string& dest, const std::shared_ptr<ast::registers::reg>& src_1, const std::variant <std::shared_ptr<ast::registers::reg>, std::string> src_2 = nullptr) {
+			void emit_inst(std::string& dest, const std::shared_ptr<ast_dec::registers::reg>& src_1, const std::variant <std::shared_ptr<ast_dec::registers::reg>, std::string> src_2 = nullptr) {
 
 				switch (o) {
 
@@ -25,10 +25,10 @@ namespace instruction_handler {
 				case LuauOpcode::LOP_POW: {
 
 					/* Check too see if register getting passed is a vararg. */
-					if (src_1->tt != ast::registers::type::vararg)
+					if (src_1->tt != ast_dec::registers::type::vararg)
 						throw std::exception("Attempted to emit non-vararg in arith when trying too emit lvalue in ast.");
 
-					const auto str = std::get<std::shared_ptr<ast::registers::reg>>(src_2)->container;
+					const auto str = std::get<std::shared_ptr<ast_dec::registers::reg>>(src_2)->container;
 					emitter::arith(o, true, dest, src_1->container, str);
 
 					break;
@@ -44,7 +44,7 @@ namespace instruction_handler {
 				case LuauOpcode::LOP_POWK: {
 
 					/* Check too see if register getting passed is a vararg. */
-					if (src_1->tt != ast::registers::type::vararg)
+					if (src_1->tt != ast_dec::registers::type::vararg)
 						throw std::exception("Attempted to emit non-vararg in arithk when trying too emit lvalue in ast.");
 
 					const auto str = std::get<std::string>(src_2);
@@ -54,7 +54,7 @@ namespace instruction_handler {
 				}
 
 				case LuauOpcode::LOP_SETGLOBAL: {
-					const auto str = std::get<std::shared_ptr<ast::registers::reg>>(src_2)->container;
+					const auto str = std::get<std::shared_ptr<ast_dec::registers::reg>>(src_2)->container;
 					emitter::vararg_equal(dest, src_1->container, str);
 					break;
 				}
@@ -74,6 +74,6 @@ namespace instruction_handler {
 }
 
 
-std::string transpiler::transpile(const std::shared_ptr<ast::ast>& main_ast, const std::shared_ptr<transpiler_config>& config) {
-
+std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_config>& config) {
+	return "";
 }

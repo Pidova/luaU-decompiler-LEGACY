@@ -71,7 +71,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(MSBuildProjectDirectory)\luau-master\VM\include\;$(MSBuildProjectDirectory)\luau-master\Common\include\;$(MSBuildProjectDirectory)\luau-master\Compiler\include\;$(MSBuildProjectDirectory)\luau-master\AST\include\;$(IncludePath)</IncludePath>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(MSBuildProjectDirectory)\luau-master\VM\include\;$(MSBuildProjectDirectory)\luau-master\Common\include\;$(MSBuildProjectDirectory)\luau-master\Compiler\include\;$(MSBuildProjectDirectory)\luau-master\AST\include\;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -131,12 +131,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="decompiler\ast\ast.cpp" />
+    <ClCompile Include="decompiler\ast\ast_dec.cpp" />
     <ClCompile Include="decompiler\decompiler.cpp" />
     <ClCompile Include="decompiler\emitter\emitter.cpp" />
     <ClCompile Include="decompiler\transpiler\transpiler.cpp" />
     <ClCompile Include="dissassembler\Dissassembler.cpp" />
-    <ClCompile Include="decompiler\lexer\lexer.cpp" />
+    <ClCompile Include="decompiler\lexer\lexer_dec.cpp" />
     <ClCompile Include="luau-master\Ast\src\Ast.cpp" />
     <ClCompile Include="luau-master\Ast\src\Confusables.cpp" />
     <ClCompile Include="luau-master\Ast\src\Lexer.cpp" />
@@ -186,13 +186,14 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="decompiler\ast\ast.hpp" />
+    <ClInclude Include="decompiler\ast\ast_dec.hpp" />
+    <ClInclude Include="decompiler\ast\ast_config.hpp" />
     <ClInclude Include="decompiler\decompiler.hpp" />
     <ClInclude Include="decompiler\emitter\emitter.hpp" />
     <ClInclude Include="decompiler\transpiler\transpiler.hpp" />
     <ClInclude Include="dissassembler\Dissassembler.hpp" />
     <ClInclude Include="dissassembler\Op_table.hpp" />
-    <ClInclude Include="decompiler\lexer\lexer.hpp" />
+    <ClInclude Include="decompiler\lexer\lexer_dec.hpp" />
     <ClInclude Include="luau-master\Ast\include\Luau\Ast.h" />
     <ClInclude Include="luau-master\Ast\include\Luau\Confusables.h" />
     <ClInclude Include="luau-master\Ast\include\Luau\DenseHash.h" />

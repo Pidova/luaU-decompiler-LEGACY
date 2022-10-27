@@ -1,5 +1,5 @@
 #pragma once
-#include "../lexer/lexer.hpp"
+#include "../lexer/lexer_dec.hpp"
 
 /*
 
