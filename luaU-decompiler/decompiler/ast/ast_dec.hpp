@@ -301,10 +301,11 @@ namespace ast_dec {
 
 			return retn;
 		}
-
+		
 		/* Visits node with previous node with given register as dest. */
 		std::shared_ptr<ast_dec::node> visit_previous_dest_register(const std::uintptr_t on_address, const std::uint16_t target_reg) {
 
+			std::shared_ptr<ast_dec::node> retn = nullptr;
 			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
 
 			do {
@@ -315,8 +316,15 @@ namespace ast_dec {
 				for (const auto& i : current_block->nodes) {
 
 					/* yeah */
-					if (i->address < on_address && i->lex->operands.size() && i->lex->operands.front() == lexer_dec::operand_types::dest && i->lex->dissassembly->operands.front()->reg == target_reg)
-						return i;
+					if (i->address < on_address && i->lex->operands.size() && i->lex->operands.front() == lexer_dec::operand_types::dest && i->lex->dissassembly->operands.front()->reg == target_reg) {
+						
+						if (retn == nullptr) /* First */
+							retn = i;
+						else if (retn->address < i->address /* Nearest */)
+							retn = i;
+
+					}
+
 				}
 
 				/* Add nested blocks. */
@@ -327,8 +335,11 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			/* No return */
-			throw std::exception("Couldn't find previous dest based on register.");
+			/* Node is null. */
+			if (retn == nullptr)
+				throw std::exception("Couldn't find previous dest based on register.");
+
+			return retn;
 		}
 
 	};
