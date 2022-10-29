@@ -126,9 +126,19 @@ namespace ast_dec {
 			}
 			else 
 				this->expr.emplace_back(std::make_pair(type, count));
-			
-			
+				
 			return;
+		}
+
+		template <lexer_dec::operand_types type>
+		bool has_expr() {
+			return std::find(this->lex->operands.begin(), this->lex->operands.end(), type) != this->lex->operands.end();
+		}
+
+		/* Gets first. */
+		template <lexer_dec::operand_types type>
+		std::shared_ptr<LuaU_dissassembler::operand> operand_expr() {
+			return this->lex->dissassembly->operands[std::find(this->lex->operands.begin(), this->lex->operands.end(), type) - this->lex->operands.begin()];
 		}
 
 	};
@@ -303,7 +313,7 @@ namespace ast_dec {
 		}
 		
 		/* Visits node with previous node with given register as dest. */
-		std::shared_ptr<ast_dec::node> visit_previous_dest_register(const std::uintptr_t on_address, const std::uint16_t target_reg) {
+		std::shared_ptr<node> visit_previous_dest_register(const std::uintptr_t on_address, const std::uint16_t target_reg) {
 
 			std::shared_ptr<ast_dec::node> retn = nullptr;
 			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
@@ -340,6 +350,75 @@ namespace ast_dec {
 				throw std::exception("Couldn't find previous dest based on register.");
 
 			return retn;
+		}
+
+		/* Visits rest of nodes for all blocks. (Ignores current) */
+	    std::vector<std::shared_ptr<node>> visit_rest(const std::uintptr_t on_address) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					if (i->address >= on_address)
+						retn.emplace_back(i);
+
+				}
+
+				/* Add nested blocks. */
+				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+			} while (scopes.size());
+
+			if (!retn.size ())
+				throw std::exception("Returning no data for visit_addr.");
+
+			return retn;
+		}
+
+		/* Visits relative node to op being target and args being addatives till op hits = dec and args = inc(singular) and its 0.  */
+		template<LuauOpcode op>
+		std::shared_ptr<node> visit_relative_inst(const std::vector<LuauOpcode> rel) {
+
+			auto count = 0u;
+			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					/* Inc for relative. */
+					if (std::find(rel.begin(), rel, i->lex->dissassembly->op) != rel.end())
+						++count;
+					
+					/* If found op dec if count isnt 0. If it is 0 then return node. */
+					if (i->lex->dissassembly->op == op)
+						if (!count)
+							return i;
+						else
+							--count;
+				}
+
+				/* Add nested blocks. */
+				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+			} while (scopes.size());
+
+			throw std::exception("Returning no data for visit_relative_inst.");
 		}
 
 	};

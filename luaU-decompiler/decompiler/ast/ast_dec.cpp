@@ -39,7 +39,7 @@ namespace ast_funcs {
 
 	namespace loops {
 
-		void set__for_routines(std::shared_ptr<ast_dec::ast>& ast) {
+		void set_for_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
 			const auto forgloops = std::get<std::vector<std::shared_ptr<ast_dec::node>>> (ast->main_block->visit_inst<LuauOpcode::LOP_FORGLOOP>(true));
 			const auto fornloops = std::get<std::vector<std::shared_ptr<ast_dec::node>>> (ast->main_block->visit_inst<LuauOpcode::LOP_FORNLOOP>(true));
@@ -57,6 +57,7 @@ namespace ast_funcs {
 					jump_node->add_expr<ast_dec::expr_type::for_start>(1u);
 
 				forloop->add_expr<ast_dec::expr_type::for_end>(1u);
+
 			}
 
 			/* Fornloops. */
@@ -94,8 +95,110 @@ namespace ast_funcs {
 				if (jmp_back->lex->dissassembly->operands[std::find(jmp_back->lex->operands.begin(), jmp_back->lex->operands.end(), lexer_dec::operand_types::memaddr) - jmp_back->lex->operands.begin()]->jmp < 0) /* See if mem address of jump is negative (We need to get idx of memaddr operand). */
 					jmp_back->add_expr<ast_dec::expr_type::until_>(1u); /* Until end. */
 
+			return;
 		}
 		
+	}
+
+	namespace tables {
+
+		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
+
+			auto table_add_info = [&](const std::shared_ptr<ast_dec::node> node, auto size, auto predicted_size) -> void {
+
+				if (node->lex->dissassembly->op == LuauOpcode::LOP_NEWTABLE) {
+
+					auto x = node->lex->dissassembly->operands[1]->table_size;
+					size += x;
+
+					--x;
+					x = x | (x >> 1);
+					x = x | (x >> 2);
+					x = x | (x >> 4);
+					x = x | (x >> 8);
+					x = x | (x >> 16);
+					predicted_size += x - (x >> 1);
+
+				}
+				else {
+
+					size += std::stoi(node->lex->dissassembly->operands[1]->k_value.c_str());
+
+				}
+
+				return;
+			};
+
+		    auto tables = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_NEWTABLE>(true));
+			const auto duptables = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_DUPTABLE>(true));		
+			tables.insert(tables.end(), duptables.begin(), duptables.end());
+
+			for (const auto& table : tables) {
+
+				std::uintptr_t table_size = 0u; 
+				std::uintptr_t predicted_size = 0u;
+
+				table->add_expr<ast_dec::expr_type::table_start>(1u);
+
+				if (table->lex->dissassembly->op != LuauOpcode::LOP_NEWTABLE || table->lex->dissassembly->operands[1]->table_size) {
+					/* Has table members. */
+
+					/* Set size. */
+					auto set_size = [&](const std::shared_ptr<ast_dec::node>& node) mutable -> void {
+
+						if (node->lex->dissassembly->op == LuauOpcode::LOP_NEWTABLE) {
+
+							auto x = node->lex->dissassembly->operands[1]->table_size;
+							table_size += x;
+
+							--x;
+							x = x | (x >> 1);
+							x = x | (x >> 2);
+							x = x | (x >> 4);
+							x = x | (x >> 8);
+							x = x | (x >> 16);
+							predicted_size += x - (x >> 1);
+
+						}
+						else {
+
+							table_size += std::stoi(node->lex->dissassembly->operands[1]->k_value.c_str());
+
+						}
+
+						return;
+					};
+					set_size(table);
+
+					const auto nodes = ast->main_block->visit_rest(table->address);
+
+					auto reg = 0u; /* Previous register dest. */
+
+					for (const auto& node : nodes) {
+
+						/* bruh */
+						if (node->lex->dissassembly->op == LuauOpcode::LOP_SETLIST)
+							table_size -= node->lex->dissassembly->operands[2]->val;
+			
+
+						/* Set previous dest register. */
+						if (node->has_expr<lexer_dec::operand_types::dest>())
+							reg = node->operand_expr<lexer_dec::operand_types::dest>()->reg;
+						
+					}
+
+				}
+				else {
+					/* No table members. */
+					table->add_expr<ast_dec::expr_type::table_start>(1u);
+					table->add_expr<ast_dec::expr_type::table_end>(1u);
+				}
+
+			}
+
+			return;
+		}
+
 	}
 
 }

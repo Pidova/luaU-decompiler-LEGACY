@@ -37,7 +37,8 @@ namespace lexer_dec {
 		fastcall, /* Fastcall opcodes. */
 		for_, /* For loop opcodes. */
 		unary, /* Minus, Not, and Lenght. */
-		table_gs, /* Table get/set. */
+		table_get, /* Table get. */
+		table_set, /* Table set. */
 		upvalue_gs, /* Table get/set. */
 		expression, /* Everything else. */
 		call /* Call */

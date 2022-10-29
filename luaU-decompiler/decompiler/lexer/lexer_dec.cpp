@@ -19,7 +19,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		/* Call and return. */
 		case LuauOpcode::LOP_CALL: {
 			retn->type = lexer_dec::inst_type::call;
-			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::integer, lexer_dec::operand_types::integer }; /* Operands are dest, int, int */
+			retn->operands = { (retn->dissassembly->operands[2]->val ? lexer_dec::operand_types::dest : lexer_dec::operand_types::reg) /* Has return so its dest else its reg. */ , lexer_dec::operand_types::integer, lexer_dec::operand_types::integer}; /* Operands are dest, int, int */
 			break;
 		}
 		case LuauOpcode::LOP_RETURN: {
@@ -147,36 +147,36 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 
 		/* Table */
 		case LuauOpcode::LOP_GETTABLE: {
-			retn->type = lexer_dec::inst_type::table_gs;
+			retn->type = lexer_dec::inst_type::table_get;
 			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source,  lexer_dec::operand_types::table_idx };
 			break;
 		}
 		case LuauOpcode::LOP_SETTABLE: {
-			retn->type = lexer_dec::inst_type::table_gs;
+			retn->type = lexer_dec::inst_type::table_set;
 			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::reg,  lexer_dec::operand_types::table_idx };
 			break;
 		}
 									 
 		/* TableK */
 		case LuauOpcode::LOP_GETTABLEKS: {
-			retn->type = lexer_dec::inst_type::table_gs;
+			retn->type = lexer_dec::inst_type::table_get;
 			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source, lexer_dec::operand_types::integer,  lexer_dec::operand_types::table_idx };
 			break;
 		}
 		case LuauOpcode::LOP_SETTABLEKS: {
-			retn->type = lexer_dec::inst_type::table_gs;
+			retn->type = lexer_dec::inst_type::table_set;
 			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::reg, lexer_dec::operand_types::integer,  lexer_dec::operand_types::table_idx };
 		    break;
 		}
 		
 		/* TablenN */
 		case LuauOpcode::LOP_GETTABLEN: {
-			retn->type = lexer_dec::inst_type::table_gs;
+			retn->type = lexer_dec::inst_type::table_get;
 			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source, lexer_dec::operand_types::table_idx };
 			break;
 		}
 		case LuauOpcode::LOP_SETTABLEN: {
-			retn->type = lexer_dec::inst_type::table_gs;
+			retn->type = lexer_dec::inst_type::table_set;
 			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::reg, lexer_dec::operand_types::table_idx };
 			break;
 		}

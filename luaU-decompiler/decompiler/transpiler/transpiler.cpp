@@ -14,7 +14,7 @@ namespace instruction_handler {
 
 				switch (o) {
 
-					/* Arith */
+				/* Arith */
 				case LuauOpcode::LOP_AND:
 				case LuauOpcode::LOP_OR:
 				case LuauOpcode::LOP_ADD:
@@ -71,6 +71,7 @@ namespace instruction_handler {
 
 	}
 
+	
 }
 
 
