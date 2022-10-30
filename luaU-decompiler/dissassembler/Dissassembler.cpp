@@ -562,18 +562,33 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						
 						const auto on = buffer->code[0];
 						const auto tt = decode_A(on);
-						const auto v = decode_B(on);
 
 						current_operand->capture_ref = tt;
-						current_operand->capture_idx = v;
 
 						/* Upvalue. */
 						if (tt == 2u) 
-							buffer->data += std::to_string (tt) + ", upvalue_"+ std::to_string (v);
+							buffer->data += std::to_string (tt);
 						else
-							buffer->data += std::to_string(tt) + ", r" + std::to_string(v);
+							buffer->data += std::to_string(tt)
 										
-						++i;
+						break;
+					}
+
+					case op_table::type::capture_ref: {
+
+						const auto on = buffer->code[0];
+						const auto tt = decode_A(on);
+						const auto v = decode_B(on);
+
+
+						current_operand->capture_reg = v;
+
+						/* Upvalue. */
+						if (tt == 2u)
+							buffer->data += "upvalue_" + std::to_string(v);
+						else				
+							buffer->data += "r" + std::to_string(v);
+
 						break;
 					}
 

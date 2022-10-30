@@ -182,7 +182,7 @@ namespace ast_funcs {
 			
 
 						/* Set previous dest register. */
-						if (node->has_expr<lexer_dec::operand_types::dest>())
+						if (node->has_operand_expr<lexer_dec::operand_types::dest>())
 							reg = node->operand_expr<lexer_dec::operand_types::dest>()->reg;
 						
 					}
@@ -192,6 +192,67 @@ namespace ast_funcs {
 					/* No table members. */
 					table->add_expr<ast_dec::expr_type::table_start>(1u);
 					table->add_expr<ast_dec::expr_type::table_end>(1u);
+				}
+
+			}
+
+			return;
+		}
+
+	}
+
+	namespace locvars {
+
+		/* Sets locvar by each register dest +1 with certain specifications. */
+		void set_lv(std::shared_ptr<ast_dec::ast>& ast, const std::uint16_t start_reg) {
+
+			std::vector<std::uint16_t> registers = { start_reg }; /* Registers for scope. */
+			auto target = start_reg; /* Target register. */
+			auto routine = 0u; /* Inside concat, call, table routine, inc for start, dec for end. */
+
+			for (const auto& node : ast->main_block->visit_all()) {
+
+
+				/* Turns node into variable. */
+				auto node_var = [&](const std::shared_ptr<LuaU_dissassembler::operand>& operand) -> void {
+
+					/* Not set yet. */
+					if (operand->reg == target) {
+						node->dest_loc.is_dest_loc = true;
+						node->dest_loc.name = std::to_string(target);
+						++target;
+					}
+
+					return;
+				};
+
+
+				/* End of scope. */
+				for (auto i = 0u; i < node->count_expr <ast_dec::expr_type::end_>(); ++i)
+					registers.pop_back();
+
+				/* Log reg scope start. */
+				if (node->scope_start()) {
+					target = registers.back();
+					registers.emplace_back(target);
+				}
+
+
+				/* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
+				routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>();
+				routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>();
+
+
+				/* Not inside routine and dest. */
+				if (!routine && node->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+					const auto dest = node->operand_expr<lexer_dec::operand_types::dest>();
+
+					/* Capture with source garunteeds locvar so check there. */
+					for (const auto& capture : std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CAPTURE>(true)))
+						if (capture->has_operand_expr<lexer_dec::operand_types::source>() && capture->operand_expr<lexer_dec::operand_types::source>()->capture_reg == target)
+							node_var(dest);
+
 				}
 
 			}

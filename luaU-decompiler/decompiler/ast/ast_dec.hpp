@@ -106,7 +106,7 @@ namespace ast_dec {
 		/* Convert destination to local? */
 		struct dest_loc {
 			bool is_dest_loc = false; /* Turns dest to local. */
-			std::string name = "";
+			std::string name = ""; /* Locvar name (Suffix) */
 		} dest_loc;
 
 		/* Extra information for branch. */
@@ -115,7 +115,8 @@ namespace ast_dec {
 		} branch_extra;
 
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */
-
+		
+		/* Node functions. */
 		template <expr_type type>
 		void add_expr(const std::size_t count) {
 
@@ -131,14 +132,29 @@ namespace ast_dec {
 		}
 
 		template <lexer_dec::operand_types type>
-		bool has_expr() {
+		bool has_operand_expr() {
 			return std::find(this->lex->operands.begin(), this->lex->operands.end(), type) != this->lex->operands.end();
+		}
+
+		/* Counts expr count total. */
+		template <expr_type type>
+		std::uintptr_t count_expr() {
+			std::uintptr_t count = 0u;
+			for (const auto& i : this->expr)
+				if (i.first == type)
+					count += i.second;
+			return count;
 		}
 
 		/* Gets first. */
 		template <lexer_dec::operand_types type>
 		std::shared_ptr<LuaU_dissassembler::operand> operand_expr() {
 			return this->lex->dissassembly->operands[std::find(this->lex->operands.begin(), this->lex->operands.end(), type) - this->lex->operands.begin()];
+		}
+
+		/* See if opcode starts a scope. */
+		bool scope_start() {
+			return (this->lex->type == lexer_dec::inst_type::for_ || this->lex->type == lexer_dec::inst_type::branch_condition || this->lex->type == lexer_dec::inst_type::branch);
 		}
 
 	};
@@ -421,6 +437,32 @@ namespace ast_dec {
 			throw std::exception("Returning no data for visit_relative_inst.");
 		}
 
+		/* Visits all blocks in ast.  */
+		std::vector <std::shared_ptr<node>> visit_all() {
+
+			std::vector <std::shared_ptr<node>> retn;
+			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				retn.insert(retn.end(), current_block->nodes.begin(), current_block->nodes.end());
+
+				/* Add nested blocks. */
+				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+			} while (scopes.size());
+
+			if (!retn.size ())
+				throw std::exception("Returning no data for visit_all.");
+
+			return retn;
+		}
+
 	};
 
 	struct ast {
@@ -429,7 +471,7 @@ namespace ast_dec {
 		std::unordered_map<std::uintptr_t, std::shared_ptr<LuaU_dissassembler::dissassembly>> dissassembly; /* Dissassembly of proto (Useful for some stuff). { PC, dissassembly } ex. dissassembly of pc=15 dissassembly[15]. */
 
 		closure_type closure_type = closure_type::none;  /* Closure type. */
-		std::string closure_name = ""; /* Closure name. */
+		std::string closure_name = ""; /* Closure name. (Suffix) */
 
 		std::vector<std::int16_t> arg_regs; /* Register for arguments to be placed in. *-1 means: ... */
 		std::shared_ptr <block> main_block; /* Main block. */

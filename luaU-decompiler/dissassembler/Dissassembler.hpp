@@ -28,7 +28,7 @@ namespace LuaU_dissassembler {
 			std::uintptr_t table_size;
 			std::uint8_t fastcall_idx;
 			std::uint8_t capture_ref;
-			std::uint8_t capture_idx;
+			std::uint8_t capture_reg;
 			std::uintptr_t import_idx;
 		};
 
