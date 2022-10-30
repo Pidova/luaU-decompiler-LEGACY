@@ -276,7 +276,7 @@ namespace ast_dec {
 		}
 
 
-		/* Visit node with address. */
+		/* Visit node with expression. */
 		template<expr_type type>
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_expr(const bool all) {
 
@@ -308,6 +308,42 @@ namespace ast_dec {
 
 			if (!retn.size ())
 				throw std::exception("Returning no data for visit_expr.");
+
+			return retn;
+		}
+
+		/* Visit next node with expression. (Ignores current address) */
+		template<expr_type type>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_expr(const std::uintptr_t address, const bool all) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					if (i->address > address && i->has_expr(type))
+						if (all)
+							retn.emplace_back(i);
+						else
+							return i;
+
+				}
+
+				/* Add nested blocks. */
+				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+			} while (scopes.size());
+
+			if (!retn.size())
+				throw std::exception("Returning no data for visit_next_expr.");
 
 			return retn;
 		}

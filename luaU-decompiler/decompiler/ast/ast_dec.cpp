@@ -263,9 +263,8 @@ namespace ast_funcs {
 						continue;
 
 
-
 					/* Check concat and call routines if the dest is used as a dest in them no locvar. */
-					const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_expr<ast_dec::expr_type::call_routine_start>(true));
+					const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr<ast_dec::expr_type::call_routine_start>(node->address, true));
 					for (const auto& call : calls) {
 						
 						const auto node_end = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::call_routine_end>(call->address, { ast_dec::expr_type::call_routine_start });
@@ -280,7 +279,7 @@ namespace ast_funcs {
 						continue;
 					
 					/* Concat */
-					const auto concats = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_expr<ast_dec::expr_type::concat_routine_start>(true));
+					const auto concats = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr<ast_dec::expr_type::concat_routine_start>(node->address, true));
 					for (const auto& concat : concats) {
 
 						const auto node_end = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::call_routine_start>(concat->address, { ast_dec::expr_type::concat_routine_start });
