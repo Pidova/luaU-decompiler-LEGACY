@@ -566,10 +566,10 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						current_operand->capture_ref = tt;
 
 						/* Upvalue. */
-						if (tt == 2u) 
-							buffer->data += std::to_string (tt);
+						if (tt == 2u)
+							buffer->data += std::to_string(tt);
 						else
-							buffer->data += std::to_string(tt)
+							buffer->data += std::to_string(tt);
 										
 						break;
 					}

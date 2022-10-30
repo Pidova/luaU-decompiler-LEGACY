@@ -208,7 +208,7 @@ namespace ast_funcs {
 
 			std::vector<std::uint16_t> registers = { start_reg }; /* Registers for scope. */
 			auto target = start_reg; /* Target register. */
-			auto routine = 0u; /* Inside concat, call, table routine, inc for start, dec for end. */
+			std::uintptr_t routine = 0u; /* Inside concat, call, table routine, inc for start, dec for end. */
 
 			for (const auto& node : ast->main_block->visit_all()) {
 
@@ -246,12 +246,55 @@ namespace ast_funcs {
 				/* Not inside routine and dest. */
 				if (!routine && node->has_operand_expr<lexer_dec::operand_types::dest>()) {
 
+					auto bad = false; /* Failed any checks. (Can also be used if node is alr set. */
 					const auto dest = node->operand_expr<lexer_dec::operand_types::dest>();
 
+
+
 					/* Capture with source garunteeds locvar so check there. */
-					for (const auto& capture : std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CAPTURE>(true)))
-						if (capture->has_operand_expr<lexer_dec::operand_types::source>() && capture->operand_expr<lexer_dec::operand_types::source>()->capture_reg == target)
+					const auto captures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CAPTURE>(true));
+					for (const auto& capture : captures)
+						if (capture->has_operand_expr<lexer_dec::operand_types::source>() && capture->operand_expr<lexer_dec::operand_types::source>()->capture_reg == target) {
 							node_var(dest);
+							bad = true;
+							break;
+						}
+					if (bad)
+						continue;
+
+
+
+					/* Check concat and call routines if the dest is used as a dest in them no locvar. */
+					const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_expr<ast_dec::expr_type::call_routine_start>(true));
+					for (const auto& call : calls) {
+						
+						const auto node_end = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::call_routine_end>(call->address, { ast_dec::expr_type::call_routine_start });
+						
+						/* Target dest reg used in call routine dest. */
+						for (const auto& call_node : ast->main_block->visit_range(call->address, node_end->address))
+							if (call_node->has_operand_expr<lexer_dec::operand_types::dest>() && call_node->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
+								bad = true;
+						
+					}
+					if (bad)
+						continue;
+					
+					/* Concat */
+					const auto concats = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_expr<ast_dec::expr_type::concat_routine_start>(true));
+					for (const auto& concat : concats) {
+
+						const auto node_end = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::call_routine_start>(concat->address, { ast_dec::expr_type::concat_routine_start });
+
+						/* Target dest reg used in call routine dest. */
+						for (const auto& concat_node : ast->main_block->visit_range(concat->address, node_end->address))
+							if (concat_node->has_operand_expr<lexer_dec::operand_types::dest>() && concat_node->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
+								bad = true;
+
+					}
+					if (bad)
+						continue;
+
+
 
 				}
 
