@@ -1,5 +1,5 @@
 # luaU-decompiler
-# Rn its supper unfinished but the old one i made is getting ported over to this
+# Rn its supper unfinished but the old one i made is getting ported over to this feel free to contribute
 # Description
 
   * This is a luaU decompiler for https://github.com/Roblox/luau/
