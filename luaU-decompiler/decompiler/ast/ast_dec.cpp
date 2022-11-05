@@ -182,8 +182,8 @@ namespace ast_funcs {
 			
 
 						/* Set previous dest register. */
-						if (node->has_operand_expr<lexer_dec::operand_types::dest>())
-							reg = node->operand_expr<lexer_dec::operand_types::dest>()->reg;
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
+							reg = node->lex->operand_expr<lexer_dec::operand_types::dest>()->reg;
 						
 					}
 
@@ -232,7 +232,7 @@ namespace ast_funcs {
 					registers.pop_back();
 
 				/* Log reg scope start. */
-				if (node->scope_start()) {
+				if (node->lex->scope_start()) {
 					target = registers.back();
 					registers.emplace_back(target);
 				}
@@ -244,24 +244,24 @@ namespace ast_funcs {
 
 
 				/* Not inside routine and dest. */
-				if (!routine && node->has_operand_expr<lexer_dec::operand_types::dest>()) {
+				if (!routine && node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
 
 					auto bad = false; /* Failed any checks. (Can also be used if node is alr set. */
-					const auto dest = node->operand_expr<lexer_dec::operand_types::dest>();
+					const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>();
 
 
 
 					/* Capture with source garunteeds locvar so check there. */
 					const auto captures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CAPTURE>(true));
 					for (const auto& capture : captures)
-						if (capture->has_operand_expr<lexer_dec::operand_types::source>() && capture->operand_expr<lexer_dec::operand_types::source>()->capture_reg == target) {
+						if (capture->lex->has_operand_expr<lexer_dec::operand_types::source>() && capture->lex->operand_expr<lexer_dec::operand_types::source>()->capture_reg == target) {
 							node_var(dest);
 							bad = true;
 							break;
 						}
 					if (bad)
 						continue;
-
+					 
 
 					/* Check concat and call routines if the dest is used as a dest in them no locvar. */
 					const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr<ast_dec::expr_type::call_routine_start>(node->address, true));
@@ -271,7 +271,7 @@ namespace ast_funcs {
 						
 						/* Target dest reg used in call routine dest. */
 						for (const auto& call_node : ast->main_block->visit_range(call->address, node_end->address))
-							if (call_node->has_operand_expr<lexer_dec::operand_types::dest>() && call_node->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
+							if (call_node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && call_node->lex->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
 								bad = true;
 						
 					}
@@ -286,7 +286,7 @@ namespace ast_funcs {
 
 						/* Target dest reg used in call routine dest. */
 						for (const auto& concat_node : ast->main_block->visit_range(concat->address, node_end->address))
-							if (concat_node->has_operand_expr<lexer_dec::operand_types::dest>() && concat_node->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
+							if (concat_node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && concat_node->lex->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
 								bad = true;
 
 					}
@@ -304,13 +304,18 @@ namespace ast_funcs {
 
 	}
 
+	void init_ast(std::shared_ptr<ast_dec::ast>& current_ast) {
+
+		return;
+	}
+
 }
 
 
 namespace blocks {
 
-	/* Set singular block and */
-	std::pair <std::vector<std::shared_ptr<ast_dec::node>>, std::uintptr_t /* Start next pc. */> init_current_block(std::shared_ptr<ast_dec::ast>& current_ast, std::uintptr_t pc, std::uint16_t available_locvar_reg, std::vector<std::uintptr_t>& branch_ends) {
+	/* Set singular block *Jumpbacks act as end. */
+	std::pair <std::vector<std::shared_ptr<ast_dec::node>>, std::uintptr_t /* Start next pc. */> init_current_block(std::shared_ptr<ast_dec::ast>& current_ast, std::uintptr_t pc, std::vector<std::uintptr_t>& branch_ends) {
 	
 		std::vector<std::shared_ptr<ast_dec::node>> retn;
 
@@ -347,8 +352,40 @@ namespace blocks {
 	/* Set blocks for current ast. */
 	void set_blocks(std::shared_ptr<ast_dec::ast>& current_ast) {
 
+		std::vector<std::uintptr_t> branch_ends;
+
+		/* Set each end as every branch taken pc. */
+		for (auto& dism : current_ast->dissassembly) {
+
+			const auto temp_lex = lexer_dec::lexer(dism.second);
+
+			/* Don't log if jumpback. */
+			if (temp_lex->dissassembly->op == LuauOpcode::LOP_JUMPBACK)
+				continue;
+
+			if (temp_lex->type == lexer_dec::inst_type::branch || temp_lex->type == lexer_dec::inst_type::branch_condition) {
+
+				/* Jump with no memaddr operand idk how this has happened. */
+				if (!temp_lex->has_operand_expr<lexer_dec::operand_types::memaddr>())
+					throw std::exception("Jump with no memaddr operand in lexer at set_blocks.");
+
+				const auto jump = dism.first + temp_lex->operand_expr<lexer_dec::operand_types::memaddr>()->jmp;
+
+				/* Jump, jumps forward in memory so log it. */
+				if (jump > dism.first)
+					branch_ends.emplace_back(jump);
+				
+			}
+		
+		}
+
 		/* Set main block. */
 		current_ast->main_block = std::make_shared<ast_dec::block>();
+
+		const auto block_init = init_current_block(current_ast, 0u, branch_ends);
+		current_ast->main_block->nodes = block_init.first;
+
+		return;
 	}
 }
 
@@ -386,8 +423,7 @@ namespace proto {
 				case LuauOpcode::LOP_DUPCLOSURE: {
 
 					/* Get proto from dupclosure kvalue. */
-					const auto proto = gco2cl(current_proto->p->k[i->lex->dissassembly->operands[1]->k_idx].value.gc)->l.p;
-					if (current_proto->p->p[child_proto_id] == proto)
+					if (current_proto->p->p[child_proto_id] == gco2cl(current_proto->p->k[i->lex->dissassembly->operands[1]->k_idx].value.gc)->l.p)
 						closure_node = i; /* Set node. */
 
 					break;

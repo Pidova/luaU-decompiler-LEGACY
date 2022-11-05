@@ -131,11 +131,6 @@ namespace ast_dec {
 			return;
 		}
 
-		template <lexer_dec::operand_types type>
-		bool has_operand_expr() {
-			return std::find(this->lex->operands.begin(), this->lex->operands.end(), type) != this->lex->operands.end();
-		}
-
 		bool has_expr(expr_type type) {
 			for (const auto& i : this->expr)
 				if (i.first == type)
@@ -153,22 +148,12 @@ namespace ast_dec {
 			return count;
 		}
 
-		/* Gets first. */
-		template <lexer_dec::operand_types type>
-		std::shared_ptr<LuaU_dissassembler::operand> operand_expr() {
-			return this->lex->dissassembly->operands[std::find(this->lex->operands.begin(), this->lex->operands.end(), type) - this->lex->operands.begin()];
-		}
-
-		/* See if opcode starts a scope. */
-		bool scope_start() {
-			return (this->lex->type == lexer_dec::inst_type::for_ || this->lex->type == lexer_dec::inst_type::branch_condition || this->lex->type == lexer_dec::inst_type::branch);
-		}
-
 	};
 	
 	struct block {
+
 		std::vector<std::shared_ptr<node>> nodes; /* Nodes in block. */
-		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls don't count), 0 no jumps.  */
+		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks(serves as end) don't count), 0 no jumps.  */
 
 
 		/* All visits may be unorganized by address you may need to sort if needed. */
@@ -640,7 +625,7 @@ namespace ast_dec {
 			return retn;
 		}
 
-		/* Visits all nodes between addresses (Gets current) */
+		/* Visits all nodes between addresses (Ignores start, end) */
 		std::vector<std::shared_ptr<node>> visit_range(const std::uintptr_t start, const std::uintptr_t end) {
 
 			std::vector<std::shared_ptr<node>> retn;
@@ -654,7 +639,7 @@ namespace ast_dec {
 				for (const auto& i : current_block->nodes) {
 
 					/* Between addresses. */
-					if (i->address >= start && i->address <= end)
+					if (i->address > start && i->address < end)
 						retn.emplace_back(i);
 
 				}

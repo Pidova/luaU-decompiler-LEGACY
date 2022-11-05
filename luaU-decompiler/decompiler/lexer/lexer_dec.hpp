@@ -48,6 +48,23 @@ namespace lexer_dec {
 		inst_type type = inst_type::expression;
 		std::vector<operand_types> operands;
 		std::shared_ptr<LuaU_dissassembler::dissassembly> dissassembly;
+
+		/* Gets first. */
+		template <lexer_dec::operand_types type>
+		std::shared_ptr<LuaU_dissassembler::operand> operand_expr() {
+			return this->dissassembly->operands[std::find(this->operands.begin(), this->operands.end(), type) - this->operands.begin()];
+		}
+
+		/* See if opcode starts a scope. */
+		bool scope_start() {
+			return (this->type == lexer_dec::inst_type::for_ || this->type == lexer_dec::inst_type::branch_condition || this->type == lexer_dec::inst_type::branch);
+		}
+
+		template <lexer_dec::operand_types type>
+		bool has_operand_expr() {
+			return std::find(this->operands.begin(), this->operands.end(), type) != this->operands.end();
+		}
+
 	};
 
 	std::shared_ptr<lexerme> lexer(std::shared_ptr<LuaU_dissassembler::dissassembly>& dissassembly);
