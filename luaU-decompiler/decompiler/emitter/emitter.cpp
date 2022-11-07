@@ -1,7 +1,7 @@
 #include "emitter.hpp"
 
 
-void emitter::compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const std::string& compare_1, const std::string& compare_2) {
+void emitter::compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const char* const compare_type, const std::string& compare_1, const std::string& compare_2) {
 
     const char* cmp;
 
@@ -73,17 +73,12 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
   
     }
 
-    dest += (nested) ? (compare_1 + cmp + compare_2) : ("if ( " + compare_1 + cmp + compare_2 + " ) then\n");
+    dest += (nested) ? (compare_1 + cmp + compare_2) : (std::string (compare_type) + " (" + compare_1 + cmp + compare_2 + ") then\n");
 
 	return;
 }
 
 void emitter::str(std::string& dest, const std::string& src) {
-	dest += src;
-	return;
-}
-
-void emitter::c_str(std::string& dest, const char* const src) {
 	dest += src;
 	return;
 }

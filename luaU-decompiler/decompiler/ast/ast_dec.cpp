@@ -1,7 +1,6 @@
 #include <algorithm>
 #include "ast_dec.hpp"
 
-
 namespace ast_funcs {
 
 	namespace concats {
@@ -26,7 +25,8 @@ namespace ast_funcs {
 		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
 			const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CALL>(true));
-
+			
+			/* Set call info. */
 			for (const auto& node : calls) {
 					ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::call_routine_start>(1u); /* Call start. */
 					node->add_expr<ast_dec::expr_type::call_routine_end>(1u); /* Call end. */
@@ -304,25 +304,27 @@ namespace ast_funcs {
 
 	}
 
-	void init_ast(std::shared_ptr<ast_dec::ast>& current_ast) {
-
+	void init_ast(std::shared_ptr<ast_dec::ast>& ast) {
+		ast_funcs::calls::set_routines(ast);
+		ast_funcs::concats::set_routines(ast);
+		ast_funcs::loops::set_for_routines(ast);
+		ast_funcs::loops::set_whilerep_routines(ast);
 		return;
 	}
 
 }
 
-
 namespace blocks {
 
 	/* Set singular block *Jumpbacks act as end. */
-	std::pair <std::vector<std::shared_ptr<ast_dec::node>>, std::uintptr_t /* Start next pc. */> init_current_block(std::shared_ptr<ast_dec::ast>& current_ast, std::uintptr_t pc, std::vector<std::uintptr_t>& branch_ends) {
+	std::tuple <std::vector<std::shared_ptr<ast_dec::node>>, std::uintptr_t /* Start next pc. */, std::uintptr_t /* Final instruction. */> init_current_block(std::shared_ptr<ast_dec::ast>& ast, std::uintptr_t pc, std::vector<std::uintptr_t>& branch_ends) {
 	
 		std::vector<std::shared_ptr<ast_dec::node>> retn;
 
 		/* Init basic node data. */
 		do {
 			
-			auto current_dissassembly = current_ast->dissassembly[pc];
+			auto current_dissassembly = ast->dissassembly[pc];
 
 			/* Pc is already at a branch ending. So just return empty vector. */
 			if (std::binary_search(branch_ends.begin(), branch_ends.end(), pc))
@@ -336,8 +338,8 @@ namespace blocks {
 			node->address = pc;
 			node->lex = lexer_dec::lexer(current_dissassembly);
 			
-			/* Branch so log branch taken and not. */
-			if (node->lex->type == lexer_dec::inst_type::branch || node->lex->type == lexer_dec::inst_type::branch_condition)
+			/* Branch/end so break. */
+			if (node->lex->type == lexer_dec::inst_type::branch || node->lex->type == lexer_dec::inst_type::branch_condition || pc == ast->p->sizecode)
 				break;		
 
 			pc += current_dissassembly->len;
@@ -345,18 +347,21 @@ namespace blocks {
 		} while (true /* Earlier code will exit if hit a branch or passed branch ends. */);
 
 
-		return std::make_pair(retn, pc + retn.back()->lex->dissassembly->len /* Skip current instruction. */);
+		return std::make_tuple(retn, pc + retn.back()->lex->dissassembly->len /* Skip current instruction. */, pc);
 	}
 
 
 	/* Set blocks for current ast. */
-	void set_blocks(std::shared_ptr<ast_dec::ast>& current_ast) {
+	void set_blocks(std::shared_ptr<ast_dec::ast>& ast) {
 
+		std::uintptr_t pc = 0u;
 		std::vector<std::uintptr_t> branch_ends;
+		std::unordered_map <std::uintptr_t /* PC(start) */, std::tuple <std::uintptr_t  /* PC(end) */, std::uintptr_t  /* PC(end(end + curr->len)) */, std::vector<std::shared_ptr<ast_dec::node>> /* Nodes */>> linear_blocks; /* Block data for scopes. */
+
 
 		/* Set each end as every branch taken pc. */
-		for (auto& dism : current_ast->dissassembly) {
-
+		for (auto& dism : ast->dissassembly) {
+			
 			const auto temp_lex = lexer_dec::lexer(dism.second);
 
 			/* Don't log if jumpback. */
@@ -369,24 +374,52 @@ namespace blocks {
 				if (!temp_lex->has_operand_expr<lexer_dec::operand_types::memaddr>())
 					throw std::exception("Jump with no memaddr operand in lexer at set_blocks.");
 
-				const auto jump = dism.first + temp_lex->operand_expr<lexer_dec::operand_types::memaddr>()->jmp;
-
-				/* Jump, jumps forward in memory so log it. */
-				if (jump > dism.first)
-					branch_ends.emplace_back(jump);
+				branch_ends.emplace_back(dism.first + temp_lex->operand_expr<lexer_dec::operand_types::memaddr>()->jmp);
 				
 			}
 		
 		}
 
-		/* Set main block. */
-		current_ast->main_block = std::make_shared<ast_dec::block>();
 
-		const auto block_init = init_current_block(current_ast, 0u, branch_ends);
-		current_ast->main_block->nodes = block_init.first;
+		/* Set main block. */
+		ast->main_block = std::make_shared<ast_dec::block>();
+
+
+		/* Append blocks */
+		do {
+
+			const auto block = init_current_block(ast, pc, branch_ends);
+			linear_blocks.insert(std::make_pair(pc, std::make_tuple(std::get<2>(block), std::get<1>(block), std::get<0>(block))));
+
+			pc = std::get<1>(block);
+
+		} while (pc < ast->p->sizecode /* Pc didn't exceed sizecode. */);
+
+
+		/* Reset PC. */
+		pc = 0u;
+		
+
+		/* Init main. (Block search is dependent on main so needs to be seperate from everything). */
+		ast->main_block->node_start = pc;
+		ast->main_block->node_end = std::get<0>(linear_blocks[pc]);
+		ast->main_block->nodes = std::get<2>(linear_blocks[pc]);
+
+
+		/* Set pc. */
+		pc = std::get<1>(linear_blocks[pc]);;
+
+
+		/* Assemble blocks. */
+		while (pc < ast->p->sizecode /* Pc didn't exceed sizecode. */) {
+
+			const auto block = linear_blocks[pc];
+
+		};
 
 		return;
 	}
+
 }
 
 namespace proto {
@@ -518,6 +551,8 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 			protos_ast.emplace_back(child_ast);
 		}
 
+		/* Init ast. */
+		ast_funcs::init_ast(current_proto);
 
 		/* Remove current. */
 		protos_ast.erase(std::remove(protos_ast.begin(), protos_ast.end(), current_proto), protos_ast.end());

@@ -7,7 +7,7 @@
 
 std::int32_t main() {
 
-	const char* const code = "for i,v in pairs(1, 2) do print (1, i, v) local p = 0; print(p /0); end ";
+	const char* const code = "print (1, 2, 3)";
 
 	/* Compile. */
 	std::size_t size = 0u;

@@ -65,9 +65,13 @@ namespace lexer_dec {
 			return std::find(this->operands.begin(), this->operands.end(), type) != this->operands.end();
 		}
 
+		template <lexer_dec::operand_types type>
+		std::size_t count_operand_expr() {
+			return std::count(this->operands.begin(), this->operands.end(), type);
+		}
+
 	};
 
 	std::shared_ptr<lexerme> lexer(std::shared_ptr<LuaU_dissassembler::dissassembly>& dissassembly);
-
 
 }

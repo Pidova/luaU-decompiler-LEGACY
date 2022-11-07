@@ -152,8 +152,11 @@ namespace ast_dec {
 	
 	struct block {
 
+		std::uintptr_t node_start = 0u; /* PC start. */
+		std::uintptr_t node_end = 0u; /* PC final instruction. */
+
 		std::vector<std::shared_ptr<node>> nodes; /* Nodes in block. */
-		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks(serves as end) don't count), 0 no jumps.  */
+		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks(serves as end) don't count, jump backs will refer to other nodes(may get fragmented)), 0 no jumps.  */
 
 
 		/* All visits may be unorganized by address you may need to sort if needed. */
@@ -163,33 +166,30 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_inst(const bool all /* All nodes with instruction. */) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
-
+				
 				auto current_block = scopes.front ();
 
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
-
+					
 					if (i->lex->dissassembly->op == op)
 						if (all) /* Has all so emblace node. */
 							retn.emplace_back(i);
 						else /* Not all so return node. */
 							return i;
 				}
-
+		
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
-
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+			
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-			} while (scopes.size ());
-
-			/* Nothing. */
-			if (!retn.size())
-				throw std::exception("Returning no data for visit_inst.");
+			} while (scopes.size());
 
 			return retn;
 		}
@@ -200,7 +200,7 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_inst(const std::uintptr_t addr, const bool all /* All nodes with instruction. */) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -217,7 +217,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -235,7 +236,7 @@ namespace ast_dec {
 		/* Visit node with address. */
 		std::shared_ptr<node> visit_addr(const std::uintptr_t addr) {
 
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -250,7 +251,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -266,7 +268,7 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_expr(const bool all) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -284,15 +286,13 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 			} while (scopes.size());
-
-			if (!retn.size ())
-				throw std::exception("Returning no data for visit_expr.");
 
 			return retn;
 		}
@@ -302,7 +302,7 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_expr(const std::uintptr_t address, const bool all) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -320,15 +320,13 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 			} while (scopes.size());
-
-			if (!retn.size())
-				throw std::exception("Returning no data for visit_next_expr.");
 
 			return retn;
 		}
@@ -337,7 +335,7 @@ namespace ast_dec {
 		/* Visit node with previous address. */
 		std::shared_ptr<node> visit_previous_addr(const std::uintptr_t addr) {
 
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -352,7 +350,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -368,7 +367,7 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_inst(const bool all /* All nodes with instruction. */) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -385,16 +384,13 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 			} while (scopes.size());
-
-			/* Nothing. */
-			if (!retn.size())
-				throw std::exception("Returning no data for visit_next_inst.");
 
 			return retn;
 		}
@@ -404,7 +400,7 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_previous_dest_register(const std::uintptr_t on_address, const std::uint16_t target_reg) {
 
 			std::shared_ptr<ast_dec::node> retn = nullptr;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -426,7 +422,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -445,7 +442,7 @@ namespace ast_dec {
 	    std::vector<std::shared_ptr<node>> visit_rest(const std::uintptr_t on_address) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -460,7 +457,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -479,7 +477,7 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_relative_inst(const std::vector<LuauOpcode> rel) {
 
 			auto count = 0u;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -501,7 +499,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -517,7 +516,7 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_relative_next_inst(const std::uintptr_t on_address, const std::vector<LuauOpcode> rel) {
 
 			auto count = 0u;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -531,7 +530,7 @@ namespace ast_dec {
 						continue;
 
 					/* Inc for relative. */
-					if (std::find(rel.begin(), rel, i->lex->dissassembly->op) != rel.end())
+					if (std::find(rel.begin(), rel.end (), i->lex->dissassembly->op) != rel.end())
 						++count;
 
 					/* If found op dec if count isnt 0. If it is 0 then return node. */
@@ -543,7 +542,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -559,7 +559,7 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_relative_next_expr(const std::uintptr_t on_address, const std::vector<expr_type> rel) {
 
 			auto count = 0u;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -588,7 +588,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -603,7 +604,7 @@ namespace ast_dec {
 		std::vector <std::shared_ptr<node>> visit_all() {
 
 			std::vector <std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -612,7 +613,8 @@ namespace ast_dec {
 				retn.insert(retn.end(), current_block->nodes.begin(), current_block->nodes.end());
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
@@ -629,7 +631,7 @@ namespace ast_dec {
 		std::vector<std::shared_ptr<node>> visit_range(const std::uintptr_t start, const std::uintptr_t end) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<std::shared_ptr<block>> scopes = { std::shared_ptr<block>(this) };
+			std::vector<block*> scopes = { this };
 
 			do {
 
@@ -645,7 +647,8 @@ namespace ast_dec {
 				}
 
 				/* Add nested blocks. */
-				scopes.insert(scopes.end(), current_block->branches.begin(), current_block->branches.end());
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
