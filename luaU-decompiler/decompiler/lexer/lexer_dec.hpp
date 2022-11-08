@@ -51,8 +51,15 @@ namespace lexer_dec {
 
 		/* Gets first. */
 		template <lexer_dec::operand_types type>
-		std::shared_ptr<LuaU_dissassembler::operand> operand_expr() {
-			return this->dissassembly->operands[std::find(this->operands.begin(), this->operands.end(), type) - this->operands.begin()];
+		std::vector <std::shared_ptr<LuaU_dissassembler::operand>> operand_expr() {
+
+			std::vector <std::shared_ptr<LuaU_dissassembler::operand>> retn;
+
+			for (auto i = 0u; i < this->operands.size(); ++i)
+				if (this->operands[i] == type)
+					retn.emplace_back(this->dissassembly->operands[i]);
+
+			return retn;
 		}
 
 		/* See if opcode starts a scope. */

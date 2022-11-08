@@ -121,7 +121,8 @@ namespace op_table {
 		capture_ref,
 		capture_idx,
 		import_idx,
-		k_value_nstr
+		k_value_nstr,
+		val_dec /* Value dec by 1. */
 	};
 
 	struct optable {
@@ -163,8 +164,8 @@ namespace op_table {
 		{ LuauOpcode::LOP_NEWCLOSURE, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::proto } }, // 13
 		{ LuauOpcode::LOP_NAMECALL, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::reg, op_table::type::slot, op_table::type::k_idx } }, // 14
 		
-		{ LuauOpcode::LOP_CALL, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C }, { op_table::type::reg, op_table::type::val, op_table::type::val } }, // 15
-		{ LuauOpcode::LOP_RETURN, { op_table::operands::A,  op_table::operands::B }, { op_table::type::reg, op_table::type::val } }, // 16
+		{ LuauOpcode::LOP_CALL, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C }, { op_table::type::reg, op_table::type::val_dec, op_table::type::val_dec } }, // 15
+		{ LuauOpcode::LOP_RETURN, { op_table::operands::A,  op_table::operands::B }, { op_table::type::reg, op_table::type::val_dec } }, // 16
 
 		{ LuauOpcode::LOP_JUMP, { op_table::operands::D }, { op_table::type::jmp } }, // 17
 		{ LuauOpcode::LOP_JUMPBACK, { op_table::operands::D }, { op_table::type::jmp } }, // 18

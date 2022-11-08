@@ -18,6 +18,9 @@ namespace emitter {
 	/* End of line emitting. */
 	void end_of_line(std::string& dest);
 
+	/* Writes line with eol. */
+	void write_line(std::string& dest, const std::string& src);
+
 	/* Variable or argument equal emitting. */
 	void vararg_equal(std::string& dest, const std::string& vararg, const std::string& src);
 

@@ -653,6 +653,13 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						break;
 					}
 
+					case op_table::type::val_dec: {
+						--operand_value;
+						buffer->data += std::to_string(operand_value) + split;
+						current_operand->val = operand_value;
+						break;
+					}
+
 					case op_table::type::import_idx: {
 
 						const auto source = buffer->code[1];

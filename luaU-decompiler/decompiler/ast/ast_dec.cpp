@@ -183,7 +183,7 @@ namespace ast_funcs {
 
 						/* Set previous dest register. */
 						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
-							reg = node->lex->operand_expr<lexer_dec::operand_types::dest>()->reg;
+							reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 						
 					}
 
@@ -247,14 +247,14 @@ namespace ast_funcs {
 				if (!routine && node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
 
 					auto bad = false; /* Failed any checks. (Can also be used if node is alr set. */
-					const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>();
+					const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front ();
 
 
 
 					/* Capture with source garunteeds locvar so check there. */
 					const auto captures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CAPTURE>(true));
 					for (const auto& capture : captures)
-						if (capture->lex->has_operand_expr<lexer_dec::operand_types::source>() && capture->lex->operand_expr<lexer_dec::operand_types::source>()->capture_reg == target) {
+						if (capture->lex->has_operand_expr<lexer_dec::operand_types::source>() && capture->lex->operand_expr<lexer_dec::operand_types::source>().front ()->capture_reg == target) {
 							node_var(dest);
 							bad = true;
 							break;
@@ -271,7 +271,7 @@ namespace ast_funcs {
 						
 						/* Target dest reg used in call routine dest. */
 						for (const auto& call_node : ast->main_block->visit_range(call->address, node_end->address))
-							if (call_node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && call_node->lex->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
+							if (call_node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && call_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg == target)
 								bad = true;
 						
 					}
@@ -286,7 +286,7 @@ namespace ast_funcs {
 
 						/* Target dest reg used in call routine dest. */
 						for (const auto& concat_node : ast->main_block->visit_range(concat->address, node_end->address))
-							if (concat_node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && concat_node->lex->operand_expr<lexer_dec::operand_types::dest>()->reg == target)
+							if (concat_node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && concat_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg == target)
 								bad = true;
 
 					}
@@ -374,7 +374,7 @@ namespace blocks {
 				if (!temp_lex->has_operand_expr<lexer_dec::operand_types::memaddr>())
 					throw std::exception("Jump with no memaddr operand in lexer at set_blocks.");
 
-				branch_ends.emplace_back(dism.first + temp_lex->operand_expr<lexer_dec::operand_types::memaddr>()->jmp);
+				branch_ends.emplace_back(dism.first + temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front ()->jmp);
 				
 			}
 		

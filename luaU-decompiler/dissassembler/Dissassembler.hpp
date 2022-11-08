@@ -37,10 +37,10 @@ namespace LuaU_dissassembler {
 
 	struct dissassembly {
 
-		LuauOpcode op;
+		LuauOpcode op; 
 
-		const char* mnenomic;
-		const char* hint;
+		const char* mnenomic = "";
+		const char* hint = "";
 
 		std::string data = "";
 		std::uint8_t len = 0u;
