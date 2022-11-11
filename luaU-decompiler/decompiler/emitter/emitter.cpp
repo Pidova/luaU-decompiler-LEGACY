@@ -94,6 +94,12 @@ void emitter::vararg_equal(std::string& dest, const std::string& vararg, const s
     return;
 }
 
+void emitter::new_vararg_equal(std::string& dest, const std::string& vararg, const std::string& src) {
+    dest += "local " + vararg + " = " + src;
+    emitter::end_of_line(dest);
+    return;
+}
+
 void emitter::write_line(std::string& dest, const std::string& src) {
     dest += src;
     emitter::end_of_line(dest);

@@ -160,12 +160,12 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		/* TableK */
 		case LuauOpcode::LOP_GETTABLEKS: {
 			retn->type = lexer_dec::inst_type::table_get;
-			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source, lexer_dec::operand_types::integer,  lexer_dec::operand_types::table_idx };
+			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source, lexer_dec::operand_types::integer,  lexer_dec::operand_types::kvalue };
 			break;
 		}
 		case LuauOpcode::LOP_SETTABLEKS: {
 			retn->type = lexer_dec::inst_type::table_set;
-			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::reg, lexer_dec::operand_types::integer,  lexer_dec::operand_types::table_idx };
+			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::reg, lexer_dec::operand_types::integer,  lexer_dec::operand_types::kvalue };
 		    break;
 		}
 		
@@ -189,7 +189,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 	    }
 		case LuauOpcode::LOP_NAMECALL : {
 			retn->type = lexer_dec::inst_type::expression;
-			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source, lexer_dec::operand_types::integer, lexer_dec::operand_types::table_idx };
+			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source, lexer_dec::operand_types::integer, lexer_dec::operand_types::kvalue };
 			break;
 		}
 

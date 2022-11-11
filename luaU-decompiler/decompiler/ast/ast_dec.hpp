@@ -668,12 +668,15 @@ namespace ast_dec {
 
 		Proto* p; /* Proto for ast. */
 		std::unordered_map<std::uintptr_t, std::shared_ptr<LuaU_dissassembler::dissassembly>> dissassembly; /* Dissassembly of proto (Useful for some stuff). { PC, dissassembly } ex. dissassembly of pc=15 dissassembly[15]. */
+		std::uintptr_t pc_end = 0u; /* Pc end */
 
 		closure_type closure_type = closure_type::none;  /* Closure type. */
 		std::string closure_name = ""; /* Closure name. (Suffix) */
 
 		std::vector<std::int16_t> arg_regs; /* Register for arguments to be placed in. *-1 means: ... */
 		std::shared_ptr <block> main_block; /* Main block. */
+		
+		std::unordered_map<std::uint32_t /* Idx */, std::pair <std::string /* Value */, std::uint16_t /* Reg*/>> upvalues;
 
 		std::vector<std::shared_ptr <ast>> protos; /* Any children protos. Relates to proto->p */
 

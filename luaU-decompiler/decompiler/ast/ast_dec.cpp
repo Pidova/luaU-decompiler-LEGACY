@@ -519,7 +519,7 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 	/* Set closure and proto. */
 	retn->closure_type = closure_type::main;
 	retn->p = proto;
-
+	
 	do {
 
 
@@ -535,6 +535,9 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 			current_proto->dissassembly.insert(std::make_pair(pc, dism));
 			pc += dism->len;
 		}
+
+		/* End dissassembly */
+		current_proto->pc_end = pc;
 
 		/* Set current proto blocks. */
 		blocks::set_blocks(current_proto);

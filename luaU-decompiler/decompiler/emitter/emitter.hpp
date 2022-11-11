@@ -24,6 +24,9 @@ namespace emitter {
 	/* Variable or argument equal emitting. */
 	void vararg_equal(std::string& dest, const std::string& vararg, const std::string& src);
 
+	/* New variable or argument equal emitting. */
+	void new_vararg_equal(std::string& dest, const std::string& vararg, const std::string& src);
+
 	/* Arithmetic emitting.*/
 	void arith(const LuauOpcode op, const bool assignment, std::string& dest, const std::string& src1, const std::string& src2);
 

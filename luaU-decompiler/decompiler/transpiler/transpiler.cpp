@@ -172,7 +172,7 @@ namespace instruction_handler {
 	}
 
 }
-#include <iostream>
+
 std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr <ast_dec::block> block, const std::shared_ptr<transpiler::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
 
 	std::string decompilation = "";
@@ -335,7 +335,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -367,7 +367,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -399,7 +399,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -431,7 +431,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -465,7 +465,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -496,7 +496,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -527,7 +527,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -571,8 +571,11 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					/* Create arg. */
 					if (node->dest_loc.is_dest_loc) {
 
+						std::string compiled = "";
+
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::arith(node->lex->dissassembly->op, true, decompilation, source_1, source_2);
+						emitter::arith(node->lex->dissassembly->op, false, compiled, "local " + source_1, source_2);
+						emitter::new_vararg_equal(decompilation, dest->data, compiled);
 
 					}
 					else {
@@ -616,8 +619,11 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					/* Create arg. */
 					if (node->dest_loc.is_dest_loc) {
 
+						std::string compiled = "";
+
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::arith(node->lex->dissassembly->op, true, decompilation, source_1, source_2);
+						emitter::arith(node->lex->dissassembly->op, false, compiled, "local " + source_1, source_2);
+						emitter::new_vararg_equal(decompilation, dest->data, compiled);
 
 					}
 					else {
@@ -635,7 +641,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			}
 
 
-			/* Getimport, Call */
+			/* Getimport, Call, Namecall */
 			case LuauOpcode::LOP_GETIMPORT: {
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
@@ -653,7 +659,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -742,7 +748,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, compiled_call);
+						emitter::new_vararg_equal(decompilation, dest->data, compiled_call);
 
 					}
 					else {
@@ -760,6 +766,123 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					for (auto i = 0u; i < (retn - 1u); ++i)   /* Fill with nil. */
 						regs.back()[i + call + 1u]->set<registers::type::expr>("nil");
 					
+
+				break;
+			}
+			case LuauOpcode::LOP_NAMECALL: {
+
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
+				const auto kvalue = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+
+				const auto compiled = source + ':' + kvalue;
+
+				/* Vararg.*/
+				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+					emitter::vararg_equal(decompilation, dest->data, compiled);
+
+				}
+				else {
+
+					/* Create arg. */
+					if (node->dest_loc.is_dest_loc) {
+
+						dest->set<registers::type::var>(node->dest_loc.name);
+						emitter::new_vararg_equal(decompilation, dest->data, compiled);
+
+					}
+					else {
+
+						/* General purpose. */
+						dest->set<registers::type::expr>(compiled);
+
+					}
+
+				}
+
+				break;
+			}
+
+			/* Concat, Return */
+			case LuauOpcode::LOP_CONCAT: {
+
+
+				std::string source = "";
+
+				const auto sources = node->lex->operand_expr<lexer_dec::operand_types::source>();
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+
+				const auto start = sources.front()->reg;
+				const auto end = sources.front()->reg;
+
+
+				/* Form data. */
+				for (auto i = start; i <= end; ++i)
+					source += regs.back()[i]->data + ((i != end) ? " .. " : "");
+
+
+				/* Vararg.*/
+				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+					emitter::vararg_equal(decompilation, dest->data, source);
+
+				}
+				else {
+
+					/* Create arg. */
+					if (node->dest_loc.is_dest_loc) {
+
+						dest->set<registers::type::var>(node->dest_loc.name);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
+
+					}
+					else {
+
+						/* General purpose. */
+						dest->set<registers::type::expr>(source);
+
+					}
+
+				}
+
+				break;
+			}
+			case LuauOpcode::LOP_RETURN: {
+
+			    auto val = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+				const auto original_val = val;
+				const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+				/* If its not main proto then write a return. */
+				if (ast->closure_type != ast_dec::closure_type::main || (node->address + node->lex->dissassembly->len) != ast->pc_end) { /* Skip op */
+
+					/* Data */
+					std::string compiled = "";
+
+					/* Fix for mulret */
+					if (val == -1)
+						val = ast->main_block->visit_previous_addr(node->address)->lex->operand_expr<lexer_dec::operand_types::dest>().front()->val;
+
+					/* Check to make sure if last dest reg is current dest reg and was multret if so just one return format. */
+					if (original_val == -1 && dest == val)
+						compiled = ' ' + regs.back()[dest]->data;
+					else {
+
+						for (auto i = 0u; i < val; ++i) {
+
+							compiled += regs.back ()[dest + i]->data;
+
+							if ((i + 1u) != val)
+								compiled += (!i) ? " " : ", ";
+
+						}
+
+					}
+
+					emitter::str(decompilation, "return" + compiled + ";\n");
+
+				}
 
 				break;
 			}
@@ -793,7 +916,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -809,11 +932,42 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			}
 
 
-			/* Table stuff. */
-			case LuauOpcode::LOP_NEWTABLE: {
+		    /* Set/Get/Close upvalue */
+			case LuauOpcode::LOP_SETUPVAL: {
+
+				const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+				const auto dest = regs.back()[reg];
+				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+
+				/* Not vararg */
+				if (dest->type != registers::type::var || dest->type != registers::type::arg) {
+
+					/* Create arg. */
+					if (node->dest_loc.is_dest_loc) {
+
+						const auto data = dest->data;
+						dest->set<registers::type::var>(node->dest_loc.name);
+						emitter::new_vararg_equal(decompilation, dest->data, data);
+
+					}
+					else {
+						throw std::exception("Tried to create upvalue on not vararg register.");
+					}
+
+				}
+
+
+				/* Set upvalue for children ast. */
+				for (const auto& i : ast->protos)
+					i->upvalues.insert(std::make_pair(idx, std::make_pair (dest->data, reg)));
+
+				break;
+			}
+			case LuauOpcode::LOP_GETUPVAL: {
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
+				const auto source = ast->upvalues[node->lex->operand_expr<lexer_dec::operand_types::upvalue>().front()->upvalue].first;
 
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
@@ -827,7 +981,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::vararg_equal(decompilation, dest->data, source);
+						emitter::new_vararg_equal(decompilation, dest->data, source);
 
 					}
 					else {
@@ -841,7 +995,24 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 				break;
 			}
+			case LuauOpcode::LOP_CLOSEUPVALS: {
 
+
+				const auto reg = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+
+
+				for (const auto& i : ast->protos)
+					for (const auto& upv : i->upvalues) 
+						if (upv.second.second >= reg)
+							i->upvalues.erase(upv.first);			
+				
+
+				break;
+			}
+
+
+			/* Table stuff. */
+			
 		}
 
 	}
