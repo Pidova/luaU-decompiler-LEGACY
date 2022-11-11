@@ -7,7 +7,7 @@
 
 std::int32_t main() {
 
-	const char* const code = "print (1, 2, 3)";
+	const char* const code = "print (1 + abx - aoo + opp, 2, 3)";
 
 	/* Compile. */
 	std::size_t size = 0u;

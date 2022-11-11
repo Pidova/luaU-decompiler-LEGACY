@@ -788,6 +788,6 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 
 	/* Calulate lenght. */
 	buffer->len = (std::uint8_t(reinterpret_cast<const std::uintptr_t>(buffer->code) - reinterpret_cast<const std::uintptr_t>(start_pc)) / sizeof(Instruction)) + 1u;
-	std::cout << buffer->data << std::endl;
+
 	return;
 }

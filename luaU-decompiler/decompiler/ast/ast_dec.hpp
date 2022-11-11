@@ -676,7 +676,7 @@ namespace ast_dec {
 		std::vector<std::int16_t> arg_regs; /* Register for arguments to be placed in. *-1 means: ... */
 		std::shared_ptr <block> main_block; /* Main block. */
 		
-		std::unordered_map<std::uint32_t /* Idx */, std::pair <std::string /* Value */, std::uint16_t /* Reg*/>> upvalues;
+		std::unordered_map<std::uintptr_t /* Idx */, std::pair <std::string /* Value */, std::uint16_t /* Reg*/>> upvalues;
 
 		std::vector<std::shared_ptr <ast>> protos; /* Any children protos. Relates to proto->p */
 

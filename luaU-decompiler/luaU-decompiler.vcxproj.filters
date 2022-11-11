@@ -326,6 +326,9 @@
     <ClInclude Include="decompiler\ast\ast_config.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="decompiler\debug.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changelog.txt" />

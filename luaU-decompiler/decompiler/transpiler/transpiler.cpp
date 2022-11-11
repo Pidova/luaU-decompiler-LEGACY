@@ -1,6 +1,7 @@
 #include <variant>
 #include "transpiler.hpp"
 #include "../emitter/emitter.hpp"
+#include "../debug.hpp"
 
 namespace registers {
 
@@ -22,6 +23,34 @@ namespace registers {
 
 		type type = type::none;
 		std::string data = "";
+
+		const char* const str_type() {
+
+			switch (this->type) {
+
+				case type::none: {
+					return "none";
+				}
+				case type::flag: {
+					return "flag";
+				}
+				case type::expr: {
+					return "expr";
+				}
+				case type::var: {
+					return "var";
+				}
+				case type::arg: {
+					return "arg";
+				}
+				case type::global: {
+					return "global";
+				}
+
+			}
+
+			throw std::exception("Unkown type for register str.");
+		}
 
 		std::shared_ptr<reg> clone() {
 			auto ptr = std::make_shared<reg>();
@@ -99,77 +128,6 @@ namespace registers {
 			}
 
 	};
-
-}
-
-namespace instruction_handler {
-
-	namespace emitters {
-
-		namespace assignment {
-
-			/* Emit inst data to decompiled. */
-			template<LuauOpcode o>
-			void emit_inst(std::string& dest, const std::shared_ptr<ast_dec::registers::reg>& src_1, const std::variant <std::shared_ptr<ast_dec::registers::reg>, std::string> src_2 = nullptr) {
-
-				switch (o) {
-
-					/* Arith */
-					case LuauOpcode::LOP_AND:
-					case LuauOpcode::LOP_OR:
-					case LuauOpcode::LOP_ADD:
-					case LuauOpcode::LOP_SUB:
-					case LuauOpcode::LOP_MUL:
-					case LuauOpcode::LOP_DIV:
-					case LuauOpcode::LOP_MOD:
-					case LuauOpcode::LOP_POW: {
-
-						/* Check too see if register getting passed is a vararg. */
-						if (src_1->tt != ast_dec::registers::type::vararg)
-							throw std::exception("Attempted to emit non-vararg in arith when trying too emit lvalue in ast.");
-
-						const auto str = std::get<std::shared_ptr<ast_dec::registers::reg>>(src_2)->container;
-						emitter::arith(o, true, dest, src_1->container, str);
-
-						break;
-					}
-
-					case LuauOpcode::LOP_ANDK:
-					case LuauOpcode::LOP_ORK:
-					case LuauOpcode::LOP_ADDK:
-					case LuauOpcode::LOP_SUBK:
-					case LuauOpcode::LOP_MULK:
-					case LuauOpcode::LOP_DIVK:
-					case LuauOpcode::LOP_MODK:
-					case LuauOpcode::LOP_POWK: {
-
-						/* Check too see if register getting passed is a vararg. */
-						if (src_1->tt != ast_dec::registers::type::vararg)
-							throw std::exception("Attempted to emit non-vararg in arithk when trying too emit lvalue in ast.");
-
-						const auto str = std::get<std::string>(src_2);
-						emitter::arith(o, true, dest, src_1->container, str);
-
-						break;
-					}
-
-					case LuauOpcode::LOP_SETGLOBAL: {
-						const auto str = std::get<std::shared_ptr<ast_dec::registers::reg>>(src_2)->container;
-						emitter::vararg_equal(dest, src_1->container, str);
-						break;
-					}
-
-					default: {
-						throw std::exception("Unkown opcode when trying too emit lvalue in ast.");
-					}
-
-				}
-
-			}
-
-		}
-
-	}
 
 }
 
@@ -306,13 +264,134 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 		}
 		
+		#if TANSPILER_DEBUG_OPERANDS 
+
+			std::cout << "[transpiler.cpp] " << node->lex->dissassembly->data << std::endl;
+
+			for (auto i = 0u; i < node->lex->operands.size(); ++i) {
+				
+				const auto oper = node->lex->dissassembly->operands[i];
+
+				switch (node->lex->operands[i]) {
+
+					case lexer_dec::operand_types::reg: {
+
+						if (!regs.back().reg_exists(oper->reg))
+							std::cout << "*	[reg( " << oper->reg << " )]: NULL\n";
+						else {
+							const auto reg = regs.back ()[oper->reg];
+							std::cout << "*	[reg( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+						}
+
+						break;
+					} 
+
+					case lexer_dec::operand_types::dest: {
+
+						if (!regs.back().reg_exists(oper->reg))
+							std::cout << "*	[dest( " << oper->reg << " )]: NULL\n";
+						else {
+							const auto reg = regs.back()[oper->reg];
+							std::cout << "*	[dest( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+						}
+
+						break;
+					}
+
+					case lexer_dec::operand_types::source: {
+
+						if (!regs.back().reg_exists(oper->reg))
+							std::cout << "*	[source( " << oper->reg << " )]: NULL\n";
+						else {
+							const auto reg = regs.back()[oper->reg];
+							std::cout << "*	[source( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+						}
+
+						break;
+					}
+
+					case lexer_dec::operand_types::integer: {
+						std::cout << "*	[integer]: " << std::to_string(oper->val) << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::compare: {
+
+						if (!regs.back().reg_exists(oper->reg))
+							std::cout << "*	[compare( " << oper->reg << " )]: NULL\n";
+						else {
+							const auto reg = regs.back()[oper->reg];
+							std::cout << "*	[compare( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+						}
+
+						break;
+					}
+
+					case lexer_dec::operand_types::memaddr: {
+						std::cout << "*	[memaddr]: " << std::to_string(oper->jmp) << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::proto: {
+						std::cout << "*	[proto]: " << std::to_string(oper->jmp) << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::kvalue: {
+						std::cout << "*	[kvalue]: " << node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::kvalue_dest: {
+						std::cout << "*	[kvalue_dest]: " << std::to_string(oper->k_idx) << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::upvalue: {
+						std::cout << "*	[upvalue]: " << std::to_string(oper->upvalue) << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::table_idx: {
+						std::cout << "*	[table_idx]: " << std::to_string(oper->table) << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::fastcall_idx: {
+						std::cout << "*	[fastcall_idx]: " << std::to_string(oper->fastcall_idx) << std::endl;
+						break;
+					}
+
+					case lexer_dec::operand_types::capture: {
+						std::cout << "*	[capture_idx]: " << std::to_string(oper->capture_ref) << std::endl;
+						break;
+					}
+
+					default: {
+						throw std::exception("Unkown operand type for debug.");
+					}
+
+				}
+
+			}
+
+		#endif
+
+		#if TANSPILER_DEBUG_PREDECOMPILATION 
+			std::cout << "[transpiler.cpp] (pre-decompilation): " << decompilation << std::endl;
+		#endif
+
 		/* Instruction handler. */
 		switch (node->lex->dissassembly->op) {
 		
 
-			/* Nop, Break */
+			/* Nop, Break, DEP */
 			case LuauOpcode::LOP_NOP:
-			case LuauOpcode::LOP_BREAK: {
+			case LuauOpcode::LOP_BREAK: 
+			case LuauOpcode::LOP_DEP_FORGLOOP_INEXT:
+			case LuauOpcode::LOP_DEP_FORGLOOP_NEXT:
+			case LuauOpcode::LOP_DEP_JUMPIFEQK:
+			case LuauOpcode::LOP_DEP_JUMPIFNOTEQK: {
 				break;
 			}
 
@@ -574,7 +653,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						std::string compiled = "";
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::arith(node->lex->dissassembly->op, false, compiled, "local " + source_1, source_2);
+						emitter::arith(node->lex->dissassembly->op, false, compiled, source_1, source_2);
 						emitter::new_vararg_equal(decompilation, dest->data, compiled);
 
 					}
@@ -622,7 +701,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						std::string compiled = "";
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::arith(node->lex->dissassembly->op, false, compiled, "local " + source_1, source_2);
+						emitter::arith(node->lex->dissassembly->op, false, compiled, source_1, source_2);
 						emitter::new_vararg_equal(decompilation, dest->data, compiled);
 
 					}
@@ -804,6 +883,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 				break;
 			}
 
+
 			/* Concat, Return */
 			case LuauOpcode::LOP_CONCAT: {
 
@@ -850,9 +930,11 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			}
 			case LuauOpcode::LOP_RETURN: {
 
+
 			    auto val = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
 				const auto original_val = val;
-				const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+				const auto dest = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+
 
 				/* If its not main proto then write a return. */
 				if (ast->closure_type != ast_dec::closure_type::main || (node->address + node->lex->dissassembly->len) != ast->pc_end) { /* Skip op */
@@ -941,7 +1023,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 
 				/* Not vararg */
-				if (dest->type != registers::type::var || dest->type != registers::type::arg) {
+				if (dest->type != registers::type::var && dest->type != registers::type::arg) {
 
 					/* Create arg. */
 					if (node->dest_loc.is_dest_loc) {
@@ -1009,11 +1091,61 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 				break;
 			}
+			
+
+			/* Getvarargs */
+			case LuauOpcode::LOP_GETVARARGS: {
+
+				auto val = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+				const auto start = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+				/* Fix for mulret */
+				if (val == -1)
+					val = ast->main_block->visit_previous_addr(node->address)->lex->operand_expr<lexer_dec::operand_types::dest>().front()->val;
+
+				/* Iterate */
+				for (auto on = start; on < (start + val); ++on) {
+
+					const auto dest = regs.back()[on];
+
+					/* Vararg.*/
+					if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+						emitter::vararg_equal(decompilation, dest->data, "...");
+
+					}
+					else {
+
+						/* Create arg. */
+						if (node->dest_loc.is_dest_loc) {
+
+							dest->set<registers::type::var>(node->dest_loc.name);
+							emitter::new_vararg_equal(decompilation, dest->data, "...");
+
+						}
+						else {
+
+							/* General purpose. */
+							dest->data.clear();
+							dest->set<registers::type::expr>("...");
+
+						}
+
+					}
+
+				}
+
+				break;
+			}
 
 
 			/* Table stuff. */
 			
 		}
+
+		#if TANSPILER_DEBUG_POSTDECOMPILATION 
+				std::cout << "[transpiler.cpp] (post-decompilation): " << decompilation << std::endl;
+		#endif
 
 	}
 

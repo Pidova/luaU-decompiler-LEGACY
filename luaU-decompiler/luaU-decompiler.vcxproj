@@ -191,6 +191,7 @@
     <ClInclude Include="decompiler\decompiler.hpp" />
     <ClInclude Include="decompiler\emitter\emitter.hpp" />
     <ClInclude Include="decompiler\transpiler\transpiler.hpp" />
+    <ClInclude Include="decompiler\debug.hpp" />
     <ClInclude Include="dissassembler\Dissassembler.hpp" />
     <ClInclude Include="dissassembler\Op_table.hpp" />
     <ClInclude Include="decompiler\lexer\lexer_dec.hpp" />
