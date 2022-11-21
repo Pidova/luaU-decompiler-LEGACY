@@ -3,6 +3,59 @@
 
 namespace ast_funcs {
 
+	namespace arguments {
+
+		/* 
+			*Note: this isn't perfect and only sets args useful to that proto Ie. print (arg1). Things that arent neccesarly useful like
+				   an argument getting set right after or inside of a routine before getting used will most of the time just become a 
+				   variable depending on some conditions like if it gets used after a condition but it can be set by that condition not
+				   garunteed it will become an argument. All of this is put together this way instead of basing everything off of it's
+				   arg stack become random 
+		*/
+		void set_arguments(std::shared_ptr<ast_dec::ast>& ast) {
+
+			std::vector <std::uint32_t> dests; /* Registers used in dest. **getting written too** */
+			std::vector <std::uint32_t> source_no_dest; /* Registers used in source, value but not dest. **Not written too yet but been used** */
+
+			/* Loops usally overwrite some regs per part of there routine append them to dest. */
+			const auto loops = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_type<lexer_dec::inst_type::for_>(true));
+			for (const auto& i : loops) {
+
+				auto start_reg = 0u; /* for start */
+				auto iteration = 0u; /* for regs being consumed for its operation */
+
+				switch (i->lex->dissassembly->op) {
+
+					case LuauOpcode::LOP_FORGLOOP: {
+						start_reg = i->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+						iteration = 4u;
+						break;
+					}
+					case LuauOpcode::LOP_FORNLOOP: {
+						start_reg = i->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+						iteration = 2u;
+						break;
+					}
+
+					/* Could be loop prep??? maybe */
+					default: {
+						continue;
+					}
+
+				}
+
+				/* Add vars from those loops. */
+				for (auto i = start_reg; i < (start_reg + iteration + 1u); ++i)
+					if (std::find(dests.begin(), dests.end(), i) == dests.end()) /* Found?? */
+						dests.emplace_back(i);
+
+			}
+
+			return;
+		}
+
+	}
+
 	namespace concats {
 
 		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
@@ -56,7 +109,7 @@ namespace ast_funcs {
 				else
 					jump_node->add_expr<ast_dec::expr_type::for_start>(1u);
 
-				forloop->add_expr<ast_dec::expr_type::for_end>(1u);
+				forloop->add_expr<ast_dec::expr_type::scope_end>(1u);
 
 			}
 
@@ -67,7 +120,7 @@ namespace ast_funcs {
 				const auto jump_inst = jump_node->lex->dissassembly->op;
 
 				jump_node->add_expr<ast_dec::expr_type::for_start>(1u);
-				forloop->add_expr<ast_dec::expr_type::for_end>(1u);
+				forloop->add_expr<ast_dec::expr_type::scope_end>(1u);
 
 			}
 
@@ -77,7 +130,7 @@ namespace ast_funcs {
 		void set_whilerep_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
 			const auto jump_backs = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_JUMPBACK>(true));
-			const auto jump_conds = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_inst<lexer_dec::inst_type::branch_condition>(true));
+			const auto jump_conds = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_type<lexer_dec::inst_type::branch_condition>(true));
 
 
 			/* Check typical jumpbacks *Previous inst is condition its until else end for while. */
@@ -86,7 +139,7 @@ namespace ast_funcs {
 				if (ast->main_block->visit_previous_addr(jmp_back->address)->lex->type == lexer_dec::inst_type::branch_condition)
 					jmp_back->add_expr<ast_dec::expr_type::until_>(1u); /* Until end. */
 				else
-					jmp_back->add_expr<ast_dec::expr_type::end_>(1u); /* While loop end. */
+					jmp_back->add_expr<ast_dec::expr_type::scope_end>(1u); /* While loop end. */
 
 			}
 
@@ -228,7 +281,7 @@ namespace ast_funcs {
 
 
 				/* End of scope. */
-				for (auto i = 0u; i < node->count_expr <ast_dec::expr_type::end_>(); ++i)
+				for (auto i = 0u; i < node->count_expr <ast_dec::expr_type::scope_end>(); ++i)
 					registers.pop_back();
 
 				/* Log reg scope start. */
@@ -305,6 +358,7 @@ namespace ast_funcs {
 	}
 
 	void init_ast(std::shared_ptr<ast_dec::ast>& ast) {
+		ast_funcs::arguments::set_arguments(ast);
 		ast_funcs::calls::set_routines(ast);
 		ast_funcs::concats::set_routines(ast);
 		ast_funcs::loops::set_for_routines(ast);
@@ -509,7 +563,7 @@ namespace proto {
 	}
 
 }
-
+#include <iostream>
 std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 
 	/* Current ast. */
@@ -531,13 +585,9 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 		for (auto i = 0u; i < unsigned (proto->sizecode); ++i) {		
 			auto dism = std::make_shared<LuaU_dissassembler::dissassembly>();
 			LuaU_dissassembler::dissassemble(pc, current_proto->p, dism);
-
 			current_proto->dissassembly.insert(std::make_pair(pc, dism));
 			pc += dism->len;
 		}
-
-		/* End dissassembly */
-		current_proto->pc_end = pc;
 
 		/* Set current proto blocks. */
 		blocks::set_blocks(current_proto);

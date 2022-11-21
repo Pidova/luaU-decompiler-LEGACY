@@ -1,4 +1,5 @@
 #include <variant>
+#include <sstream>
 #include "transpiler.hpp"
 #include "../emitter/emitter.hpp"
 #include "../debug.hpp"
@@ -143,13 +144,13 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			for (auto i = 0u; i < expr.second; ++i)
 				switch (expr.first) {
 
-					case ast_dec::expr_type::do_: {
+					case ast_dec::expr_type::repeat_: {
 
 						/* Replicate scope. */
 						regs.emplace_back(regs.back().clone());
 
 						/* Emit do */
-						emitter::str(decompilation, "do {\n");
+						emitter::str(decompilation, "repeat\n");
 
 						break;
 					}
@@ -194,7 +195,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						break;
 					}
 
-					case ast_dec::expr_type::end_: {
+					case ast_dec::expr_type::scope_end: {
 
 						/* Remove current register. */
 						regs.pop_back();
@@ -260,13 +261,51 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						break;
 					}
 
+					case ast_dec::expr_type::while_: {
+
+						/* Emit else. */
+						/* Emit if/elseif based on compare operand count. */
+						if (node->lex->count_operand_expr<lexer_dec::operand_types::compare>() == 2u) {
+
+							/* if/elseif (?? ?? ??) */
+
+							const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
+							const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
+
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[-1]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", cmp_1->data, cmp_2->data);
+						}
+						else {
+
+							/* if/elseif (??) */
+
+							const auto cmp = regs.back()[node->lex->dissassembly->operands[0]->reg];
+
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[-1]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", cmp->data);
+						}
+
+						/* Remove last scope and replicate next. */
+						regs.pop_back();
+						regs.emplace_back(regs.back().clone());
+
+						/* Clear compare flag. */
+						regs.back()[-1]->clear(true);
+
+						break;
+					}
+
 				}
 
 		}
 		
 		#if TANSPILER_DEBUG_OPERANDS 
 
-			std::cout << "[transpiler.cpp] " << node->lex->dissassembly->data << std::endl;
+			std::stringstream str;
+
+			#if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+				str << "[transpiler.cpp] " << node->lex->dissassembly->data << std::endl;
+			#elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+				str << "[Metric]: " << node->lex->dissassembly->data << std::endl;
+			#endif
 
 			for (auto i = 0u; i < node->lex->operands.size(); ++i) {
 				
@@ -277,10 +316,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					case lexer_dec::operand_types::reg: {
 
 						if (!regs.back().reg_exists(oper->reg))
-							std::cout << "*	[reg( " << oper->reg << " )]: NULL\n";
+							str << "*	[reg( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back ()[oper->reg];
-							std::cout << "*	[reg( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[reg( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
 						}
 
 						break;
@@ -289,10 +328,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					case lexer_dec::operand_types::dest: {
 
 						if (!regs.back().reg_exists(oper->reg))
-							std::cout << "*	[dest( " << oper->reg << " )]: NULL\n";
+							str << "*	[dest( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back()[oper->reg];
-							std::cout << "*	[dest( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[dest( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
 						}
 
 						break;
@@ -301,69 +340,69 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					case lexer_dec::operand_types::source: {
 
 						if (!regs.back().reg_exists(oper->reg))
-							std::cout << "*	[source( " << oper->reg << " )]: NULL\n";
+							str << "*	[source( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back()[oper->reg];
-							std::cout << "*	[source( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[source( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
 						}
 
 						break;
 					}
 
 					case lexer_dec::operand_types::integer: {
-						std::cout << "*	[integer]: " << std::to_string(oper->val) << std::endl;
+						str << "*	[integer]: " << std::to_string(oper->val) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::compare: {
 
 						if (!regs.back().reg_exists(oper->reg))
-							std::cout << "*	[compare( " << oper->reg << " )]: NULL\n";
+							str << "*	[compare( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back()[oper->reg];
-							std::cout << "*	[compare( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[compare( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
 						}
 
 						break;
 					}
 
 					case lexer_dec::operand_types::memaddr: {
-						std::cout << "*	[memaddr]: " << std::to_string(oper->jmp) << std::endl;
+						str << "*	[memaddr]: " << std::to_string(oper->jmp) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::proto: {
-						std::cout << "*	[proto]: " << std::to_string(oper->jmp) << std::endl;
+						str << "*	[proto]: " << std::to_string(oper->jmp) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::kvalue: {
-						std::cout << "*	[kvalue]: " << node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value << std::endl;
+						str << "*	[kvalue]: " << node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::kvalue_dest: {
-						std::cout << "*	[kvalue_dest]: " << std::to_string(oper->k_idx) << std::endl;
+						str << "*	[kvalue_dest]: " << std::to_string(oper->k_idx) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::upvalue: {
-						std::cout << "*	[upvalue]: " << std::to_string(oper->upvalue) << std::endl;
+						str << "*	[upvalue]: " << std::to_string(oper->upvalue) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::table_idx: {
-						std::cout << "*	[table_idx]: " << std::to_string(oper->table) << std::endl;
+						str << "*	[table_idx]: " << std::to_string(oper->table) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::fastcall_idx: {
-						std::cout << "*	[fastcall_idx]: " << std::to_string(oper->fastcall_idx) << std::endl;
+						str << "*	[fastcall_idx]: " << std::to_string(oper->fastcall_idx) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::capture: {
-						std::cout << "*	[capture_idx]: " << std::to_string(oper->capture_ref) << std::endl;
+						str << "*	[capture_idx]: " << std::to_string(oper->capture_ref) << std::endl;
 						break;
 					}
 
@@ -375,6 +414,12 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 			}
 
+			#if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+				std::cout << str.str ();
+			#elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+				emitter::expandable_comment(decompilation, str.str());
+			#endif
+
 		#endif
 
 		#if TANSPILER_DEBUG_PREDECOMPILATION 
@@ -385,7 +430,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 		switch (node->lex->dissassembly->op) {
 		
 
-			/* Nop, Break, DEP */
+			/* Nop, Break, Depricated opcodes */
 			case LuauOpcode::LOP_NOP:
 			case LuauOpcode::LOP_BREAK: 
 			case LuauOpcode::LOP_DEP_FORGLOOP_INEXT:
@@ -937,7 +982,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 
 				/* If its not main proto then write a return. */
-				if (ast->closure_type != ast_dec::closure_type::main || (node->address + node->lex->dissassembly->len) != ast->pc_end) { /* Skip op */
+				if (ast->closure_type != ast_dec::closure_type::main || ast->main_block->has_next_inst<LuauOpcode::LOP_RETURN>(node->address) /* Has next return. */) { /* Skip op */
 
 					/* Data */
 					std::string compiled = "";
@@ -1137,10 +1182,118 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 				break;
 			}
+										   
 
+			/* Loop */
+			case LuauOpcode::LOP_FORNLOOP: {
+				break;
+			}
 
 			/* Table stuff. */
-			
+			/* Get */
+			case LuauOpcode::LOP_GETTABLEN: {
+
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
+				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->table;
+
+				const auto compiled = source + '[' + std::to_string(idx) + ']';
+
+				/* Vararg.*/
+				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+					emitter::vararg_equal(decompilation, dest->data, compiled);
+
+				}
+				else {
+
+					/* Create arg. */
+					if (node->dest_loc.is_dest_loc) {
+
+						dest->set<registers::type::var>(node->dest_loc.name);
+						emitter::new_vararg_equal(decompilation, dest->data, compiled);
+
+					}
+					else {
+
+						/* General purpose. */
+						dest->set<registers::type::expr>(compiled);
+
+					}
+
+				}
+
+				break;
+			}
+			case LuauOpcode::LOP_GETTABLEKS: {
+
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
+				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+
+				const auto compiled = source + "[\"" + idx + "\"]";
+
+				/* Vararg.*/
+				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+					emitter::vararg_equal(decompilation, dest->data, compiled);
+
+				}
+				else {
+
+					/* Create arg. */
+					if (node->dest_loc.is_dest_loc) {
+
+						dest->set<registers::type::var>(node->dest_loc.name);
+						emitter::new_vararg_equal(decompilation, dest->data, compiled);
+
+					}
+					else {
+
+						/* General purpose. */
+						dest->set<registers::type::expr>(compiled);
+
+					}
+
+				}
+
+				break;
+			}
+			case LuauOpcode::LOP_GETTABLE: {
+
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
+				const auto idx = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg]->data;
+
+				const auto compiled = source + '[' + idx + ']';
+
+				/* Vararg.*/
+				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+					emitter::vararg_equal(decompilation, dest->data, compiled);
+
+				}
+				else {
+
+					/* Create arg. */
+					if (node->dest_loc.is_dest_loc) {
+
+						dest->set<registers::type::var>(node->dest_loc.name);
+						emitter::new_vararg_equal(decompilation, dest->data, compiled);
+
+					}
+					else {
+
+						/* General purpose. */
+						dest->set<registers::type::expr>(compiled);
+
+					}
+
+				}
+
+				break;
+			}
+
 		}
 
 		#if TANSPILER_DEBUG_POSTDECOMPILATION 

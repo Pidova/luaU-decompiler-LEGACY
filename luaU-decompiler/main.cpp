@@ -1,13 +1,13 @@
 #include "luau-master/VM/include/lua.h"
 #include "luau-master/Compiler/include/luacode.h"
 #include "luau-master/VM/include/lualib.h"
+#include "decompiler/decompiler.hpp"
 #include "decompiler/transpiler/transpiler.hpp"
-#include "decompiler/ast/ast_dec.hpp"
 #include <iostream>
 
 std::int32_t main() {
 
-	const char* const code = "print (1 + abx - aoo + opp, 2, 3)";
+	const char* const code = "print (\"cow\");";
 
 	/* Compile. */
 	std::size_t size = 0u;
@@ -17,11 +17,10 @@ std::int32_t main() {
 	const auto state = luaL_newstate();
 	luau_load(state, "Bruh", compilation, size, 0);
 
-	/* Get main proto and dissassemble. */
-	auto buffer = std::make_shared<LuaU_dissassembler::dissassembly>();
+	/* Get main proto. */
 	const auto proto = gco2cl((state->top - 1)->value.gc)->l.p;
 
-	std::cout << transpiler::transpile(ast_dec::gen_ast(proto), std::make_shared<transpiler::transpiler_config>()) << std::endl;
+	std::cout << luaU_decompiler::decompile(proto, std::make_shared<transpiler::transpiler_config>()) << std::endl;
 	std::cin.get();
 	return 0;
 }

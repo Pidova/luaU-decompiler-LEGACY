@@ -64,14 +64,12 @@ namespace ast_dec {
 
 		for_iv_start, /* for i,v in pairs ({ 1 }) do */
 		for_start, /* for start */
-		for_end, /* end */
 
 		repeat_, /* repeat */
 		while_, /* while () follows condition. */
 		until_, /* until () follows condition. */
-		do_, /* do */
-		end_, /* end */
 		break_, /* break */
+		scope_end, /* scope end */
 
 		call_routine_start, /* Call routine start. */
 		call_routine_end, /* Call routine end. */
@@ -232,6 +230,35 @@ namespace ast_dec {
 			return retn;
 		}
 
+		/* See if next opcode from addr exists. (Ignores current.) */
+		template<LuauOpcode op>
+		bool has_next_inst(const std::uintptr_t addr) {
+
+			std::vector<block*> scopes = { this };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					if (i->address > addr && i->lex->dissassembly->op == op)
+						return true;
+				}
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+			} while (scopes.size());
+
+			return false;
+		}
+
 
 		/* Visit node with address. */
 		std::shared_ptr<node> visit_addr(const std::uintptr_t addr) {
@@ -364,7 +391,7 @@ namespace ast_dec {
 
 		/* Visits next/all inst type. */
 		template<lexer_dec::inst_type inst>
-		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_inst(const bool all /* All nodes with instruction. */) {
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_type(const bool all /* All nodes with instruction. */) {
 
 			std::vector<std::shared_ptr<node>> retn;
 			std::vector<block*> scopes = { this };
@@ -683,4 +710,5 @@ namespace ast_dec {
 	};
 
 	std::shared_ptr<ast> gen_ast(Proto* proto);
+
 }

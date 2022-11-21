@@ -106,6 +106,10 @@ void emitter::write_line(std::string& dest, const std::string& src) {
     return;
 }
 
+void emitter::expandable_comment(std::string& dest, const std::string& src) {
+    dest += "--[[\n" + src + ((src.back() != '\n') ? "\n]]\n" : "]]\n");
+    return;
+}
 
 void emitter::arith(const LuauOpcode op, const bool assignment, std::string& dest, const std::string& src1, const std::string& src2) {
 

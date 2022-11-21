@@ -33,4 +33,6 @@ namespace emitter {
 	/* Unary emitting. */
 	void unary(const LuauOpcode op, std::string& dest, const std::string& src1);
 
+	/* Expandable comment emmitting. */
+	void expandable_comment(std::string& dest, const std::string& src);
 }
