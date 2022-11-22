@@ -6,51 +6,172 @@ namespace ast_funcs {
 	namespace arguments {
 
 		/* 
-			*Note: this isn't perfect and only sets args useful to that proto Ie. print (arg1). Things that arent neccesarly useful like
+			*Note: This isn't perfect and only sets args useful to that proto Ie. print (arg1). Things that arent neccesarly useful like
 				   an argument getting set right after or inside of a routine before getting used will most of the time just become a 
 				   variable depending on some conditions like if it gets used after a condition but it can be set by that condition not
 				   garunteed it will become an argument. All of this is put together this way instead of basing everything off of it's
-				   arg stack become random 
+				   arg stack become random args that don't even get used.
 		*/
 		void set_arguments(std::shared_ptr<ast_dec::ast>& ast) {
 
 			std::vector <std::uint32_t> dests; /* Registers used in dest. **getting written too** */
 			std::vector <std::uint32_t> source_no_dest; /* Registers used in source, value but not dest. **Not written too yet but been used** */
 
-			/* Loops usally overwrite some regs per part of there routine append them to dest. */
-			const auto loops = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_type<lexer_dec::inst_type::for_>(true));
-			for (const auto& i : loops) {
 
-				auto start_reg = 0u; /* for start */
-				auto iteration = 0u; /* for regs being consumed for its operation */
+			/* Everything needs to go through based on control flow. */
+			const auto all = ast->main_block->visit_all();
+			for (const auto& node : all) {
 
-				switch (i->lex->dissassembly->op) {
+				/* Loops usally overwrite some regs per part of there routine append them to dest. */
+				if (node->lex->type == lexer_dec::inst_type::for_) {
 
-					case LuauOpcode::LOP_FORGLOOP: {
-						start_reg = i->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
-						iteration = 4u;
+					auto start_reg = 0u; /* for start */
+					auto iteration = 0u; /* for regs being consumed for its operation */
+
+					switch (node->lex->dissassembly->op) {
+
+						case LuauOpcode::LOP_FORGLOOP: {
+							start_reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+							iteration = 4u;
+							break;
+						}
+						case LuauOpcode::LOP_FORNLOOP: {
+							start_reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+							iteration = 2u;
+							break;
+						}
+
+						/* Could be loop prep??? maybe */
+						default: {
+							continue;
+						}
+
+					}
+
+					/* Add vars from those loops. */
+					for (auto i = start_reg; i < (start_reg + iteration + 1u); ++i)
+						if (std::find(dests.begin(), dests.end(), i) == dests.end()) /* Found dest */
+							dests.emplace_back(i);
+
+				}
+
+				
+				switch (node->lex->dissassembly->op) {
+					
+					case LuauOpcode::LOP_RETURN: {
+
+						const auto dest = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+						auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+						if (amt) {
+
+							if (amt == -1)
+								amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
+
+							for (auto a = dest; a < (dest + amt); ++a)
+								if (std::find(dests.begin(), dests.end(), a) == dests.end())
+									dests.emplace_back(a);
+
+						}
+
 						break;
 					}
-					case LuauOpcode::LOP_FORNLOOP: {
-						start_reg = i->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
-						iteration = 2u;
+
+					case LuauOpcode::LOP_GETVARARGS: {
+
+						const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+						auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+						if (amt == -1)
+							amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
+
+						for (auto a = dest; a < (dest + amt); ++a)
+							if (std::find(dests.begin(), dests.end(), a) == dests.end())
+								dests.emplace_back(a);
+
 						break;
 					}
 
-					/* Could be loop prep??? maybe */
+					case LuauOpcode::LOP_CALL: {
+
+						auto args = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+						const auto start = node->lex->dissassembly->operands.front()->reg;
+
+						if (args == -1)
+							args = ((*(&node - 1u))->lex->dissassembly->operands.front()->reg - start);
+
+						/* Iterate through args and see if arg is not getting used in dest. */
+						for (auto i = 0; i < args; ++i) {
+
+							const auto arg = (i + start + 1u);
+
+							if (std::find(dests.begin(), dests.end(), arg) == dests.end() &&
+								std::find(source_no_dest.begin(), source_no_dest.end(), arg) == source_no_dest.end())
+									source_no_dest.emplace_back(arg);
+
+						}
+
+						/* Add placement for call. */
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.begin(), dests.end(), start) == dests.end() &&
+							std::find(source_no_dest.begin(), source_no_dest.end(), start) == source_no_dest.end())
+								source_no_dest.emplace_back(start);
+
+						break;
+					}
+
 					default: {
-						continue;
+
+						/* Append source. */
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::source>()) {
+
+							const auto regz = node->lex->operand_expr<lexer_dec::operand_types::source>();
+
+							for (const auto& operand : regz) {
+
+								/* Append unused reg. */
+								if (std::find(dests.begin(), dests.end(), operand->reg) == dests.end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end())
+									source_no_dest.emplace_back(operand->reg);
+
+							}
+
+						}
+
+
+						/* Append reg. */
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::reg>()) {
+
+							const auto regz = node->lex->operand_expr<lexer_dec::operand_types::reg>();
+
+							for (const auto& operand : regz) {
+
+								/* Append unused reg. */
+								if (std::find(dests.begin(), dests.end(), operand->reg) == dests.end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end())
+									source_no_dest.emplace_back(operand->reg);
+
+							}
+
+						}
+
+
+						/* Append dest. */
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.begin(), dests.end(), node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg) == dests.end()) {
+
+							const auto reg = dests.emplace_back(node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
+
+							dests.emplace_back(reg);
+
+							/* Append this. */
+							if (node->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL)
+								dests.emplace_back(reg + 1u);
+						}
+
+						break;
 					}
 
 				}
 
-				/* Add vars from those loops. */
-				for (auto i = start_reg; i < (start_reg + iteration + 1u); ++i)
-					if (std::find(dests.begin(), dests.end(), i) == dests.end()) /* Found?? */
-						dests.emplace_back(i);
-
 			}
-
+			
 			return;
 		}
 
@@ -58,6 +179,11 @@ namespace ast_funcs {
 
 	namespace concats {
 
+		/*
+			Concat routines in luaU are a bit special. When a concat opcode is called the start register and end register operand assemble the concat too
+			get placed as a dest. This can be used too find it's routine by getting the preceeding dest of the start and the end being the concat we can determine
+			the routine and where it starts and end.
+		*/
 		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
 			const auto concats = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CONCAT>(true));
@@ -75,6 +201,11 @@ namespace ast_funcs {
 
 	namespace calls {
 
+		/* 
+			Calls are a bit special in luaU because they rely on parent registers for both arguments and stack. Using this call routines usally get assembled right before
+			a call opcode is executed. We get the beggining of this by judging by it's parent target register stack found in the call opcode in previous code. Note you can
+			assemble the call and everything ahead of time and call later but that is very impracticle and very unoptimized which is generally not done.
+		*/
 		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
 			const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CALL>(true));
@@ -92,6 +223,11 @@ namespace ast_funcs {
 
 	namespace loops {
 
+		/* 
+			For loops in luaU are generally easy to find based on it instruction jumpback range and where a for loop instruction is though this only finds
+			start and end of the routine not where variables get assembled that is usally self handled by the transpiler and IGNORED by locvar huertistics
+			though special cases may apply changing this.
+		*/
 		void set_for_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
 			const auto forgloops = std::get<std::vector<std::shared_ptr<ast_dec::node>>> (ast->main_block->visit_inst<LuauOpcode::LOP_FORGLOOP>(true));
@@ -127,6 +263,19 @@ namespace ast_funcs {
 			return;
 		}
 
+		/*
+			While and repeat loops are "pretty tricky" to detect. 
+				* Repeat: The compare will come at the end of the routine and is near a jumpback instruction.
+				* While:  The compare will come at the beginging of the routine but its jump will go past jumpback instruction.
+		
+			This issue with this is not determing which one it is, it is determing which one is a valid while,until expression then a if/elseif.
+			Though some hueristics can be used to mitigate this problem and determine if its apart of the loop or not:
+				* If the jump exceeds the jumpback opcode or goes directly too it.
+				* If a variable doesn't get written between the next branch if there proceeds a jump.
+				* Opcodes that shouldn't be in between the next branch and proceeding jump (ie. return/nop/etc).
+				* Use of any of the compares used as dest between the next branch and proceeding jump.
+
+		*/
 		void set_whilerep_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
 			const auto jump_backs = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_JUMPBACK>(true));
@@ -256,10 +405,18 @@ namespace ast_funcs {
 
 	namespace locvars {
 
-		/* Sets locvar by each register dest +1 with certain specifications. */
+		/*
+		
+			Sets locvars based on certain hueristics. More detailed info about it can be found in ast_config.hpp at control_flow_vars macro.
+			Changing that will effect the behavior of this function but all the information you need can be found there but judge your discision
+			on how you want the code to be in the decompilation. This isn't 100% perfect because where mostly judging on hueristics and nothing else.
+			Depending on how the code is decompiled as of this version of luaU debug information contains stuff about variables (names, etc) but there isn't 
+			a garunteed it will be present or not so this will try to recreat that.
+		
+		*/
 		void set_lv(std::shared_ptr<ast_dec::ast>& ast, const std::uint16_t start_reg) {
 
-			std::vector<std::uint16_t> registers = { start_reg }; /* Registers for scope. */
+			std::vector<std::uint16_t> registers = { start_reg }; /* Registers for scope. (Based on target register) */
 			auto target = start_reg; /* Target register. */
 			std::uintptr_t routine = 0u; /* Inside concat, call, table routine, inc for start, dec for end. */
 
@@ -301,7 +458,6 @@ namespace ast_funcs {
 
 					auto bad = false; /* Failed any checks. (Can also be used if node is alr set. */
 					const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front ();
-
 
 
 					/* Capture with source garunteeds locvar so check there. */
@@ -346,6 +502,12 @@ namespace ast_funcs {
 					if (bad)
 						continue;
 
+					/* 
+					
+						After checking concat and call routines which can garunteed a variable this is where we mostly look at hueristics and decide if
+						a register will become a variable or not. Either one it's set too will effect the preformance of the decompiled code and accuracy.
+					
+					*/
 
 
 				}

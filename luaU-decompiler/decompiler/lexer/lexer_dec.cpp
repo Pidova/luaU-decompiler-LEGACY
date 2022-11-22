@@ -19,7 +19,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		/* Call and return. */
 		case LuauOpcode::LOP_CALL: {
 			retn->type = lexer_dec::inst_type::call;
-			retn->operands = { (retn->dissassembly->operands[2]->val ? lexer_dec::operand_types::dest : lexer_dec::operand_types::reg) /* Has return so its dest else its reg. */ , lexer_dec::operand_types::integer, lexer_dec::operand_types::integer}; /* Operands are dest, int, int */
+			retn->operands = { (retn->dissassembly->operands[2]->val ? lexer_dec::operand_types::dest : lexer_dec::operand_types::reg) /* Has return so its dest else its reg. */ , lexer_dec::operand_types::integer, lexer_dec::operand_types::integer}; /* Operands are dest, int(arg), int(return) */
 			break;
 		}
 		case LuauOpcode::LOP_RETURN: {
