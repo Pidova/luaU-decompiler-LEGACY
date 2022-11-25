@@ -32,10 +32,13 @@ namespace LuaU_dissassembler {
 			std::uintptr_t import_idx;
 		};
 
+		std::uintptr_t jmp_addr = 0u;
 		std::string k_value = ""; /* Seperate value to represent as a string and idx. Will also serve as import str. */
 	};
 
 	struct dissassembly {
+
+		std::uintptr_t addr = 0u;
 
 		LuauOpcode op; 
 

@@ -367,12 +367,12 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					}
 
 					case lexer_dec::operand_types::memaddr: {
-						str << "*	[memaddr]: " << std::to_string(oper->jmp) << std::endl;
+						str << "*	[memaddr]: " << std::to_string(node->address + oper->jmp_addr) << std::endl;
 						break;
 					}
 
 					case lexer_dec::operand_types::proto: {
-						str << "*	[proto]: " << std::to_string(oper->jmp) << std::endl;
+						str << "*	[proto]: " << std::to_string(oper->proto) << std::endl;
 						break;
 					}
 
@@ -426,6 +426,9 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			std::cout << "[transpiler.cpp] (pre-decompilation): " << decompilation << std::endl;
 		#endif
 
+		if (node->has_expr(ast_dec::expr_type::dead_instruction))
+			continue;
+
 		/* Instruction handler. */
 		switch (node->lex->dissassembly->op) {
 		
@@ -477,7 +480,13 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			case LuauOpcode::LOP_LOADB: {
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = std::to_string(node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val);
+			    auto source = std::to_string(node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val);
+
+
+				/* Jump for loadb, jump target will be a dead instruction. */
+				if (node->lex->dissassembly->op == LuauOpcode::LOP_LOADB && node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp)
+					source = regs.back()[-1]->data;
+
 
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
@@ -662,6 +671,29 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					}
 
 				}
+
+				break;
+			}
+
+
+			/* If */
+			case LuauOpcode::LOP_JUMPIF:
+			case LuauOpcode::LOP_JUMPIFNOT:
+			case LuauOpcode::LOP_JUMPIFEQ:
+			case LuauOpcode::LOP_JUMPIFLE:
+			case LuauOpcode::LOP_JUMPIFLT:
+			case LuauOpcode::LOP_JUMPIFNOTEQ:
+			case LuauOpcode::LOP_JUMPIFNOTLE:
+			case LuauOpcode::LOP_JUMPIFNOTLT: {
+
+				/* Only handles conditional for compare flag. */
+
+				/* Gets handled ahead of time just skip opcode. */
+				if (node->has_expr(ast_dec::expr_type::if_) || node->has_expr(ast_dec::expr_type::elseif_) ||
+					node->has_expr(ast_dec::expr_type::while_) || node->has_expr(ast_dec::expr_type::until_))
+						break;
+
+
 
 				break;
 			}

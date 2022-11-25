@@ -69,7 +69,7 @@ namespace ast_dec {
 		while_, /* while () follows condition. */
 		until_, /* until () follows condition. */
 		break_, /* break */
-		scope_end, /* scope end */
+		scope_end, /* scope end (generic) */
 
 		call_routine_start, /* Call routine start. */
 		call_routine_end, /* Call routine end. */
@@ -82,6 +82,7 @@ namespace ast_dec {
 		else_, /* else */
 	    condition_and, /* if/elseif/nested(and) appends to if_statements (Can be applied to until or while) */
 		condition_or, /* if/elseif/nested(or)  appends to if_statements (Can be applied to until or while) */
+		condition_nonmutable, /* Condition that cannot be converted into while/if/elseif etc. */
 
 		close, /*   %s ) */
 		open, /* ( %s   */
@@ -92,7 +93,10 @@ namespace ast_dec {
 
 		closure_local, /* local function test () */
 		closure_global, /* function test () */
-		closure_newclosure /* (function()  end)*/
+		closure_newclosure, /* (function()  end)*/
+
+		dead_instruction, /* Instruction gets ignored. */
+		conditional /* Condition flag will get written too dest. */
 	};
 
 	struct node {
@@ -116,7 +120,7 @@ namespace ast_dec {
 		
 		/* Node functions. */
 		template <expr_type type>
-		void add_expr(const std::size_t count) {
+		void add_expr(const std::size_t count = 1u) {
 
 			/* Replace only lex with type. */
 			if (this->expr.size() == 1u) {
@@ -176,8 +180,9 @@ namespace ast_dec {
 					if (i->lex->dissassembly->op == op)
 						if (all) /* Has all so emblace node. */
 							retn.emplace_back(i);
-						else /* Not all so return node. */
+						else {/* Not all so return node. */
 							return i;
+						}
 				}
 		
 				/* Add nested blocks. */
@@ -210,8 +215,9 @@ namespace ast_dec {
 					if (i->address > addr && i->lex->dissassembly->op == op)
 						if (all) /* Has all so emblace node. */
 							retn.emplace_back(i);
-						else /* Not all so return node. */
+						else { /* Not all so return node. */
 							return i;
+						}
 				}
 
 				/* Add nested blocks. */
@@ -230,7 +236,7 @@ namespace ast_dec {
 			return retn;
 		}
 
-		/* See if next opcode from addr exists. (Ignores current.) */
+		/* See if next opcode from addr exists. (Ignores current) */
 		template<LuauOpcode op>
 		bool has_next_inst(const std::uintptr_t addr) {
 
@@ -341,8 +347,9 @@ namespace ast_dec {
 					if (i->address > address && i->has_expr(type))
 						if (all)
 							retn.emplace_back(i);
-						else
+						else {
 							return i;
+						}
 
 				}
 
@@ -406,8 +413,9 @@ namespace ast_dec {
 					if (i->lex->type == inst)
 						if (all) /* Has all so emblace node. */
 							retn.emplace_back(i);
-						else /* Not all so return node. */
+						else { /* Not all so return node. */
 							return i;
+						}
 				}
 
 				/* Add nested blocks. */
@@ -610,8 +618,9 @@ namespace ast_dec {
 					if (i->has_expr(target))
 						if (!count)
 							return i;
-						else
+						else {
 							--count;
+						}
 				}
 
 				/* Add nested blocks. */

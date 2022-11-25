@@ -348,7 +348,6 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		}
 
 	}
-			
 
 	return retn;
 }

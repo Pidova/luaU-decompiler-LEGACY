@@ -7,7 +7,15 @@
 
 std::int32_t main() {
 
-	const char* const code = "print (\"cow\");";
+	const char* const code = "\
+		repeat \
+			if (cmp1 == cmp2) then \
+				 print (119); \
+				 break; \
+			end; \
+		 until(oaao and aoaoap == ajajk and ioaoa == aoak and aoapop == ujaja and lmao == kmao);\
+		print(111);\
+		";
 
 	/* Compile. */
 	std::size_t size = 0u;

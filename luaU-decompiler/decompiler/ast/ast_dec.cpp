@@ -1,7 +1,94 @@
 #include <algorithm>
 #include "ast_dec.hpp"
 
+#define node_nonmutable(node) node->has_expr(ast_dec::expr_type::condition_nonmutable)
+
 namespace ast_funcs {
+
+	namespace branches {
+		
+		template <ast_dec::expr_type tt, bool loadb = false /* loadb influences compare (conditional operations) */>
+		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end) {
+
+			std::uintptr_t ignore_till_addr = 0u;
+
+			const auto range = ast->main_block->visit_range(begin, end);
+			const auto loadbs = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_LOADB>(true));
+
+			for (const auto& node : range) {
+
+				/* Used for loadb jump. */
+				if (ignore_till_addr && node->address > ignore_till_addr)
+					continue;
+
+				if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
+
+					const auto jmp = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+
+				}
+
+				/* Check loadb as end or data. */
+				if (node->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
+
+					const auto jmp = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front();
+
+					/* Jump. (Logical operation) */
+					if (jmp->jmp) {
+
+						ignore_till_addr = jmp->jmp_addr;
+
+						const auto jmp_target = ast->main_block->visit_addr(ignore_till_addr);
+
+						/* Next loadb exists so check to see if it has a jump. */
+						if (ast->main_block->has_next_inst<LuauOpcode::LOP_LOADB>(jmp_target->address)) {
+
+							bool next_bool_jump = false;
+
+							for (const auto& lb : loadbs) {
+
+								/* Fits in range and has jump. */
+								if (lb->address > jmp_target->address && lb->address < end && lb->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
+									next_bool_jump = true;
+									break;
+								}
+
+							}
+
+							/* Next bools in the routines don't have jumps. */
+							if (!next_bool_jump) {
+
+								node->add_expr<tt>();
+
+							}
+							else { /* Next bools in the routine does have jump. */
+
+								/* Conditional for the set jmp and dead for the jmp target. */
+								node->add_expr<ast_dec::expr_type::conditional>();						
+
+							}
+
+							jmp_target->add_expr<ast_dec::expr_type::dead_instruction>();
+
+						}
+						else {
+
+							/* Mark loadb so it gets analyzed. */
+							ast->main_block->visit_addr(ignore_till_addr)->add_expr<ast_dec::expr_type::dead_instruction>();
+
+						}
+
+					}
+
+				}
+
+			}
+
+			ast->main_block->visit_addr(end)->add_expr<tt>();
+
+			return;
+		}
+
+	}
 
 	namespace arguments {
 
@@ -190,8 +277,8 @@ namespace ast_funcs {
 
 			/* Set concat info. */
 			for (const auto& node : concats) {
-				ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::concat_routine_start>(1u); /* Concat start. */
-				node->add_expr<ast_dec::expr_type::concat_routine_end>(1u); /* Concat end. */
+				ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::concat_routine_start>(); /* Concat start. */
+				node->add_expr<ast_dec::expr_type::concat_routine_end>(); /* Concat end. */
 			}
 
 			return;
@@ -212,8 +299,8 @@ namespace ast_funcs {
 			
 			/* Set call info. */
 			for (const auto& node : calls) {
-					ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::call_routine_start>(1u); /* Call start. */
-					node->add_expr<ast_dec::expr_type::call_routine_end>(1u); /* Call end. */
+					ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start. */
+					node->add_expr<ast_dec::expr_type::call_routine_end>(); /* Call end. */
 			}
 
 			return;
@@ -236,27 +323,24 @@ namespace ast_funcs {
 			/* Forgloops. */
 			for (const auto& forloop : forgloops) {
 
-				const auto jump_node = ast->main_block->visit_addr(forloop->address + forloop->lex->dissassembly->operands[1]->jmp);
+				const auto jump_node = ast->main_block->visit_addr(forloop->lex->dissassembly->operands[1]->jmp_addr);
 				const auto jump_inst = jump_node->lex->dissassembly->op;
 
 				/* for i,v in ipairs/pairs */
 				if (jump_inst == LuauOpcode::LOP_FORGPREP_INEXT || jump_inst == LuauOpcode::LOP_FORGPREP_NEXT)
-					jump_node->add_expr<ast_dec::expr_type::for_iv_start>(1u);
+					jump_node->add_expr<ast_dec::expr_type::for_iv_start>();
 				else
-					jump_node->add_expr<ast_dec::expr_type::for_start>(1u);
+					jump_node->add_expr<ast_dec::expr_type::for_start>();
 
-				forloop->add_expr<ast_dec::expr_type::scope_end>(1u);
+				forloop->add_expr<ast_dec::expr_type::scope_end>();
 
 			}
 
 			/* Fornloops. */
 			for (const auto& forloop : fornloops) {
 
-				const auto jump_node = ast->main_block->visit_addr(forloop->address + forloop->lex->dissassembly->operands[1]->jmp);
-				const auto jump_inst = jump_node->lex->dissassembly->op;
-
-				jump_node->add_expr<ast_dec::expr_type::for_start>(1u);
-				forloop->add_expr<ast_dec::expr_type::scope_end>(1u);
+				ast->main_block->visit_addr(forloop->lex->dissassembly->operands[1]->jmp_addr)->add_expr<ast_dec::expr_type::for_start>();
+				forloop->add_expr<ast_dec::expr_type::scope_end>();
 
 			}
 
@@ -278,6 +362,8 @@ namespace ast_funcs {
 		*/
 		void set_whilerep_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
+			std::vector<std::shared_ptr<ast_dec::node>> nodes;
+
 			const auto jump_backs = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_JUMPBACK>(true));
 			const auto jump_conds = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_type<lexer_dec::inst_type::branch_condition>(true));
 
@@ -285,18 +371,119 @@ namespace ast_funcs {
 			/* Check typical jumpbacks *Previous inst is condition its until else end for while. */
 			for (const auto& jmp_back : jump_backs) {
 
-				if (ast->main_block->visit_previous_addr(jmp_back->address)->lex->type == lexer_dec::inst_type::branch_condition)
-					jmp_back->add_expr<ast_dec::expr_type::until_>(1u); /* Until end. */
-				else
-					jmp_back->add_expr<ast_dec::expr_type::scope_end>(1u); /* While loop end. */
+				if (ast->main_block->visit_previous_addr(jmp_back->address)->lex->type == lexer_dec::inst_type::branch_condition) {
+					jmp_back->add_expr<ast_dec::expr_type::until_>(); /* Until end. */
+					nodes.emplace_back(jmp_back);
+				}
+				else {
+					jmp_back->add_expr<ast_dec::expr_type::scope_end>(); /* While loop end. */
+					nodes.emplace_back(jmp_back);
+				}
 
 			}
 
 			/* See if jump memaddrs are negatives usally means there until. */
 			for (const auto& jmp_back : jump_conds) 
-				if (jmp_back->lex->dissassembly->operands[std::find(jmp_back->lex->operands.begin(), jmp_back->lex->operands.end(), lexer_dec::operand_types::memaddr) - jmp_back->lex->operands.begin()]->jmp < 0) /* See if mem address of jump is negative (We need to get idx of memaddr operand). */
-					jmp_back->add_expr<ast_dec::expr_type::until_>(1u); /* Until end. */
+				if (jmp_back->lex->dissassembly->operands[std::find(jmp_back->lex->operands.begin(), jmp_back->lex->operands.end(), lexer_dec::operand_types::memaddr) - jmp_back->lex->operands.begin()]->jmp < 0) { /* See if mem address of jump is negative (We need to get idx of memaddr operand). */
+					jmp_back->add_expr<ast_dec::expr_type::until_>(); /* Until end. */
+					nodes.emplace_back(jmp_back);
+				}
 
+			/* We need to get range of until/while rotuines conditions. */
+			for (const auto& jumpback : nodes) {
+
+				/* See if jumpback is a branch. */
+				if (jumpback->lex->type != lexer_dec::inst_type::branch_condition && jumpback->lex->type != lexer_dec::inst_type::branch)
+					throw std::exception("until/while branch jumpback isn't a branch.");
+
+				const auto nodes_routine = ast->main_block->visit_range(jumpback->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr, jumpback->address);
+
+
+				std::shared_ptr<ast_dec::node> marked_node = nullptr;
+				
+
+				if (jumpback->has_expr(ast_dec::expr_type::until_)) {
+
+					/* End of routine is given with until. Find begging. */
+					for (const auto& node : nodes_routine) {
+
+						if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
+
+							/* Break */
+							if (node->lex->dissassembly->op == LuauOpcode::LOP_JUMP || node->lex->dissassembly->op == LuauOpcode::LOP_JUMPX) {
+
+								if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address)
+									node->add_expr<ast_dec::expr_type::break_>();
+
+								continue;
+							} 
+
+							/* Only has one compare or couldnt find anything else. */
+							if ((node->address + node->lex->dissassembly->len) == jumpback->address) {
+
+								if (node_nonmutable(node))
+									throw std::exception("Until node cannot non-mutable.");
+
+								node->add_expr<ast_dec::expr_type::condition_nonmutable>();
+								break;
+							}
+
+							/* 
+								Jumps too jumpback address.
+									* Can mean justs ands in the compare condition.
+									* If there is a compare after the jumpback it must exceed the jumpback if not then the loop is just a until(true/false);
+							*/
+							if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr == jumpback->address) {
+
+								const auto previous = ast->main_block->visit_previous_addr(jumpback->address);
+
+								/* Isn't a until(true/false) loop. */
+								if (previous->lex->type == lexer_dec::inst_type::branch_condition || previous->lex->type == lexer_dec::inst_type::branch) {
+									branches::set<ast_dec::expr_type::until_>(ast, node->address, jumpback->address);
+									break;
+								}
+								else { /* Is a until(true/false) loop. */
+									/* 	until(true/false) loop data will get handeled by transpiler if compareflag is 0. */
+									break;
+								}
+
+							}
+
+						}
+
+					}
+
+				}
+				else {
+
+					/* Begining of routine is given with until. Find end. */
+					for (const auto& node : nodes_routine) {
+
+						if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
+
+							/* Break */
+							if (node->lex->dissassembly->op == LuauOpcode::LOP_JUMP || node->lex->dissassembly->op == LuauOpcode::LOP_JUMPX) {
+
+								if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address)
+									node->add_expr<ast_dec::expr_type::break_>();
+
+								continue;
+							}
+
+
+
+
+
+						}
+
+
+					}
+
+
+				}
+
+			}
+			
 			return;
 		}
 		
@@ -340,7 +527,7 @@ namespace ast_funcs {
 				std::uintptr_t table_size = 0u; 
 				std::uintptr_t predicted_size = 0u;
 
-				table->add_expr<ast_dec::expr_type::table_start>(1u);
+				table->add_expr<ast_dec::expr_type::table_start>();
 
 				if (table->lex->dissassembly->op != LuauOpcode::LOP_NEWTABLE || table->lex->dissassembly->operands[1]->table_size) {
 					/* Has table members. */
@@ -388,12 +575,12 @@ namespace ast_funcs {
 							reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 						
 					}
-
+					
 				}
 				else {
 					/* No table members. */
-					table->add_expr<ast_dec::expr_type::table_start>(1u);
-					table->add_expr<ast_dec::expr_type::table_end>(1u);
+					table->add_expr<ast_dec::expr_type::table_start>();
+					table->add_expr<ast_dec::expr_type::table_end>();
 				}
 
 			}
@@ -523,8 +710,8 @@ namespace ast_funcs {
 		ast_funcs::arguments::set_arguments(ast);
 		ast_funcs::calls::set_routines(ast);
 		ast_funcs::concats::set_routines(ast);
+		ast_funcs::loops::set_whilerep_routines(ast); /* Needed after concat can mess up if before or after. (expr_type::scope_end needed only for while end) */
 		ast_funcs::loops::set_for_routines(ast);
-		ast_funcs::loops::set_whilerep_routines(ast);
 		return;
 	}
 
@@ -590,7 +777,7 @@ namespace blocks {
 				if (!temp_lex->has_operand_expr<lexer_dec::operand_types::memaddr>())
 					throw std::exception("Jump with no memaddr operand in lexer at set_blocks.");
 
-				branch_ends.emplace_back(dism.first + temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front ()->jmp);
+				branch_ends.emplace_back(temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front ()->jmp_addr);
 				
 			}
 		
@@ -652,7 +839,7 @@ namespace proto {
 		closures.insert(closures.end(), dupclosures.begin(), dupclosures.end());
 		
 		/* Iterate through closures and get expression for it relative to proto given. */
-		for (const auto i : closures) {
+		for (const auto& i : closures) {
 
 			/* Expression has been set. */
 			if (closure_node != nullptr)
@@ -687,7 +874,7 @@ namespace proto {
 		}
 
 		/* Turn expression to closure type. */
-		for (const auto e : closure_node->expr) {
+		for (const auto& e : closure_node->expr) {
 
 			auto& proto = current_proto->protos[child_proto_id];
 
