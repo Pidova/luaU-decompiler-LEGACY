@@ -5,6 +5,94 @@
 
 namespace ast_funcs {
 
+	namespace proto {
+
+		void set_closure_info(const std::shared_ptr<ast_dec::ast>& current_proto, const std::size_t child_proto_id) {
+
+			std::shared_ptr<ast_dec::node> closure_node = nullptr;
+
+			/* Newclosure, Dupclosures node. */
+			auto closures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(current_proto->main_block->visit_inst<LuauOpcode::LOP_NEWCLOSURE>(true));
+			const auto dupclosures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(current_proto->main_block->visit_inst<LuauOpcode::LOP_DUPCLOSURE>(true));
+
+			/* All closures. */
+			closures.insert(closures.end(), dupclosures.begin(), dupclosures.end());
+
+			/* Iterate through closures and get expression for it relative to proto given. */
+			for (const auto& i : closures) {
+
+				/* Expression has been set. */
+				if (closure_node != nullptr)
+					break;
+
+				switch (i->lex->dissassembly->op) {
+
+					case LuauOpcode::LOP_NEWCLOSURE: {
+
+						/* Set newcclosure node. */
+						if (i->lex->dissassembly->operands[1]->proto == child_proto_id)
+							closure_node = i; /* Set node. */
+
+						break;
+					}
+
+					case LuauOpcode::LOP_DUPCLOSURE: {
+
+						/* Get proto from dupclosure kvalue. */
+						if (current_proto->p->p[child_proto_id] == gco2cl(current_proto->p->k[i->lex->dissassembly->operands[1]->k_idx].value.gc)->l.p)
+							closure_node = i; /* Set node. */
+
+						break;
+					}
+
+					default: {
+						throw std::exception("Unkown opcode for closure_type.");
+					}
+
+				}
+
+			}
+
+			/* Turn expression to closure type. */
+			for (const auto& e : closure_node->expr) {
+
+				auto& proto = current_proto->protos[child_proto_id];
+
+				switch (e.first) {
+
+					/* Comes with closure name. */
+					case ast_dec::expr_type::closure_global: {
+						proto->closure_type = ast_dec::closure_type::global;
+						proto->closure_name = std::get<std::shared_ptr<ast_dec::node>>(current_proto->main_block->visit_next_inst<LuauOpcode::LOP_SETGLOBAL>(closure_node->address, false))->lex->dissassembly->operands[2]->k_value;
+						break;
+					}
+
+					/* Closure name doesn't get compiled unless specified. */
+					case ast_dec::expr_type::closure_local: {
+						proto->closure_type = ast_dec::closure_type::local;
+						break;
+					}
+
+					/* No closure name. */
+					case ast_dec::expr_type::closure_newclosure: {
+						proto->closure_type = ast_dec::closure_type::newclosure;
+						break;
+					}
+
+					/* Shouldn't happen but incase it does. */
+					default: {
+						throw std::exception("Unkown expression for closure_type.");
+					}
+
+				}
+
+			}
+
+			return;
+		}
+
+	}
+
 	namespace branches {
 		
 		template <ast_dec::expr_type tt, bool loadb = false /* loadb influences compare (conditional operations) */>
@@ -723,7 +811,7 @@ namespace blocks {
 	std::tuple <std::vector<std::shared_ptr<ast_dec::node>>, std::uintptr_t /* Start next pc. */, std::uintptr_t /* Final instruction. */> init_current_block(std::shared_ptr<ast_dec::ast>& ast, std::uintptr_t pc, std::vector<std::uintptr_t>& branch_ends) {
 	
 		std::vector<std::shared_ptr<ast_dec::node>> retn;
-
+	
 		/* Init basic node data. */
 		do {
 			
@@ -748,9 +836,8 @@ namespace blocks {
 			pc += current_dissassembly->len;
 
 		} while (true /* Earlier code will exit if hit a branch or passed branch ends. */);
-
-
-		return std::make_tuple(retn, pc + retn.back()->lex->dissassembly->len /* Skip current instruction. */, pc);
+		
+		return std::make_tuple(retn, pc + ast->dissassembly[pc]->len /* Skip current instruction. */, pc);
 	}
 
 
@@ -816,7 +903,7 @@ namespace blocks {
 		/* Assemble blocks. */
 		while (pc < ast->p->sizecode /* Pc didn't exceed sizecode. */) {
 
-			const auto block = linear_blocks[pc];
+			const auto& block = linear_blocks[pc];
 
 		};
 
@@ -825,94 +912,6 @@ namespace blocks {
 
 }
 
-namespace proto {
-
-	void set_closure_info(const std::shared_ptr<ast_dec::ast>& current_proto, const std::size_t child_proto_id) {
-
-		std::shared_ptr<ast_dec::node> closure_node = nullptr;
-
-		/* Newclosure, Dupclosures node. */
-		auto closures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(current_proto->main_block->visit_inst<LuauOpcode::LOP_NEWCLOSURE>(true));
-		const auto dupclosures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(current_proto->main_block->visit_inst<LuauOpcode::LOP_DUPCLOSURE>(true));
-		
-		/* All closures. */
-		closures.insert(closures.end(), dupclosures.begin(), dupclosures.end());
-		
-		/* Iterate through closures and get expression for it relative to proto given. */
-		for (const auto& i : closures) {
-
-			/* Expression has been set. */
-			if (closure_node != nullptr)
-				break;
-
-			switch (i->lex->dissassembly->op) {
-
-				case LuauOpcode::LOP_NEWCLOSURE: {
-
-					/* Set newcclosure node. */
-					if (i->lex->dissassembly->operands[1]->proto == child_proto_id)
-						closure_node = i; /* Set node. */
-
-					break;
-				}
-
-				case LuauOpcode::LOP_DUPCLOSURE: {
-
-					/* Get proto from dupclosure kvalue. */
-					if (current_proto->p->p[child_proto_id] == gco2cl(current_proto->p->k[i->lex->dissassembly->operands[1]->k_idx].value.gc)->l.p)
-						closure_node = i; /* Set node. */
-
-					break;
-				}
-
-				default: {
-					throw std::exception("Unkown opcode for closure_type.");
-				}
-
-			}
-
-		}
-
-		/* Turn expression to closure type. */
-		for (const auto& e : closure_node->expr) {
-
-			auto& proto = current_proto->protos[child_proto_id];
-
-			switch (e.first) {
-			
-				/* Comes with closure name. */
-				case ast_dec::expr_type::closure_global: {
-					proto->closure_type = ast_dec::closure_type::global;
-					proto->closure_name = std::get<std::shared_ptr<ast_dec::node>>(current_proto->main_block->visit_next_inst<LuauOpcode::LOP_SETGLOBAL>(closure_node->address, false))->lex->dissassembly->operands[2]->k_value;
-					break;
-				}
-			
-				/* Closure name doesn't get compiled unless specified. */
-				case ast_dec::expr_type::closure_local: {
-					proto->closure_type = ast_dec::closure_type::local;
-					break;
-				}
-			
-				/* No closure name. */
-				case ast_dec::expr_type::closure_newclosure: {
-					proto->closure_type = ast_dec::closure_type::newclosure;
-					break;
-				}
-			
-				/* Shouldn't happen but incase it does. */
-				default: {
-					throw std::exception("Unkown expression for closure_type.");
-				}
-			
-			}
-
-		}
-
-		return;
-	}
-
-}
-#include <iostream>
 std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 
 	/* Current ast. */
@@ -947,7 +946,7 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 			/* Make child ast and add proto and get type. */
 			auto child_ast = std::make_shared<ast>();
 			child_ast->p = current_proto->p->p[i];
-			proto::set_closure_info(current_proto, i);
+			ast_funcs::proto::set_closure_info(current_proto, i);
 
 			/* Add child to get analyzed. */
 			protos_ast.emplace_back(child_ast);

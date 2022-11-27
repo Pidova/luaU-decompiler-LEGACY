@@ -4,6 +4,9 @@
 #include "../emitter/emitter.hpp"
 #include "../debug.hpp"
 
+
+#define flag_compare -1
+
 namespace registers {
 
 	enum class type : std::uint8_t {
@@ -110,7 +113,7 @@ namespace registers {
 					auto ptr = std::make_shared<registers::reg>();
 					this->registers.insert(std::make_pair(reg, ptr));
 
-					if (reg > -1)
+					if (reg > -1 /* First flag */)
 						ptr->type = registers::type::flag;
 
 					return ptr;
@@ -139,7 +142,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 	for (const auto& node : block->nodes) {
 
 		/* Pass expr. */
-		for (const auto expr : node->expr) {
+		for (const auto& expr : node->expr) {
 			
 			for (auto i = 0u; i < expr.second; ++i)
 				switch (expr.first) {
@@ -170,7 +173,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						}
 						
 						/* Inc expr. */
-						++regs.back()[-1]->special.inside_expr;
+						++regs.back()[flag_compare]->special.inside_expr;
 
 						break;
 					}
@@ -190,7 +193,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						}
 
 						/* Dec expr. */
-						--regs.back()[-1]->special.inside_expr;
+						--regs.back()[flag_compare]->special.inside_expr;
 
 						break;
 					}
@@ -225,7 +228,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 							const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
 							const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[-1]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", cmp_1->data, cmp_2->data);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", cmp_1->data, cmp_2->data);
 						}
 						else {
 
@@ -233,7 +236,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 							const auto cmp = regs.back()[node->lex->dissassembly->operands[0]->reg];
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[-1]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", cmp->data);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", cmp->data);
 						}
 
 						/* Remove last scope and replicate next. */
@@ -241,7 +244,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						regs.emplace_back(regs.back().clone());
 
 						/* Clear compare flag. */
-						regs.back()[-1]->clear(true);
+						regs.back()[flag_compare]->clear(true);
 						
 						break;
 					}
@@ -256,7 +259,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						regs.emplace_back(regs.back().clone());
 
 						/* Clear compare flag. */
-						regs.back()[-1]->clear(true);
+						regs.back()[flag_compare]->clear(true);
 
 						break;
 					}
@@ -272,7 +275,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 							const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
 							const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[-1]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", cmp_1->data, cmp_2->data);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", cmp_1->data, cmp_2->data);
 						}
 						else {
 
@@ -280,7 +283,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 							const auto cmp = regs.back()[node->lex->dissassembly->operands[0]->reg];
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[-1]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", cmp->data);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", cmp->data);
 						}
 
 						/* Remove last scope and replicate next. */
@@ -288,7 +291,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						regs.emplace_back(regs.back().clone());
 
 						/* Clear compare flag. */
-						regs.back()[-1]->clear(true);
+						regs.back()[flag_compare]->clear(true);
 
 						break;
 					}
@@ -485,7 +488,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 				/* Jump for loadb, jump target will be a dead instruction. */
 				if (node->lex->dissassembly->op == LuauOpcode::LOP_LOADB && node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp)
-					source = regs.back()[-1]->data;
+					source = regs.back()[flag_compare]->data;
 
 
 				/* Vararg.*/
@@ -684,7 +687,11 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			case LuauOpcode::LOP_JUMPIFLT:
 			case LuauOpcode::LOP_JUMPIFNOTEQ:
 			case LuauOpcode::LOP_JUMPIFNOTLE:
-			case LuauOpcode::LOP_JUMPIFNOTLT: {
+			case LuauOpcode::LOP_JUMPIFNOTLT: 
+			case LuauOpcode::LOP_JUMPXEQKB:
+			case LuauOpcode::LOP_JUMPXEQKN:
+			case LuauOpcode::LOP_JUMPXEQKS:
+			case LuauOpcode::LOP_JUMPXEQKNIL: {
 
 				/* Only handles conditional for compare flag. */
 
@@ -693,7 +700,115 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					node->has_expr(ast_dec::expr_type::while_) || node->has_expr(ast_dec::expr_type::until_))
 						break;
 
+				/* Get compare. */
+				std::string cmp1 = "";
+				std::string cmp2 = "";
 
+				switch (node->lex->dissassembly->op) {
+			
+					case LuauOpcode::LOP_JUMPXEQKB:
+					case LuauOpcode::LOP_JUMPXEQKN:
+					case LuauOpcode::LOP_JUMPXEQKS:
+					case LuauOpcode::LOP_JUMPXEQKNIL: {
+						cmp1 = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::compare>().front()->reg]->data;
+						cmp2 = node->lex->operand_expr<lexer_dec::operand_types::kvalue>()[1]->k_value;
+						break;
+					}
+
+					case LuauOpcode::LOP_JUMPIF:
+					case LuauOpcode::LOP_JUMPIFNOT: {
+						cmp1 = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::compare>().front()->reg]->data;
+						break;
+					}
+
+					case LuauOpcode::LOP_JUMPIFEQ:
+					case LuauOpcode::LOP_JUMPIFLE:
+					case LuauOpcode::LOP_JUMPIFLT:
+					case LuauOpcode::LOP_JUMPIFNOTEQ:
+					case LuauOpcode::LOP_JUMPIFNOTLE:
+					case LuauOpcode::LOP_JUMPIFNOTLT: {
+						cmp1 = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::compare>().front()->reg]->data;
+						cmp2 = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::compare>()[1]->reg]->data;
+						break;
+					}
+
+				}
+
+				/* See pre-condition expr. */
+				for (const auto& expr : node->expr) {
+
+					for (auto i = 0u; i < expr.second; ++i)
+						switch (expr.first) {
+
+							case ast_dec::expr_type::open: {
+								emitter::str(regs.back()[flag_compare]->data, " ( ");
+								break;
+							}
+
+						}
+
+				}
+
+				/* Emit compare to compare flag. */
+				emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, regs.back()[flag_compare]->data, NULL, cmp1, cmp2);
+
+				/* See post-condition expr. */
+				for (const auto& expr : node->expr) {
+
+					for (auto i = 0u; i < expr.second; ++i)
+						switch (expr.first) {
+
+							case ast_dec::expr_type::condition_and: {
+								emitter::str(regs.back()[flag_compare]->data, " and ");
+								break;
+							}
+
+							case ast_dec::expr_type::condition_or: {
+								emitter::str(regs.back()[flag_compare]->data, " or ");
+								break;
+							}
+
+							case ast_dec::expr_type::close: {
+								emitter::str(regs.back()[flag_compare]->data, " ) ");
+								break;
+							}
+
+						}
+
+				}
+
+				/* Emit conditional. */
+				if (node->has_expr(ast_dec::expr_type::conditional)) {
+
+					const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::compare>().front()->reg];
+
+					/* Vararg.*/
+					if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+						emitter::vararg_equal(decompilation, dest->data, regs.back()[flag_compare]->data);
+
+					}
+					else {
+
+						/* Create arg. */
+						if (node->dest_loc.is_dest_loc) {
+
+							dest->set<registers::type::var>(node->dest_loc.name);
+							emitter::new_vararg_equal(decompilation, dest->data, regs.back()[flag_compare]->data);
+
+						}
+						else {
+
+							/* General purpose. */
+							dest->set<registers::type::expr>(regs.back()[flag_compare]->data);
+
+						}
+
+					}
+
+					regs.back()[flag_compare]->clear();
+
+				}
 
 				break;
 			}

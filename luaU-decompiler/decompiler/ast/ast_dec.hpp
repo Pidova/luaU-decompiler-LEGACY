@@ -14,38 +14,6 @@
 
 namespace ast_dec {
 
-	namespace registers {
-
-		enum class type : std::uint8_t {
-			none,
-			expression,
-			vararg,
-			integer,
-			boolean,
-			upvalue,
-			kvalue,
-			proto
-		}; 
-
-		struct reg {
-
-			std::uint16_t id = 0u; /* Register id. */
-			type tt = type::none;
-
-			union values {
-				bool boolean;
-				std::intptr_t integer;
-				std::uintptr_t upvalue;
-				std::uintptr_t proto;
-				std::uintptr_t kvalue;
-			};
-
-			std::string container = "";
-			
-		};
-
-	}
-
 	/* Types of closures. */
 	enum class closure_type : std::uint8_t {
 		none,
@@ -96,7 +64,7 @@ namespace ast_dec {
 		closure_newclosure, /* (function()  end)*/
 
 		dead_instruction, /* Instruction gets ignored. */
-		conditional /* Condition flag will get written too dest. */
+		conditional /* Condition flag will get written too dest. (Used for branching opcodes including loadb +jmp **Will clear compare flag if conditional is not loadb) */
 	};
 
 	struct node {
@@ -192,6 +160,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size());
 
 			return retn;
@@ -227,6 +198,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size ());
 
 			/* Nothing. */
@@ -235,6 +209,7 @@ namespace ast_dec {
 
 			return retn;
 		}
+
 
 		/* See if next opcode from addr exists. (Ignores current) */
 		template<LuauOpcode op>
@@ -259,6 +234,9 @@ namespace ast_dec {
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
 
 			} while (scopes.size());
 
@@ -289,6 +267,9 @@ namespace ast_dec {
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
 
 			} while (scopes.size());
 
@@ -325,6 +306,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size());
 
 			return retn;
@@ -360,6 +344,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size());
 
 			return retn;
@@ -389,6 +376,9 @@ namespace ast_dec {
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
 
 			} while (scopes.size());
 
@@ -424,6 +414,9 @@ namespace ast_dec {
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
 
 			} while (scopes.size());
 
@@ -463,6 +456,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size());
 
 			/* Node is null. */
@@ -497,6 +493,9 @@ namespace ast_dec {
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
 
 			} while (scopes.size());
 
@@ -540,6 +539,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size());
 
 			throw std::exception("Returning no data for visit_relative_inst.");
@@ -582,6 +584,9 @@ namespace ast_dec {
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
 
 			} while (scopes.size());
 
@@ -630,6 +635,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size());
 
 			throw std::exception("Returning no data for visit_relative_next_expr.");
@@ -654,6 +662,9 @@ namespace ast_dec {
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
 
 			} while (scopes.size());
 
@@ -689,6 +700,9 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
+				/* Remove duplicates. */
+				this->remove_dupes(scopes);
+
 			} while (scopes.size());
 
 			/* Nothing. */
@@ -698,6 +712,23 @@ namespace ast_dec {
 			return retn;
 		}
 
+		private:
+			/* Removes scope dupes. */
+			void remove_dupes(std::vector<block*>& scopes) {
+
+				for (const auto& target : scopes) {
+					auto count = 0u;
+					for (const auto& on : scopes) {
+						if (on->node_start == target->node_start && on->node_end == target->node_end) {
+							++count;
+							if (count > 1u) {
+								scopes.erase(std::remove(scopes.begin(), scopes.end(), on), scopes.end());
+							}
+						}
+					}
+				}
+
+			}
 	};
 
 	struct ast {
