@@ -600,7 +600,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 
 					case op_table::type::table_size: {
 						const auto size = (!operand_value ? 0 : (1 << (operand_value - 1)));
-						buffer->data += "proto_" + std::to_string(size) + split;
+						buffer->data += std::to_string(size) + split;
 						current_operand->table_size = size;
 						break;
 					}

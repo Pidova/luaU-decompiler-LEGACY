@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <iostream>
 #include "ast_dec.hpp"
 
 #define node_nonmutable(node) node->has_expr(ast_dec::expr_type::condition_nonmutable)
@@ -581,52 +582,27 @@ namespace ast_funcs {
 
 		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
 
-			auto table_add_info = [&](const std::shared_ptr<ast_dec::node> node, auto size, auto predicted_size) -> void {
-
-				if (node->lex->dissassembly->op == LuauOpcode::LOP_NEWTABLE) {
-
-					auto x = node->lex->dissassembly->operands[1]->table_size;
-					size += x;
-
-					--x;
-					x = x | (x >> 1);
-					x = x | (x >> 2);
-					x = x | (x >> 4);
-					x = x | (x >> 8);
-					x = x | (x >> 16);
-					predicted_size += x - (x >> 1);
-
-				}
-				else {
-
-					size += std::stoi(node->lex->dissassembly->operands[1]->k_value.c_str());
-
-				}
-
-				return;
-			};
-
 		    auto tables = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_NEWTABLE>(true));
 			const auto duptables = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_DUPTABLE>(true));		
 			tables.insert(tables.end(), duptables.begin(), duptables.end());
 
 			for (const auto& table : tables) {
 
-				std::uintptr_t table_size = 0u; 
+
+				std::uintptr_t node_size = 0u;
+				std::uintptr_t array_size = 0u; 
 				std::uintptr_t predicted_size = 0u;
 
-				table->add_expr<ast_dec::expr_type::table_start>();
+				auto set_size = [&](const std::shared_ptr<ast_dec::node>& node) mutable -> void {
 
-				if (table->lex->dissassembly->op != LuauOpcode::LOP_NEWTABLE || table->lex->dissassembly->operands[1]->table_size) {
-					/* Has table members. */
+					switch (node->lex->dissassembly->op) {
 
-					/* Set size. */
-					auto set_size = [&](const std::shared_ptr<ast_dec::node>& node) mutable -> void {
+						case LuauOpcode::LOP_NEWTABLE: {
 
-						if (node->lex->dissassembly->op == LuauOpcode::LOP_NEWTABLE) {
-
-							auto x = node->lex->dissassembly->operands[1]->table_size;
-							table_size += x;
+							const auto operands = table->lex->operand_expr<lexer_dec::operand_types::integer>();
+							auto x = operands.front()->table_size;
+							node_size += x;
+							array_size += operands.front()->val;
 
 							--x;
 							x = x | (x >> 1);
@@ -635,42 +611,69 @@ namespace ast_funcs {
 							x = x | (x >> 8);
 							x = x | (x >> 16);
 							predicted_size += x - (x >> 1);
-
-						}
-						else {
-
-							table_size += std::stoi(node->lex->dissassembly->operands[1]->k_value.c_str());
-
+							break;
 						}
 
-						return;
-					};
-					set_size(table);
+						case LuauOpcode::LOP_DUPTABLE: {
+							node_size += std::stoi(node->lex->dissassembly->operands[1]->k_value.c_str());
+							break;
+						}
 
-					const auto nodes = ast->main_block->visit_rest(table->address);
 
-					auto reg = 0u; /* Previous register dest. */
+						case LuauOpcode::LOP_SETTABLE:
+						case LuauOpcode::LOP_SETTABLEKS:
+						case LuauOpcode::LOP_SETTABLEN: {
+							--node_size;
+							break;
+						}
 
-					for (const auto& node : nodes) {
+						case LuauOpcode::LOP_SETLIST: {
+							array_size -= node->lex->dissassembly->operands[2]->val;
+							break;
+						}
 
-						/* bruh */
-						if (node->lex->dissassembly->op == LuauOpcode::LOP_SETLIST)
-							table_size -= node->lex->dissassembly->operands[2]->val;
-			
-
-						/* Set previous dest register. */
-						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
-							reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-						
 					}
-					
+
+					return;
+				};
+				
+				/* Add first info */
+				if (table->lex->dissassembly->op != LuauOpcode::LOP_NEWTABLE) {
+					/* Has table members. */
+
+					const auto operands = table->lex->operand_expr<lexer_dec::operand_types::integer>();
+					if (operands.front()->table_size || operands.back()->val) {
+						
+						table->add_expr<ast_dec::expr_type::table_start>();
+						set_size(table);
+						auto reg = 0u; /* Previous register dest. */
+						
+
+						const auto nodes = ast->main_block->visit_rest(table->address);
+						for (const auto& node : nodes) {
+
+							if (node->lex->dissassembly->op == LuauOpcode::LOP_SETLIST)
+								set_size(node);
+
+
+							/* Set previous dest register. */
+							if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
+								reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+						}
+
+					}
+					else {
+						/* No table members. */
+						table->add_expr<ast_dec::expr_type::table_start>();
+						table->add_expr<ast_dec::expr_type::table_end>();
+					}
+
 				}
 				else {
-					/* No table members. */
 					table->add_expr<ast_dec::expr_type::table_start>();
-					table->add_expr<ast_dec::expr_type::table_end>();
+					set_size(table);
 				}
-
 			}
 
 			return;
@@ -830,7 +833,7 @@ namespace blocks {
 			node->lex = lexer_dec::lexer(current_dissassembly);
 			
 			/* Branch/end so break. */
-			if (node->lex->type == lexer_dec::inst_type::branch || node->lex->type == lexer_dec::inst_type::branch_condition || pc == ast->p->sizecode)
+			if (node->lex->type == lexer_dec::inst_type::branch || node->lex->type == lexer_dec::inst_type::branch_condition || (pc + current_dissassembly->len) == ast->p->sizecode)
 				break;		
 
 			pc += current_dissassembly->len;
@@ -851,7 +854,7 @@ namespace blocks {
 
 		/* Set each end as every branch taken pc. */
 		for (auto& dism : ast->dissassembly) {
-			
+
 			const auto temp_lex = lexer_dec::lexer(dism.second);
 
 			/* Don't log if jumpback. */
@@ -877,7 +880,7 @@ namespace blocks {
 
 		/* Append blocks */
 		do {
-
+			
 			const auto block = init_current_block(ast, pc, branch_ends);
 			linear_blocks.insert(std::make_pair(pc, std::make_tuple(std::get<2>(block), std::get<1>(block), std::get<0>(block))));
 
@@ -888,7 +891,7 @@ namespace blocks {
 
 		/* Reset PC. */
 		pc = 0u;
-		
+	
 
 		/* Init main. (Block search is dependent on main so needs to be seperate from everything). */
 		ast->main_block->node_start = pc;
@@ -906,7 +909,7 @@ namespace blocks {
 			const auto& block = linear_blocks[pc];
 
 		};
-
+		
 		return;
 	}
 
@@ -928,13 +931,13 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 		std::uintptr_t pc = 0u;
 		auto current_proto = protos_ast[0];
 
-
 		/* Set current proto dissasembly. */
-		for (auto i = 0u; i < unsigned (proto->sizecode); ++i) {		
+		for (auto i = 0u; i < unsigned (proto->sizecode);) {
 			auto dism = std::make_shared<LuaU_dissassembler::dissassembly>();
 			LuaU_dissassembler::dissassemble(pc, current_proto->p, dism);
 			current_proto->dissassembly.insert(std::make_pair(pc, dism));
 			pc += dism->len;
+			i += dism->len;
 		}
 
 		/* Set current proto blocks. */

@@ -7,7 +7,9 @@
 
 std::int32_t main() {
 
-	const char* const code = "\
+	const char* const code = " printf ({ [100] = (10912 + aiai / aoao), [(iaoao + 100 * aoao)] = 100, [ppp] = { 100, 100, 100 }, 1, 2, 3, 8, 1, 12, 10 } )";
+		/*
+		
 		repeat \
 			if (cmp1 == cmp2) then \
 				 print (119); \
@@ -15,8 +17,7 @@ std::int32_t main() {
 			end; \
 		 until(oaao and aoaoap == ajajk and ioaoa == aoak and aoapop == ujaja and lmao == kmao);\
 		print(111);\
-		";
-
+		*/
 	/* Compile. */
 	std::size_t size = 0u;
 	const auto compilation = luau_compile(code, std::strlen(code), NULL, &size);
@@ -27,7 +28,6 @@ std::int32_t main() {
 
 	/* Get main proto. */
 	const auto proto = gco2cl((state->top - 1)->value.gc)->l.p;
-
 	std::cout << luaU_decompiler::decompile(proto, std::make_shared<transpiler::transpiler_config>()) << std::endl;
 	std::cin.get();
 	return 0;
