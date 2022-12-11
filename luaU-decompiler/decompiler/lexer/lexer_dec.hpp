@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include "../../luau-master/Common/include/Luau/Bytecode.h"
 #include "../../luau-master/VM/src/lobject.h"
 #include "../../luau-master/VM/src/lstate.h"
@@ -75,6 +76,16 @@ namespace lexer_dec {
 		template <lexer_dec::operand_types type>
 		std::size_t count_operand_expr() {
 			return std::count(this->operands.begin(), this->operands.end(), type);
+		}
+
+		template <lexer_dec::operand_types type>
+		void operand_expr_callback(std::function<void(const std::shared_ptr<LuaU_dissassembler::operand>& operand, const lexer_dec::operand_types tt)>& callback) {
+
+			const auto operands = this->operand_expr<type>();
+			for (const auto& i : operands)
+				callback(i, type);
+
+			return;
 		}
 
 	};

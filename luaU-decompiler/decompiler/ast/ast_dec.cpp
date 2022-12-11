@@ -586,13 +586,61 @@ namespace ast_funcs {
 			const auto duptables = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_DUPTABLE>(true));		
 			tables.insert(tables.end(), duptables.begin(), duptables.end());
 
+			std::vector<std::uintptr_t> ends; /* Used to avoid encapsulation with tables as this is for ends of already analyzed tables. */
+
 			for (const auto& table : tables) {
+
+				/* Check */
+				bool valid = true;
+				for (const auto i : ends)
+					if (table->lex->dissassembly->addr <= i)
+						valid = false;
+
+				if (!valid)
+					break;
 
 
 				std::uintptr_t node_size = 0u;
 				std::uintptr_t array_size = 0u; 
-				std::uintptr_t predicted_size = 0u;
+				std::uintptr_t predicted_size = 0u; /* Previous power of 2 for array_size, gives us more context on end. */
 
+
+				/* Sizes for scopes of table. (Used for scopes of nested tables) */
+				std::vector<std::uintptr_t> predicted_sizes;
+				std::vector<std::uintptr_t> node_sizes;
+				std::vector<std::uintptr_t> array_sizes;
+
+
+
+				/* Cache data for scopes. */
+				auto cache = [&](const bool start) mutable -> void {
+
+					if (start) {
+						predicted_sizes.emplace_back(predicted_size);
+						node_sizes.emplace_back(node_size);
+						array_sizes.emplace_back(array_size);
+					}
+					else {
+
+						predicted_sizes.pop_back();
+						node_sizes.pop_back();
+						array_sizes.pop_back();
+
+						/* Check size */
+						if (predicted_sizes.size())
+							predicted_size = predicted_sizes.back();
+
+						if (node_sizes.size())
+							node_size = node_sizes.back();
+
+						if (array_sizes.size())
+							array_size = array_sizes.back();
+
+					}
+
+				};
+
+				/* Set size for node_size and array_size also sets table elements/start/end. */
 				auto set_size = [&](const std::shared_ptr<ast_dec::node>& node) mutable -> void {
 
 					switch (node->lex->dissassembly->op) {
@@ -601,8 +649,8 @@ namespace ast_funcs {
 
 							const auto operands = table->lex->operand_expr<lexer_dec::operand_types::integer>();
 							auto x = operands.front()->table_size;
-							node_size += x;
-							array_size += operands.front()->val;
+							node_size = x;
+							array_size = operands.front()->val;
 
 							--x;
 							x = x | (x >> 1);
@@ -610,12 +658,27 @@ namespace ast_funcs {
 							x = x | (x >> 4);
 							x = x | (x >> 8);
 							x = x | (x >> 16);
-							predicted_size += x - (x >> 1);
+							predicted_size = x - (x >> 1);
+
+							cache(true);
+							node->add_expr<ast_dec::expr_type::table_start>();
 							break;
 						}
 
 						case LuauOpcode::LOP_DUPTABLE: {
-							node_size += std::stoi(node->lex->dissassembly->operands[1]->k_value.c_str());
+
+							auto x = std::stoi(node->lex->dissassembly->operands[1]->k_value.c_str());
+							node_size = x;
+
+							--x;
+							x = x | (x >> 1);
+							x = x | (x >> 2);
+							x = x | (x >> 4);
+							x = x | (x >> 8);
+							x = x | (x >> 16);
+							predicted_size = x - (x >> 1);
+							cache(true);
+							node->add_expr<ast_dec::expr_type::table_start>();
 							break;
 						}
 
@@ -624,11 +687,21 @@ namespace ast_funcs {
 						case LuauOpcode::LOP_SETTABLEKS:
 						case LuauOpcode::LOP_SETTABLEN: {
 							--node_size;
+							node->add_expr<ast_dec::expr_type::table_element>();
 							break;
 						}
 
 						case LuauOpcode::LOP_SETLIST: {
+
 							array_size -= node->lex->dissassembly->operands[2]->val;
+							node->add_expr<ast_dec::expr_type::table_end>();
+							ends.emplace_back(table->address);
+							cache(false);
+
+							/* Still unused array members. */
+							if (array_size)
+								throw std::exception("Expected array size too be 0 for SETLIST instruction.");
+
 							break;
 						}
 
@@ -637,28 +710,92 @@ namespace ast_funcs {
 					return;
 				};
 				
-				/* Add first info */
-				if (table->lex->dissassembly->op != LuauOpcode::LOP_NEWTABLE) {
-					/* Has table members. */
 
-					const auto operands = table->lex->operand_expr<lexer_dec::operand_types::integer>();
-					if (operands.front()->table_size || operands.back()->val) {
+			
+				/* Add first info */
+				if (table->lex->dissassembly->op == LuauOpcode::LOP_NEWTABLE || table->lex->dissassembly->op == LuauOpcode::LOP_DUPTABLE) {
+					
+					/* Has table members. */
+					set_size(table);
+					if (array_size || node_size) {
 						
-						table->add_expr<ast_dec::expr_type::table_start>();
-						set_size(table);
-						auto reg = 0u; /* Previous register dest. */
-						
+						std::uint16_t reg = 0u; /* Previous register dest. */
 
 						const auto nodes = ast->main_block->visit_rest(table->address);
 						for (const auto& node : nodes) {
 
-							if (node->lex->dissassembly->op == LuauOpcode::LOP_SETLIST)
-								set_size(node);
-
-
+							set_size(node);
+		
 							/* Set previous dest register. */
 							if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
 								reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+
+							/* Node_size equals predicted_size or is less then predicted_size that means that it exceeded predicted_size. */
+							if (node_size && predicted_size >= node_size) {
+
+
+								/* Table set so check if it's the end. */
+								if (node->lex->type == lexer_dec::inst_type::table_set) {
+
+
+									/* Target table. */
+									const auto table_reg = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+
+									const auto target_2 = (node->lex->dissassembly->op == LuauOpcode::LOP_SETTABLE) ? node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg : -1; /* Index for SETTABLE. */
+									const auto target_1 = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg; /* Source data can be idx. */
+									bool used_target_1 = false;
+									bool used_target_2 = false;
+
+								
+									const auto rest_nodes = ast->main_block->visit_rest(table->address);
+									for (const auto& i : rest_nodes) {
+										
+										/* Checks operands if targets get used or not but if it does get used just resets target. */
+										std::function<void(const std::shared_ptr<LuaU_dissassembler::operand>&, const lexer_dec::operand_types)> check_usage = [&](const std::shared_ptr<LuaU_dissassembler::operand>& operand, const lexer_dec::operand_types tt) mutable {
+											
+											const auto val = operand->reg;
+
+											if (val == target_1)
+												used_target_1 = false;
+
+											if (target_2 != -1 && signed(val) == target_2)
+												used_target_2 = false;
+
+											return;
+										};
+
+
+										/* Check reg operands for usage. */
+										i->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
+										i->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
+										i->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
+
+										
+										if (i->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+										}
+										else {
+											// TODO check end for table end with settable not always end for after power of 2.
+											/* No dest so node is final for table. */
+											--node_size; 
+											node->add_expr<ast_dec::expr_type::table_end>(); 
+											cache(false);
+											break;
+										}
+
+									}
+
+								}
+
+							}
+
+							/* Found end, end anlysis. */
+							if (!node_size && !array_size) {
+								node->add_expr<ast_dec::expr_type::table_end>();
+								ends.emplace_back(table->address);
+								continue;
+							}
 
 						}
 
@@ -667,13 +804,14 @@ namespace ast_funcs {
 						/* No table members. */
 						table->add_expr<ast_dec::expr_type::table_start>();
 						table->add_expr<ast_dec::expr_type::table_end>();
+						ends.emplace_back(table->address);
 					}
 
 				}
 				else {
-					table->add_expr<ast_dec::expr_type::table_start>();
-					set_size(table);
+					throw std::exception("Expected NEWTABLE or DUPTABLE instruction to init table.");
 				}
+
 			}
 
 			return;

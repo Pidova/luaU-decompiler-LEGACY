@@ -56,7 +56,7 @@ namespace ast_dec {
 		open, /* ( %s   */
 
 		table_start, /* Table { */
-		nested_element, /* Nested element in table. */
+		table_element, /* Element in table. (Not usable for setlist cause of concatation) */
 		table_end, /* Table } */
 
 		closure_local, /* local function test () */
