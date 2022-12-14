@@ -112,7 +112,7 @@ namespace ast_funcs {
 
 				if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
 
-					const auto jmp = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+					// const auto jmp = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 
 				}
 
@@ -565,9 +565,7 @@ namespace ast_funcs {
 
 						}
 
-
 					}
-
 
 				}
 
@@ -600,6 +598,7 @@ namespace ast_funcs {
 					break;
 
 
+				std::uint16_t reg = 0u; /* Previous register dest. */
 				std::uintptr_t node_size = 0u;
 				std::uintptr_t array_size = 0u; 
 				std::uintptr_t predicted_size = 0u; /* Previous power of 2 for array_size, gives us more context on end. */
@@ -693,7 +692,11 @@ namespace ast_funcs {
 
 						case LuauOpcode::LOP_SETLIST: {
 
-							array_size -= node->lex->dissassembly->operands[2]->val;
+							auto amt = node->lex->dissassembly->operands[2]->val;
+							if (amt == -1)
+								amt = reg;
+
+							array_size -= amt;
 							node->add_expr<ast_dec::expr_type::table_end>();
 							ends.emplace_back(table->address);
 							cache(false);
@@ -702,6 +705,10 @@ namespace ast_funcs {
 							if (array_size)
 								throw std::exception("Expected array size too be 0 for SETLIST instruction.");
 
+							break;
+						}
+
+						default: {
 							break;
 						}
 
@@ -718,8 +725,6 @@ namespace ast_funcs {
 					/* Has table members. */
 					set_size(table);
 					if (array_size || node_size) {
-						
-						std::uint16_t reg = 0u; /* Previous register dest. */
 
 						const auto nodes = ast->main_block->visit_rest(table->address);
 						for (const auto& node : nodes) {
@@ -747,7 +752,8 @@ namespace ast_funcs {
 									bool used_target_1 = false;
 									bool used_target_2 = false;
 
-								
+
+									/* Really just visiting future instructions too see if table source, dest, or idx gets set twice indicating end. */
 									const auto rest_nodes = ast->main_block->visit_rest(table->address);
 									for (const auto& i : rest_nodes) {
 										
@@ -774,14 +780,50 @@ namespace ast_funcs {
 										
 										if (i->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
 
+											const auto dest = i->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+											/* Check target usage. Abrubt end. */
+											if (dest == target_1) {
+
+												/* Set twice without used. Abrubt end. */
+												if (used_target_1) {
+													goto node_end;
+												}
+
+												used_target_1 = true;
+											}
+
+											if (target_2 != -1 && signed(dest) == target_2) {
+
+												/* Set twice without used. Abrubt end. */
+												if (used_target_2) {
+													goto node_end;
+												}
+
+												used_target_2 = true;
+											}
+
 										}
 										else {
-											// TODO check end for table end with settable not always end for after power of 2.
-											/* No dest so node is final for table. */
-											--node_size; 
-											node->add_expr<ast_dec::expr_type::table_end>(); 
-											cache(false);
-											break;
+											
+											if (i->lex->type == lexer_dec::inst_type::table_set) {
+
+												/* Table has same table source as current table source valid element.*/
+												if (table_reg == i->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg) {
+													--node_size;
+												}
+												else {
+
+
+
+												}
+
+												break;
+											}
+											else { /* No dest and not settable. */
+												goto node_end;
+											}
+											
 										}
 
 									}
@@ -792,6 +834,7 @@ namespace ast_funcs {
 
 							/* Found end, end anlysis. */
 							if (!node_size && !array_size) {
+							node_end:
 								node->add_expr<ast_dec::expr_type::table_end>();
 								ends.emplace_back(table->address);
 								continue;
@@ -1044,7 +1087,7 @@ namespace blocks {
 		/* Assemble blocks. */
 		while (pc < ast->p->sizecode /* Pc didn't exceed sizecode. */) {
 
-			const auto& block = linear_blocks[pc];
+			// const auto& block = linear_blocks[pc];
 
 		};
 		

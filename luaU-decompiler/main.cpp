@@ -7,7 +7,7 @@
 
 std::int32_t main() {
 
-	const char* const code = " printf ({ [100] = (10912 + aiai / aoao), [(iaoao + 100 * aoao)] = 100, [ppp] = { 100, 100, 100 }, 1, 2, 3, 8, 1, 12, 10 } )";
+	const char* const code = "print (1)";
 		/*
 		
 		repeat \

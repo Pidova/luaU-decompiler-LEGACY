@@ -10,4 +10,9 @@
 	#define TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE true /* Allows you too override print in debug and just comment it. */
 	#define TANSPILER_DEBUG_PREDECOMPILATION false
 	#define TANSPILER_DEBUG_POSTDECOMPILATION false
+#else /* Nothing */
+	#define TANSPILER_DEBUG_OPERANDS false
+	#define TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE false
+	#define TANSPILER_DEBUG_PREDECOMPILATION false 
+	#define TANSPILER_DEBUG_POSTDECOMPILATION false
 #endif

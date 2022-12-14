@@ -129,7 +129,7 @@ namespace ast_dec {
 		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks(serves as end) don't count, jump backs will refer to other nodes(may get fragmented)), 0 no jumps.  */
 
 
-		/* All visits may be unorganized by address you may need to sort if needed. */
+		/* All visits gets sorted automatically by address. */
 
 		/* Visits first/all opcode value block. */
 		template<LuauOpcode op>
@@ -145,12 +145,17 @@ namespace ast_dec {
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
 					
-					if (i->lex->dissassembly->op == op)
-						if (all) /* Has all so emblace node. */
+					if (i->lex->dissassembly->op == op) {
+
+						if (all) { /* Has all so emblace node. */
 							retn.emplace_back(i);
+						}
 						else {/* Not all so return node. */
 							return i;
 						}
+
+					}
+
 				}
 		
 				/* Add nested blocks. */
@@ -159,9 +164,9 @@ namespace ast_dec {
 			
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
@@ -183,12 +188,17 @@ namespace ast_dec {
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
 
-					if (i->address > addr && i->lex->dissassembly->op == op)
-						if (all) /* Has all so emblace node. */
+					if (i->address > addr && i->lex->dissassembly->op == op) {
+
+						if (all) { /* Has all so emblace node. */
 							retn.emplace_back(i);
+						}
 						else { /* Not all so return node. */
 							return i;
 						}
+
+					}
+
 				}
 
 				/* Add nested blocks. */
@@ -198,8 +208,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size ());
 
@@ -235,8 +245,7 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
 
 			} while (scopes.size());
 
@@ -268,9 +277,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
-
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				
 			} while (scopes.size());
 
 			throw std::exception("Returning no data for visit_addr.");
@@ -306,8 +314,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
@@ -328,12 +336,16 @@ namespace ast_dec {
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
 
-					if (i->address > address && i->has_expr(type))
-						if (all)
+					if (i->address > address && i->has_expr(type)) {
+
+						if (all) {
 							retn.emplace_back(i);
+						}
 						else {
 							return i;
 						}
+
+					}
 
 				}
 
@@ -344,8 +356,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
@@ -377,8 +389,7 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
 
 			} while (scopes.size());
 
@@ -400,12 +411,17 @@ namespace ast_dec {
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
 
-					if (i->lex->type == inst)
-						if (all) /* Has all so emblace node. */
+					if (i->lex->type == inst) {
+
+						if (all) { /* Has all so emblace node. */
 							retn.emplace_back(i);
+						}
 						else { /* Not all so return node. */
 							return i;
 						}
+
+					}
+
 				}
 
 				/* Add nested blocks. */
@@ -415,8 +431,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
@@ -456,8 +472,7 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
 
 			} while (scopes.size());
 
@@ -494,8 +509,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
@@ -585,8 +600,7 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
 
 			} while (scopes.size());
 
@@ -609,8 +623,9 @@ namespace ast_dec {
 				for (const auto& i : current_block->nodes) {
 
 					/* If current node address isnt bigger repeat till it is.*/
-					if (i->address <= on_address)
+					if (i->address <= on_address) {
 						continue;
+					}
 
 					/* Inc for relative. */
 					for (const auto r : rel)
@@ -620,12 +635,17 @@ namespace ast_dec {
 						}
 
 					/* If found op dec if count isnt 0. If it is 0 then return node. */
-					if (i->has_expr(target))
-						if (!count)
+					if (i->has_expr(target)) {
+
+						if (!count) {
 							return i;
+						}
 						else {
 							--count;
 						}
+
+					}
+
 				}
 
 				/* Add nested blocks. */
@@ -635,8 +655,7 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
 
 			} while (scopes.size());
 
@@ -663,8 +682,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
@@ -700,8 +719,8 @@ namespace ast_dec {
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
@@ -713,6 +732,7 @@ namespace ast_dec {
 		}
 
 		private:
+
 			/* Removes scope dupes. */
 			void remove_dupes(std::vector<block*>& scopes) {
 
@@ -729,6 +749,14 @@ namespace ast_dec {
 				}
 
 			}
+
+			/* Sorts nodes by addr. */
+			void sort_addr(std::vector<std::shared_ptr<node>>& nodes) {
+				if (nodes.size ())
+					std::sort(nodes.begin(), nodes.end(), [](const std::shared_ptr<node>& a, const std::shared_ptr<node>& b) -> bool { return a->address < b->address; });
+				return;
+			}
+
 	};
 
 	struct ast {

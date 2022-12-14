@@ -658,6 +658,10 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 								break;
 							}
 
+							default: {
+								break;
+							}
+
 						}
 
 						break;
@@ -694,9 +698,9 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						if (id1 >= 0) 
 							current_operand->k_value += gco2ts(k[id1].value.gc)->data;
 						if (id2 >= 0)
-							current_operand->k_value += '.' + gco2ts(k[id2].value.gc)->data;
+							current_operand->k_value += std::string (".") + std::string(gco2ts(k[id2].value.gc)->data);
 						if (id3 >= 0)
-							current_operand->k_value += '.' + gco2ts(k[id3].value.gc)->data;		
+							current_operand->k_value += std::string(".") + std::string(gco2ts(k[id3].value.gc)->data);
 
 						buffer->data += current_operand->k_value + split;
 						current_operand->import_idx = id3;
@@ -811,7 +815,8 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 
 	/* Calulate lenght. */
 	buffer->len = (std::uint8_t(reinterpret_cast<const std::uintptr_t>(buffer->code) - reinterpret_cast<const std::uintptr_t>(start_pc)) / sizeof(Instruction)) + 1u;
-	printf("%d %s\n", pc, buffer->data.c_str ());
+	
+	std::printf("%llu %s\n", pc, buffer->data.c_str ());
 
 	return;
 }

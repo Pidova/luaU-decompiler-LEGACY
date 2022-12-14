@@ -20,4 +20,6 @@ True:
 
 #if control_flow_vars 
 	#define control_flow_vars_ignore_useless false /* Ignores useless variables. (Variables that are created with dest but are never used in scope, if compiler didn't get rid of it before hand) */
+#else /* Nothing */
+	#define control_flow_vars_ignore_useless false
 #endif

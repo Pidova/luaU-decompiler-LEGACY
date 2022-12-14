@@ -177,6 +177,9 @@
     <ClCompile Include="decompiler\clean up\clean.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="decompiler\ast\validate.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="luau-master\Ast\include\Luau\Ast.h">
@@ -333,6 +336,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="decompiler\clean up\clean.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="decompiler\ast\validate.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

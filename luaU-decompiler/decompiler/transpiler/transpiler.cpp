@@ -125,7 +125,7 @@ namespace registers {
 
 				reg_scope retn;
 
-				for (const auto i : this->registers)
+				for (const auto& i : this->registers)
 					retn[i.first]->replicate(i.second);
 
 				return retn;
@@ -299,6 +299,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						break;
 					}
 
+					default: {
+						break;
+					}
+
 				}
 
 		}
@@ -445,7 +449,8 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			case LuauOpcode::LOP_DEP_FORGLOOP_INEXT:
 			case LuauOpcode::LOP_DEP_FORGLOOP_NEXT:
 			case LuauOpcode::LOP_DEP_JUMPIFEQK:
-			case LuauOpcode::LOP_DEP_JUMPIFNOTEQK: {
+			case LuauOpcode::LOP_DEP_JUMPIFNOTEQK: 
+			case LuauOpcode::LOP_PREPVARARGS: /* Unused */ {
 				break;
 			}
 
@@ -735,6 +740,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						break;
 					}
 
+					default: {
+						break;
+					}
+
 				}
 
 				/* See pre-condition expr. */
@@ -745,6 +754,11 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 							case ast_dec::expr_type::open: {
 								emitter::str(regs.back()[flag_compare]->data, " ( ");
+								break;
+							}
+
+
+							default: {
 								break;
 							}
 
@@ -773,6 +787,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 							case ast_dec::expr_type::close: {
 								emitter::str(regs.back()[flag_compare]->data, " ) ");
+								break;
+							}
+
+							default: {
 								break;
 							}
 
@@ -1560,6 +1578,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 				}
 
 				break;
+			}
+
+			default: {
+				throw std::exception("Unkown instruction for transpiler.");
 			}
 
 		}
