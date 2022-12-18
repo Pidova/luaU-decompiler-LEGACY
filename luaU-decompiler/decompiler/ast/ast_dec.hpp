@@ -31,7 +31,8 @@ namespace ast_dec {
 		arithK, /* r1 += r1 + 1 */
 
 		for_iv_start, /* for i,v in pairs ({ 1 }) do */
-		for_start, /* for start */
+		for_start, /* for ?? in ?? do */
+		for_n_start, /* for ?? in ?? do (numeral) */
 
 		repeat_, /* repeat */
 		while_, /* while () follows condition. */
@@ -57,13 +58,13 @@ namespace ast_dec {
 
 		table_start, /* Table { */
 		table_element, /* Element in table. (Not usable for setlist cause of concatation) */
-		table_end, /* Table } */
+		table_end, /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) */
 
 		closure_local, /* local function test () */
 		closure_global, /* function test () */
 		closure_newclosure, /* (function()  end)*/
 
-		dead_instruction, /* Instruction gets ignored. */
+		dead_instruction, /* Instruction gets ignored. *Will run exprs but not instruction in transpiler. */
 		conditional /* Condition flag will get written too dest. (Used for branching opcodes including loadb +jmp **Will clear compare flag if conditional is not loadb) */
 	};
 
@@ -75,6 +76,7 @@ namespace ast_dec {
 
 		/* Convert destination to local? */
 		struct dest_loc {
+			bool set_prefix = false; /* Used in transpiler to set suffix to local variable name. */
 			bool is_dest_loc = false; /* Turns dest to local. */
 			std::string name = ""; /* Locvar name (Suffix) */
 		} dest_loc;
@@ -84,6 +86,16 @@ namespace ast_dec {
 			bool opposite = false; /* Opposite compare from opcode. */
 		} branch_extra;
 
+		/* Extra information for tables. */
+		struct table_extra {
+			std::uintptr_t end_table = 0u; /* End table node address(not scopped). */
+		} table_extra;
+
+		/* Extra information for loops. */
+		struct loop_extra {
+			std::shared_ptr<ast_dec::node> end_node = nullptr; /* Used for prologue and epilogue of loop. */
+		} loop_extra;
+
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */
 		
 		/* Node functions. */
@@ -91,7 +103,7 @@ namespace ast_dec {
 		void add_expr(const std::size_t count = 1u) {
 
 			/* Replace only lex with type. */
-			if (this->expr.size() == 1u) {
+			if (this->expr.size() && this->expr.front().first == ast_dec::expr_type::lex /* Used as place holder. */) {
 				this->expr.front().first = type;
 				this->expr.front().second = count;
 			}
@@ -116,6 +128,65 @@ namespace ast_dec {
 				if (i.first == type)
 					count += i.second;
 			return count;
+		}
+
+		std::string expr_str(const std::pair <expr_type, std::size_t>& p) {
+
+			std::string retn = "";
+
+			switch (p.first) {
+
+				case expr_type::lex: { retn += "lex";  break; }
+
+				case expr_type::arith: { retn += "arith";  break; }
+				case expr_type::arithK: { retn += "arithK";  break; }
+
+				case expr_type::for_iv_start: { retn += "for_iv_start";  break; }
+				case expr_type::for_n_start: { retn += "for_n_start";  break; }
+				case expr_type::for_start: { retn += "for_start";  break; }
+
+				case expr_type::repeat_: { retn += "repeat";  break; }
+				case expr_type::while_: { retn += "while";  break; }
+				case expr_type::until_: { retn += "until";  break; }
+				case expr_type::break_: { retn += "break";  break; }
+				case expr_type::scope_end: { retn += "scope_end";  break; }
+
+				case expr_type::call_routine_start: { retn += "call_routine_start";  break; }
+				case expr_type::call_routine_end: { retn += "call_routine_end";  break; }
+
+				case expr_type::concat_routine_start: { retn += "concat_routine_start";  break; }
+				case expr_type::concat_routine_end: { retn += "concat_routine_end";  break; }
+
+				case expr_type::if_: { retn += "if";  break; }
+				case expr_type::elseif_: { retn += "elseif";  break; }
+				case expr_type::else_: { retn += "else";  break; }
+				case expr_type::condition_and: { retn += "and";  break; }
+				case expr_type::condition_or: { retn += "or";  break; }
+				case expr_type::condition_nonmutable: { retn += "condition_nonmutable";  break; }
+
+				case expr_type::close: { retn += "close";  break; }
+				case expr_type::open: { retn += "open";  break; }
+
+				case expr_type::table_start: { retn += "table_start";  break; }
+				case expr_type::table_element: { retn += "table_element";  break; }
+				case expr_type::table_end: { retn += "table_end";  break; }
+
+				case expr_type::closure_local: { retn += "closure_local";  break; }
+				case expr_type::closure_global: { retn += "closure_global";  break; }
+				case expr_type::closure_newclosure: { retn += "closure_newclosure";  break; }
+
+				case expr_type::dead_instruction: { retn += "dead_instruction";  break; }
+				case expr_type::conditional: { retn += "conditional";  break; }
+
+				default: {
+					throw std::exception("Unkown expr for expr string.");
+				}
+
+			}
+
+			retn = '[' + retn + "]: " + std::to_string(p.second);
+
+			return retn;
 		}
 
 	};
@@ -299,11 +370,16 @@ namespace ast_dec {
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
 
-					if (i->has_expr(type))
-						if (all)
+					if (i->has_expr(type)) {
+
+						if (all) {
 							retn.emplace_back(i);
-						else
+						}
+						else {
 							return i;
+						}
+
+					}
 
 				}
 
@@ -497,7 +573,7 @@ namespace ast_dec {
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
 
-					if (i->address >= on_address)
+					if (i->address > on_address)
 						retn.emplace_back(i);
 
 				}
@@ -608,7 +684,7 @@ namespace ast_dec {
 		}
 
 
-		/* Visits next relative node to expr being target and args being addatives till op hits = dec and args = inc(singular) and its 0.  (Ignores current) */
+		/* Visits next relative node to expr being target and args being addatives till exprs(rel arg) hits = dec and exper_target(template target) = inc(singular) and its 0.  (Ignores current) */
 		template<expr_type target>
 		std::shared_ptr<node> visit_relative_next_expr(const std::uintptr_t on_address, const std::vector<expr_type> rel) {
 
@@ -708,6 +784,44 @@ namespace ast_dec {
 
 					/* Between addresses. */
 					if (i->address > start && i->address < end)
+						retn.emplace_back(i);
+
+				}
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->sort_addr(retn); /* Sort retn by address. */
+
+			} while (scopes.size());
+
+			/* Nothing. */
+			if (!retn.size())
+				throw std::exception("Returning no data for visit_range.");
+
+			return retn;
+		}
+
+		/* Visits all nodes between addresses (Includes curren, end) */
+		std::vector<std::shared_ptr<node>> visit_range_current(const std::uintptr_t start, const std::uintptr_t end) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			std::vector<block*> scopes = { this };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes. */
+				for (const auto& i : current_block->nodes) {
+
+					/* Between addresses. */
+					if (i->address >= start && i->address <= end)
 						retn.emplace_back(i);
 
 				}

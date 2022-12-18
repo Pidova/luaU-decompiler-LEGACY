@@ -13,12 +13,12 @@ namespace transpiler {
 
 		/* Prefixs. */
 		std::string iterator_prefix = "i";
-		std::string variable_prefix = "v";
+		std::string variable_prefix = "v_";
 		std::string argument_prefix = "a";
 		std::string function_prefix = "func_";
 		std::string upvalue_prefix = "upv";
 		std::string loop_variable_prefix = "k";
-		std::string loop_variable_prefix_2 = "r";
+		std::string loop_variable_prefix_2 = "v";
 
 		/* Comment */
 		bool include_header = false; /* Includes header per proto and main along with extra stuff like time and full bytecode. */

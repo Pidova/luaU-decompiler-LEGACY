@@ -167,6 +167,18 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 					break;
 				}
 
+				case LuauOpcode::LOP_FORNLOOP: {
+					buffer->mnenomic = "fornloop";
+					buffer->hint = "For numeral loop.";
+					break;
+				}
+
+				case LuauOpcode::LOP_FORNPREP: {
+					buffer->mnenomic = "fornprep";
+					buffer->hint = "For numeral loop.";
+					break;
+				}
+
 				case LuauOpcode::LOP_GETGLOBAL: {
 					buffer->mnenomic = "getglobal";
 					buffer->hint = "Get global.";
@@ -488,6 +500,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 				default: {
 					throw std::exception("Unkown opcode in dissassembler.");
 				}
+
 			}
 
 			break;
@@ -526,6 +539,16 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						break;
 					}
 
+					case op_table::operands::C_dec: {
+						operand_value = decode_C(buffer->code[0]) - 1;
+						break;
+					}
+
+					case op_table::operands::C_inc: {
+						operand_value = decode_C(buffer->code[0]) + 1;
+						break;
+					}
+
 					case op_table::operands::D: {
 						operand_value = decode_D(buffer->code[0]);
 						break;
@@ -546,6 +569,10 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						buffer->code += 1u;
 						operand_value = buffer->code[0] & 0xffffff;
 						break;
+					}
+
+					default: {
+						throw std::exception("Unkown operand type.");
 					}
 
 				}

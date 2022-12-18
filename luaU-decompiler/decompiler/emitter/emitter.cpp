@@ -83,6 +83,16 @@ void emitter::str(std::string& dest, const std::string& src) {
 	return;
 }
 
+void emitter::for_g_loop(std::string& dest, const std::string& vars, const std::string& iter) {
+    dest += "for " + vars + " in " + iter + " do\n";
+    return;
+}
+
+void emitter::for_n_loop(std::string& dest, const std::string& var, const std::string& iter) {
+    dest += "for " + var + " = " + iter + " do\n";
+    return;
+}
+
 void emitter::end_of_line(std::string& dest) {
     dest += ";\n";
     return;

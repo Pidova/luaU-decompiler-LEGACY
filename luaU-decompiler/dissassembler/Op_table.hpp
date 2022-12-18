@@ -100,6 +100,8 @@ namespace op_table {
 		A,
 		B,
 		C,
+		C_dec, /* C - 1*/
+		C_inc, /* C + 1*/
 		D,
 		E,
 		AUX,
@@ -158,8 +160,8 @@ namespace op_table {
 		{ LuauOpcode::LOP_GETTABLEKS, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::reg, op_table::type::slot, op_table::type::k_idx } }, // F
 		{ LuauOpcode::LOP_SETTABLEKS, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::reg, op_table::type::slot, op_table::type::k_idx } }, // 10
 		
-		{ LuauOpcode::LOP_GETTABLEN, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C }, { op_table::type::reg, op_table::type::reg, op_table::type::val } }, // 11
-		{ LuauOpcode::LOP_SETTABLEN, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C }, { op_table::type::reg, op_table::type::reg, op_table::type::val } }, // 12
+		{ LuauOpcode::LOP_GETTABLEN, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C_inc }, { op_table::type::reg, op_table::type::reg, op_table::type::val } }, // 11
+		{ LuauOpcode::LOP_SETTABLEN, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C_inc }, { op_table::type::reg, op_table::type::reg, op_table::type::val } }, // 12
 	
 		{ LuauOpcode::LOP_NEWCLOSURE, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::proto } }, // 13
 		{ LuauOpcode::LOP_NAMECALL, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::reg, op_table::type::slot, op_table::type::k_idx } }, // 14
@@ -208,11 +210,11 @@ namespace op_table {
 
 		{ LuauOpcode::LOP_NEWTABLE, { op_table::operands::A,  op_table::operands::B,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::table_size, op_table::type::val } }, // 35
 		{ LuauOpcode::LOP_DUPTABLE, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::k_idx } }, // 36
-		{ LuauOpcode::LOP_SETLIST, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::reg, op_table::type::val, op_table::type::val } }, // 37
+		{ LuauOpcode::LOP_SETLIST, { op_table::operands::A,  op_table::operands::B,  op_table::operands::C_dec,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::reg, op_table::type::val, op_table::type::val } }, // 37
 
 		{ LuauOpcode::LOP_FORNPREP, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::jmp } }, // 38
 		{ LuauOpcode::LOP_FORNLOOP, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::jmp } }, // 39
-		{ LuauOpcode::LOP_FORGLOOP, { op_table::operands::A,  op_table::operands::D, op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp } }, // 3A
+		{ LuauOpcode::LOP_FORGLOOP, { op_table::operands::A,  op_table::operands::D, op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp, op_table::type::val } }, // 3A
 	    
 		{ LuauOpcode::LOP_FORGPREP_INEXT, { op_table::operands::A }, { op_table::type::jmp } }, // 3B
 		{ LuauOpcode::LOP_DEP_FORGLOOP_INEXT, { }, { } }, // 3C : Depricated

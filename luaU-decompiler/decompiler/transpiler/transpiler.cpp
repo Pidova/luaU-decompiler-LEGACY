@@ -6,6 +6,15 @@
 
 
 #define flag_compare -1
+#define multret -1
+#define fix_multret(ast, node) ast->main_block->visit_previous_addr(node->address)->lex->operand_expr<lexer_dec::operand_types::dest>().front()->val;
+
+/* Suffixes */
+namespace suffixes {
+	std::uintptr_t loop_variable_suffix = 0u; 
+	std::uintptr_t iterator_prefix_suffix = 0u;
+	std::uintptr_t loop_variable_prefix_2_suffix = 0u;
+}
 
 namespace registers {
 
@@ -27,6 +36,7 @@ namespace registers {
 
 		type type = type::none;
 		std::string data = "";
+		std::string sub_data = ""; /* Mostly used for stuff that needs it's own string. */
 
 		const char* const str_type() {
 
@@ -60,6 +70,7 @@ namespace registers {
 			auto ptr = std::make_shared<reg>();
 			ptr->type = this->type;
 			ptr->data = this->data;
+			ptr->sub_data = this->sub_data;
 			ptr->special.inside_expr = this->special.inside_expr;
 			return ptr;
 		}
@@ -67,6 +78,7 @@ namespace registers {
 		void replicate(const std::shared_ptr<reg> src) {
 			this->type = src->type;
 			this->data = src->data;
+			this->sub_data = src->sub_data;
 			this->special.inside_expr = src->special.inside_expr;
 			return;
 		}
@@ -79,10 +91,34 @@ namespace registers {
 			return;
 		}
 
+
+
 		template<registers::type tt>
 		void set(const std::string& str) {
 			this->type = tt;
 			this->data = str;
+			return;
+		}
+
+		template<registers::type tt>
+		void set_append(const std::string& str) {
+			this->type = tt;
+			this->data += str;
+			return;
+		}
+
+
+		template<registers::type tt>
+		void set_sub(const std::string& str) {
+			this->type = tt;
+			this->sub_data = str;
+			return;
+		}
+
+		template<registers::type tt>
+		void set_sub_append(const std::string& str) {
+			this->type = tt;
+			this->sub_data += str;
 			return;
 		}
 
@@ -141,6 +177,16 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 	for (const auto& node : block->nodes) {
 
+		/* Fix lv name. */
+		if (node->dest_loc.is_dest_loc && !node->dest_loc.set_prefix) {
+			node->dest_loc.name = config->variable_prefix + node->dest_loc.name;
+			node->dest_loc.set_prefix = true;
+		}
+
+
+		bool table_start_new_node = false; /* For old nodes append and so on. */
+	
+
 		/* Pass expr. */
 		for (const auto& expr : node->expr) {
 			
@@ -161,15 +207,21 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					case ast_dec::expr_type::table_start:
 					case ast_dec::expr_type::concat_routine_start:
 					case ast_dec::expr_type::call_routine_start: {
-
+						
 						/* Write table start to reg. */
 						if (expr.first == ast_dec::expr_type::table_start) {
+						
+							const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 
 							if (!node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
 								throw std::exception("No dest operand for table start.");
 
-							const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-							dest->set<registers::type::expr>("{ ");
+							if (!table_start_new_node) {
+								regs.back()[reg]->sub_data.clear();
+								table_start_new_node = true;
+							}
+
+							regs.back()[reg]->set_sub_append<registers::type::expr>("{ ");
 						}
 						
 						/* Inc expr. */
@@ -181,16 +233,6 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					case ast_dec::expr_type::table_end:
 					case ast_dec::expr_type::concat_routine_end:
 					case ast_dec::expr_type::call_routine_end: {
-
-						/* Concat with table end dest. */
-						if (expr.first == ast_dec::expr_type::table_end) {
-
-							if (!node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
-								throw std::exception("No dest operand for table end.");
-
-							const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-							dest->data += " }";
-						}
 
 						/* Dec expr. */
 						--regs.back()[flag_compare]->special.inside_expr;
@@ -216,6 +258,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 						break;
 					}
+
 
 					case ast_dec::expr_type::if_:
 					case ast_dec::expr_type::elseif_: {
@@ -252,7 +295,6 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						
 						break;
 					}
-
 					case ast_dec::expr_type::else_: {
 
 						/* Emit else. */
@@ -299,6 +341,126 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						break;
 					}
 
+					case ast_dec::expr_type::for_iv_start: {
+
+						std::string iter = "";
+						static constexpr auto reserved = 2u + 1u; /* 2 is reserved 1 for new slot. */
+
+						/* Replicate next. */
+						regs.emplace_back(regs.back().clone());
+						const auto begin = node->loop_extra.end_node->lex->dissassembly->operands.front()->reg;
+
+						/* K */
+						const auto K = config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
+						regs.back()[begin + reserved]->set<registers::type::var>(K);
+
+						/* V */
+						const auto V = config->loop_variable_prefix_2 + std::to_string(suffixes::loop_variable_prefix_2_suffix++);
+						regs.back()[begin + reserved + 1u]->set<registers::type::var>(V);
+						
+						/* Compile iter */
+						for (auto i = 0u; i < 3u; ++i) {
+
+							const auto& dest = regs.back ()[begin + i];
+
+							/* invalid */
+							if (dest->data == "nil")
+								break;
+
+							iter += dest->data;
+
+							/* Next not found/nil so end. */
+							if (regs.back().reg_exists(begin + i + 1u) || regs.back()[begin + i + 1u]->data == "nil")
+								break;
+							else /* Add split */
+								iter += dest->data;
+
+						}
+
+						/* Emit */
+						emitter::for_g_loop(decompilation, K + ", " + V, iter);
+
+						break;
+					}
+					case ast_dec::expr_type::for_start: {
+
+						static constexpr auto reserved = 2u + 1u; /* 2 is reserved 1 for new slot. */
+
+						/* Replicate next. */
+						regs.emplace_back(regs.back().clone());
+
+						const auto begin = node->loop_extra.end_node->lex->dissassembly->operands.front()->reg;
+						const auto count = node->loop_extra.end_node->lex->dissassembly->operands.back()->val;
+
+						/* Compile variables in loop statement. */
+						std::string compiled_vars = "";
+						for (auto i = 0u; i < count; ++i) {
+
+							/* Make iterating variable name and compile it. */
+							const auto name = config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
+							compiled_vars += (name + (((i + 1u) == count) ? "" : ", "));
+
+							regs.back()[i + begin + reserved]->set<registers::type::var>(name);
+
+						}
+
+						/* Compile iterators. */
+						std::string compiled_iterator = "";
+						for (auto i = begin; i < (begin + reserved); ++i) {
+
+							/* Make iterator and compile it. */
+							if (regs.back().reg_exists(i)) {
+
+								/* Register exists so compile it if its not nil. */
+								const auto reg = regs.back()[i];
+
+								/* Add split, check for nils */
+								if (!compiled_iterator.empty() && reg->data != "nil")
+									compiled_iterator += ", ";
+
+								if (reg->data != "nil")
+									compiled_iterator += reg->data;
+							}
+							else
+								break;
+
+						}
+						
+						/* Remove ", " *This is here just incase it hangs. */
+						if (compiled_iterator[compiled_iterator.length() - 2u] == ',')
+							compiled_iterator.erase(compiled_iterator.length() - 2u);
+
+						/* Emit */
+						emitter::for_g_loop(decompilation, compiled_vars, compiled_iterator);
+
+						break;
+					}
+					case ast_dec::expr_type::for_n_start: {
+
+						/* Replicate next. */
+						regs.emplace_back(regs.back().clone());
+
+						const auto end = node->loop_extra.end_node->lex->dissassembly->operands.front()->reg;
+						const auto inc = (end + 1u);
+						const auto start = (end + 2u);
+
+						/* Write start end etc and finalize. */
+						const auto iterate = config->iterator_prefix + std::to_string(suffixes::iterator_prefix_suffix++);
+						auto iteration = regs.back()[start]->data + ", " + regs.back()[end]->data;
+
+						/* Set reg as var. */
+						regs.back()[start]->set<registers::type::var>(iterate);
+
+						/* Check for incrementor. */
+						if (regs.back().reg_exists(inc) && regs.back()[inc]->data != "1")
+							iteration += ", " + regs.back()[inc]->data;
+
+						/* Emit */
+						emitter::for_n_loop(decompilation, iterate, iteration);
+
+						break;
+					}
+
 					default: {
 						break;
 					}
@@ -314,7 +476,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 			#if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
 				str << "[transpiler.cpp] " << node->lex->dissassembly->data << std::endl;
 			#elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
-				str << "[Metric]: " << node->lex->dissassembly->data << std::endl;
+				str << "[INSTRUCTION]: " << node->lex->dissassembly->data << std::endl;
 			#endif
 
 			for (auto i = 0u; i < node->lex->operands.size(); ++i) {
@@ -329,7 +491,9 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 							str << "*	[reg( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back ()[oper->reg];
-							str << "*	[reg( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[reg( " << oper->reg << " )]: " << reg->str_type() << std::endl;
+							str << "*		[data]: " << reg->data << std::endl;
+							str << "*		[sub_data]: " << reg->sub_data << std::endl;
 						}
 
 						break;
@@ -341,7 +505,9 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 							str << "*	[dest( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back()[oper->reg];
-							str << "*	[dest( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[dest( " << oper->reg << " )]: " <<  reg->str_type() << std::endl;
+							str << "*		[data]: " << reg->data << std::endl;
+							str << "*		[sub_data]: " << reg->sub_data << std::endl;
 						}
 
 						break;
@@ -353,7 +519,9 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 							str << "*	[source( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back()[oper->reg];
-							str << "*	[source( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[source( " << oper->reg << " )]: " << reg->str_type() << std::endl;
+							str << "*		[data]: " << reg->data << std::endl;
+							str << "*		[sub_data]: " << reg->sub_data << std::endl;
 						}
 
 						break;
@@ -370,7 +538,9 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 							str << "*	[compare( " << oper->reg << " )]: NULL\n";
 						else {
 							const auto reg = regs.back()[oper->reg];
-							str << "*	[compare( " << oper->reg << " )]: data: " << reg->data << " : " << reg->str_type() << std::endl;
+							str << "*	[compare( " << oper->reg << " )]: " << reg->str_type() << std::endl;
+							str << "*		[data]: " << reg->data << std::endl;
+							str << "*		[sub_data]: " << reg->sub_data << std::endl;
 						}
 
 						break;
@@ -423,6 +593,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 				}
 
 			}
+
+			str << "*	[exprs]: " << std::endl;
+			for (const auto& p : node->expr)
+				str << "*		" << node->expr_str(p) << std::endl;
 
 			#if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
 				std::cout << str.str ();
@@ -985,14 +1159,14 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 
 				/* Fix for mulret */
-				if (arg == -1) {
+				if (arg == multret) {
 					
 					if (!prev->lex->has_operand_expr<lexer_dec::operand_types::dest>())
 						throw std::exception("Previous doesn't have dest for call mulret.");
 
 					arg = prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg - call;
 				}
-				if (retn == -1) {
+				if (retn == multret) {
 
 					if (!prev->lex->has_operand_expr<lexer_dec::operand_types::dest>())
 						throw std::exception("Previous doesn't have dest for call mulret.");
@@ -1000,7 +1174,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					retn = prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg - call;
 				}
 
-
+			
 				/* Has args so parse them. */
 				if (arg)
 					for (auto i = 0u; i < arg; ++i) {
@@ -1032,8 +1206,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					emitter::write_line(decompilation, compiled_call);
 					continue;
 				}
-
-
+			
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
 					
@@ -1058,12 +1231,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 				}
 
-
 				/* Return has multiple returns fill upper with nils. */
 				if (retn > 0)
 					for (auto i = 0u; i < (retn - 1u); ++i)   /* Fill with nil. */
 						regs.back()[i + call + 1u]->set<registers::type::expr>("nil");
-					
 
 				break;
 			}
@@ -1113,7 +1284,7 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
 
 				const auto start = sources.front()->reg;
-				const auto end = sources.front()->reg;
+				const auto end = sources.back()->reg;
 
 
 				/* Form data. */
@@ -1162,8 +1333,8 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					std::string compiled = "";
 
 					/* Fix for mulret */
-					if (val == -1)
-						val = ast->main_block->visit_previous_addr(node->address)->lex->operand_expr<lexer_dec::operand_types::dest>().front()->val;
+					if (val == multret)
+						val = fix_multret(ast, node);
 
 					/* Check to make sure if last dest reg is current dest reg and was multret if so just one return format. */
 					if (original_val == -1 && dest == val)
@@ -1319,8 +1490,8 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 				const auto start = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 
 				/* Fix for mulret */
-				if (val == -1)
-					val = ast->main_block->visit_previous_addr(node->address)->lex->operand_expr<lexer_dec::operand_types::dest>().front()->val;
+				if (val == multret)
+					val = fix_multret(ast, node);
 
 				/* Iterate */
 				for (auto on = start; on < (start + val); ++on) {
@@ -1368,7 +1539,12 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 
 
 			/* Loop */
-			case LuauOpcode::LOP_FORNLOOP: {
+			case LuauOpcode::LOP_FORNPREP:
+			case LuauOpcode::LOP_FORNLOOP:
+			case LuauOpcode::LOP_FORGLOOP:
+			case LuauOpcode::LOP_FORGPREP:
+			case LuauOpcode::LOP_FORGPREP_INEXT:
+			case LuauOpcode::LOP_FORGPREP_NEXT: { /* Gets handled ahead of time. */
 				break;
 			}
 
@@ -1477,86 +1653,103 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 				break;
 			}
 			/* Set */
-			case LuauOpcode::LOP_SETTABLEN: {
-
-				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
-				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->table;
-
-				const auto compiled = source + '[' + std::to_string(idx) + ']';
-
-				/* Vararg.*/
-				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
-
-					emitter::vararg_equal(decompilation, dest->data, compiled);
-
-				}
-				else {
-
-					/* Create arg. */
-					if (node->dest_loc.is_dest_loc) {
-
-						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::new_vararg_equal(decompilation, dest->data, compiled);
-
-					}
-					else {
-
-						/* General purpose. */
-						dest->set<registers::type::expr>(compiled);
-
-					}
-
-				}
-
-				break;
-			}
-			case LuauOpcode::LOP_SETTABLEKS: {
-
-				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
-				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
-
-				const auto compiled = source + "[\"" + idx + "\"]";
-
-				/* Vararg.*/
-				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
-
-					emitter::vararg_equal(decompilation, dest->data, compiled);
-
-				}
-				else {
-
-					/* Create arg. */
-					if (node->dest_loc.is_dest_loc) {
-
-						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::new_vararg_equal(decompilation, dest->data, compiled);
-
-					}
-					else {
-
-						/* General purpose. */
-						dest->set<registers::type::expr>(compiled);
-
-					}
-
-				}
-
-				break;
-			}
+			case LuauOpcode::LOP_SETTABLEN: 
+			case LuauOpcode::LOP_SETTABLEKS:
 			case LuauOpcode::LOP_SETTABLE: {
 
-				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
-				const auto idx = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg]->data;
+				const auto value = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg];
+				auto table = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg];
+				std::string idx;
 
-				const auto compiled = source + '[' + idx + ']';
+				/* Set idx */
+				switch (node->lex->dissassembly->op) {
+
+					case LuauOpcode::LOP_SETTABLEKS: {
+						idx = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+						break;
+					}
+
+					case LuauOpcode::LOP_SETTABLEN: {
+						idx = std::to_string(node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->table);
+						break;
+					}   
+
+					case LuauOpcode::LOP_SETTABLE: {
+						idx = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg]->data;
+						break;
+					}
+
+					default: {
+						throw std::exception("Unkown instruction for set tables.");
+					}
+
+				}
+
+
+				auto compiled = std::string("[") + idx + std::string("]");
+
+
+				/* Element */
+				if (node->has_expr(ast_dec::expr_type::table_element)) {
+					
+					compiled += std::string (" = ") + value->data;
+
+					/* Append */
+					table->sub_data += compiled + ((node->table_extra.end_table == node->lex->dissassembly->addr) ? "" : ", ");
+
+					/* Not a table end so add end. */
+					const auto table_ends = node->count_expr<ast_dec::expr_type::table_end>();
+					for (auto i = 0u; i < table_ends; ++i)
+						table->sub_data += " }";
+				}
+				
+
+				/* Table */
+				if (node->table_extra.end_table == node->lex->dissassembly->addr) {
+
+					/* Vararg.*/
+					if (table->type == registers::type::var || table->type == registers::type::arg) {
+
+						emitter::vararg_equal(decompilation, table->data, table->sub_data);
+
+					}
+					else {
+
+						/* Create arg. */
+						if (node->dest_loc.is_dest_loc) {
+
+							table->set<registers::type::var>(node->dest_loc.name);
+							emitter::new_vararg_equal(decompilation, table->data, table->sub_data);
+
+						}
+						else {
+
+							/* General purpose. */
+							table->set<registers::type::expr>(table->sub_data);
+
+						}
+
+					}
+
+				}
+				else if (!node->table_extra.end_table) {
+					emitter::vararg_equal(decompilation, table->data + compiled, value->data);
+				}
+
+				
+				break;
+			}
+			/* Table */
+			case LuauOpcode::LOP_DUPTABLE: 
+			case LuauOpcode::LOP_NEWTABLE: {
+				
+				/* Table is already created before hand just decide like locvar or something. */
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
 
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
 
-					emitter::vararg_equal(decompilation, dest->data, compiled);
+					emitter::vararg_equal(decompilation, dest->data, dest->sub_data);
 
 				}
 				else {
@@ -1565,18 +1758,57 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 					if (node->dest_loc.is_dest_loc) {
 
 						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::new_vararg_equal(decompilation, dest->data, compiled);
+						emitter::new_vararg_equal(decompilation, dest->data, dest->sub_data);
 
 					}
 					else {
 
 						/* General purpose. */
-						dest->set<registers::type::expr>(compiled);
+						dest->set<registers::type::expr>(dest->sub_data);
+		
+					}
+
+				}
+				break;
+			}
+			case LuauOpcode::LOP_SETLIST: {
+
+				/* Table is already created before hand just decide like locvar or something. */
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+				const auto start = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+				auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+				if (amt == multret)
+					amt = fix_multret(ast, node);
+			
+				/* Add setlist data. */
+				for (auto i = 0u; i < unsigned(amt); ++i) 
+					dest->sub_data += regs.back()[start + i]->data + (((i + 1u) == amt) ? " }" : ", ");
+				
+
+				/* Vararg.*/
+				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+					emitter::vararg_equal(decompilation, dest->data, dest->sub_data);
+
+				}
+				else {
+
+					/* Create arg. */
+					if (node->dest_loc.is_dest_loc) {
+
+						dest->set<registers::type::var>(node->dest_loc.name);
+						emitter::new_vararg_equal(decompilation, dest->data, dest->sub_data);
+
+					}
+					else {
+
+						/* General purpose. */
+						dest->set<registers::type::expr>(dest->sub_data);
 
 					}
 
 				}
-
 				break;
 			}
 

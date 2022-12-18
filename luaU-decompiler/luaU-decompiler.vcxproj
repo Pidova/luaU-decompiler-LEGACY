@@ -135,7 +135,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="decompiler\ast\ast_dec.cpp" />
-    <ClCompile Include="decompiler\ast\validate.cpp" />
+    <ClCompile Include="decompiler\ast\post_ast.cpp" />
     <ClCompile Include="decompiler\clean up\clean.cpp" />
     <ClCompile Include="decompiler\decompiler.cpp" />
     <ClCompile Include="decompiler\emitter\emitter.cpp" />
@@ -193,7 +193,7 @@
   <ItemGroup>
     <ClInclude Include="decompiler\ast\ast_dec.hpp" />
     <ClInclude Include="decompiler\ast\ast_config.hpp" />
-    <ClInclude Include="decompiler\ast\validate.hpp" />
+    <ClInclude Include="decompiler\ast\post_ast.hpp" />
     <ClInclude Include="decompiler\clean up\clean.hpp" />
     <ClInclude Include="decompiler\decompiler.hpp" />
     <ClInclude Include="decompiler\emitter\emitter.hpp" />
@@ -244,9 +244,6 @@
     <ClInclude Include="luau-master\VM\src\ltm.h" />
     <ClInclude Include="luau-master\VM\src\ludata.h" />
     <ClInclude Include="luau-master\VM\src\lvm.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="Changelog.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

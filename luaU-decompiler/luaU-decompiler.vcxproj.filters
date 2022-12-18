@@ -177,7 +177,7 @@
     <ClCompile Include="decompiler\clean up\clean.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\validate.cpp">
+    <ClCompile Include="decompiler\ast\post_ast.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -338,11 +338,8 @@
     <ClInclude Include="decompiler\clean up\clean.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="decompiler\ast\validate.hpp">
+    <ClInclude Include="decompiler\ast\post_ast.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="Changelog.txt" />
   </ItemGroup>
 </Project>

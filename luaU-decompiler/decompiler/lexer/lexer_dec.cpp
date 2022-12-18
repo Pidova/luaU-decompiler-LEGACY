@@ -237,6 +237,11 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::memaddr };
 			break;
 		}
+		case LuauOpcode::LOP_FORGPREP: {
+			retn->type = lexer_dec::inst_type::for_;
+			retn->operands = { lexer_dec::operand_types::reg, lexer_dec::operand_types::memaddr };
+			break;
+		}
 		case LuauOpcode::LOP_FORGLOOP: {
 			retn->type = lexer_dec::inst_type::for_;
 			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::memaddr, lexer_dec::operand_types::integer };
@@ -318,13 +323,6 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		case LuauOpcode::LOP_FASTCALL2K: {
 			retn->type = lexer_dec::inst_type::fastcall;
 			retn->operands = { lexer_dec::operand_types::fastcall_idx, lexer_dec::operand_types::source,  lexer_dec::operand_types::memaddr, lexer_dec::operand_types::kvalue };
-			break;
-		}
-
-	    /* Forloop */
-		case LuauOpcode::LOP_FORGPREP: {
-			retn->type = lexer_dec::inst_type::for_;
-			retn->operands = { lexer_dec::operand_types::reg, lexer_dec::operand_types::memaddr };
 			break;
 		}
 

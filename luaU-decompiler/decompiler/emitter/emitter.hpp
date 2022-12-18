@@ -35,4 +35,11 @@ namespace emitter {
 
 	/* Expandable comment emmitting. */
 	void expandable_comment(std::string& dest, const std::string& src);
+
+	/* For gloop */
+	void for_g_loop(std::string& dest, const std::string& vars, const std::string& iter);
+
+	/* For nloop */
+	void for_n_loop(std::string& dest, const std::string& var, const std::string& iter);
+
 }
