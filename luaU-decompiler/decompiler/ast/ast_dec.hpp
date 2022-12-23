@@ -64,6 +64,7 @@ namespace ast_dec {
 		table_start, /* Table { [ALL] */
 		table_element, /* Element in table. (Not usable for setlist cause of concatation) [ALL] */
 		table_end, /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) [ALL] */
+		table_index, /* Extra expr used for certain things (Will be appended when everything is done). [ALL] */
 
 		closure_local, /* local function test () [ALL] */
 		closure_global, /* function test () [ALL] */
@@ -207,6 +208,7 @@ namespace ast_dec {
 				case expr_type::table_start: { retn += "table_start";  break; }
 				case expr_type::table_element: { retn += "table_element";  break; }
 				case expr_type::table_end: { retn += "table_end";  break; }
+				case expr_type::table_index: { retn += "table_index"; break; }
 
 				case expr_type::closure_local: { retn += "closure_local";  break; }
 				case expr_type::closure_global: { retn += "closure_global";  break; }

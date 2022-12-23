@@ -27,3 +27,42 @@ void ast_post::table::set_node_end(const std::shared_ptr<ast_dec::ast>& ast) {
 
 	return;
 }
+
+
+void ast_post::table::set_indexs(const std::shared_ptr<ast_dec::ast>& ast) {
+
+	const auto all = ast->main_block->visit_all();
+	for (const auto& i : all) {
+
+		if (i->lex->type == lexer_dec::inst_type::table_get) {
+
+			i->add_expr<ast_dec::expr_type::table_index>();
+
+		}
+
+	}
+
+	return;
+}
+
+
+void ast_post::arith::set_arith_exprs(const std::shared_ptr<ast_dec::ast>& ast) {
+
+	const auto all = ast->main_block->visit_all();
+	for (const auto& i : all) {
+
+		if (i->lex->type == lexer_dec::inst_type::arith) {
+
+			if (i->lex->has_operand_expr<lexer_dec::operand_types::kvalue>()) {
+				i->add_expr<ast_dec::expr_type::arithK>();
+			}
+			else {
+				i->add_expr<ast_dec::expr_type::arith>();
+			}
+			
+		}
+
+	}
+
+	return;
+}

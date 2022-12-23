@@ -8,8 +8,85 @@
 #define flag_compare -1
 #define multret -1
 #define fix_multret(ast, node) ast->main_block->visit_previous_addr(node->address)->lex->operand_expr<lexer_dec::operand_types::dest>().front()->val;
+#define char_valid(ch) ((ch >= 0x30 /* '0' */ && ch <= 0x39 /* '9' */) || (ch >= 0x41 /* 'A' */ && ch <= 0x5A /* 'Z' */) || (ch >= 0x61 /* 'a' */ && ch <= 0x7A /* 'z' */))
 
 /* Suffixes */
+namespace str {
+
+
+	/* Sees if character exists respect to string scopes. (Use this for character search for register data, makes things safe). */
+	template<char c /* DONT USE, "\"", "\'"*/>
+    bool find(const std::string& str) {
+		
+		bool v = true;
+
+		for (const auto ch : str) {
+
+			if (ch == '\"' || ch == '\'')
+				v ^= true;
+
+			if (v && ch == c)
+				return true;
+
+		}
+
+		return false;
+	}
+
+	/* Splits string with respect to string scope. Valid function name.  */
+	template<char target /* DONT USE, "\"", "\'"*/>
+	std::vector<std::string> split(const std::string& str) {
+
+		bool v = true;
+		std::string append = "";
+
+		std::vector<std::string> retn;
+
+		if (!str::find<target>(str))
+			return retn;
+
+		/* Split by character with respect to strings. */
+		for (auto i = 0u; i < str.size(); ++i) {
+
+			const auto ch = str[i];
+
+			if (ch != target) {
+				append += ch;
+			}
+
+			if (ch == '\"' || ch == '\'') {
+				v ^= true;
+				append.clear();
+			}
+
+			if (v && ((i + 1u) != str.size() && str[i + 1u] == target) && ch != target) {
+				retn.emplace_back(append);
+				append.clear();
+			}
+
+		}
+
+		/* Append end */
+		if (append.size()) {
+			retn.emplace_back(append);
+		}
+
+		/* Check for valid entries. */
+		for (auto& i : retn) {
+
+			for (auto a = 0u; a < i.size(); ++a)
+				if (!char_valid(i[a])) /* Invalid? */ {
+					i = i.substr(0, a);
+					break;
+				}
+
+		}
+
+		return retn;
+	}
+
+}
+
 namespace suffixes {
 	std::uintptr_t loop_variable_suffix = 0u; 
 	std::uintptr_t iterator_prefix_suffix = 0u;
@@ -171,6 +248,82 @@ namespace registers {
 
 }
 
+namespace lv {
+
+	std::string smart_name(std::vector<registers::reg_scope>& regs, const std::shared_ptr<ast_dec::node>& node, const std::string& def) {
+
+		/* Go through exprs and decide. */
+		for (const auto& expr : node->expr) {
+
+			switch (expr.first) {
+
+				case ast_dec::expr_type::table_end: {
+					return "table_";
+				}
+
+				case ast_dec::expr_type::concat_routine_end: {
+					return "concat_";
+				}
+
+				case ast_dec::expr_type::call_routine_end: {
+
+					const auto str = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg]->data;
+
+					/* Compiled var name */
+					std::string compiled = "";
+
+					/* example.example1 = example, **example1** */
+					if (str::find<'.'>(str)) {
+						compiled = str::split<'.'>(str).back();
+					}
+				
+					
+					if (!compiled.empty()) { /* First so add : if any. */
+
+						if (str::find<':'>(str)) { /* example.example1:example2, example1_example2_??  */
+							compiled += "_" + str::split<':'>(str).back() + "_";
+						}
+						else { /* No, ":" example.example1 example1_?? */
+							compiled += "_";
+						}
+
+					}
+					else {
+
+						if (str::find<':'>(str)) { /* Compiled = "" example:example1, example_example1_?? */
+							const auto split = str::split<':'>(str);
+							compiled += split[split.size() - 2u] + "_" + split.back() + "_";
+						}
+						else { /* call_?? */
+							compiled = str + "_";
+						}
+
+					}
+
+					return compiled;
+				}
+
+				case ast_dec::expr_type::table_index: {
+					return "idx_";
+				}
+
+				case ast_dec::expr_type::arithK:
+				case ast_dec::expr_type::arith: {
+					return "arith_";
+				}
+
+				default: {
+					return def;
+				}
+
+			}
+
+		}
+
+		return def;
+	}
+
+}
 std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<transpiler::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
 
 	std::string decompilation = "";
@@ -180,10 +333,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 	for (const auto& node : all) {
 
 		/* Fix lv name. */
-		if (node->dest_loc.is_dest_loc && !node->dest_loc.set_prefix) {
-			node->dest_loc.name = config->variable_prefix + node->dest_loc.name;
+		if (node->dest_loc.is_dest_loc && (config->smart_variable || !node->dest_loc.set_prefix)) {
+			node->dest_loc.name = ((config->smart_variable) ? lv::smart_name(regs, node, config->variable_prefix) : config->variable_prefix) + node->dest_loc.name;
 			node->dest_loc.set_prefix = true;
-		}
+		} 
 
 
 		bool table_start_new_node = false; /* For old nodes append and so on. */
@@ -533,6 +686,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 		}
 		
+		if (config->include_data) {
+			emitter::expandable_comment(decompilation,  std::to_string(node->lex->dissassembly->addr) + " : " + node->lex->dissassembly->data);
+		}
+
 		#if TANSPILER_DEBUG_OPERANDS 
 
 			std::stringstream str;
@@ -663,9 +820,9 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				str << "*		" << node->expr_str(p) << std::endl;
 
 			#if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
-				std::cout << str.str ();
+				std::cout << str.str () << std::endl;
 			#elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
-				emitter::expandable_comment(decompilation, str.str());
+				emitter::expandable_comment(decompilation, str.str() + std::string ("\n"));
 			#endif
 
 		#endif
@@ -1306,7 +1463,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
 				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
-				const auto kvalue = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+				auto& kvalue = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+
+				/* Remove qoutes */
+				kvalue.erase(std::remove(kvalue.begin(), kvalue.end(), '\"'), kvalue.end());
 
 				const auto compiled = source + ':' + kvalue;
 

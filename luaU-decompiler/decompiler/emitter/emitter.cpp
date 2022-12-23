@@ -123,7 +123,7 @@ void emitter::write_line(std::string& dest, const std::string& src) {
 }
 
 void emitter::expandable_comment(std::string& dest, const std::string& src) {
-    dest += "--[[\n" + src + ((src.back() != '\n') ? "\n]]\n" : "]]\n");
+    dest += "--[[\n" + src + ((src.back() != '\n') ? "]]\n" : "]]\n");
     return;
 }
 

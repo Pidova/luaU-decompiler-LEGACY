@@ -390,8 +390,41 @@ namespace ast_funcs {
 			
 			/* Set call info. */
 			for (const auto& node : calls) {
-					ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start. */
-					node->add_expr<ast_dec::expr_type::call_routine_end>(); /* Call end. */
+
+				const auto prev = ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg);
+
+				/* Namecall gets special treatment. */
+				if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
+					// lexer_dec::operand_types::source
+
+					const auto data = prev->lex->operand_expr< lexer_dec::operand_types::source>().front()->reg;
+					const auto data_1 = prev->lex->operand_expr< lexer_dec::operand_types::integer>().front()->reg;
+					
+					/* Call first operand will be the same as previous. */
+					if (data == data_1) {
+						ast->main_block->visit_previous_dest_register(prev->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+					}
+					else {
+
+						const auto args = node->lex->operand_expr< lexer_dec::operand_types::integer>().front()->val - 1u;
+
+						if (args) {
+							/* Set previous as call register + 2(1 is reserved, other is slot) */
+							ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg + 2u)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+						}
+						else {
+							/* No args namecall is end. */
+							prev->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+						}
+
+					}
+
+				}
+				else {
+					prev->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+				}
+
+				node->add_expr<ast_dec::expr_type::call_routine_end>(); /* Call end. */
 			}
 
 			return;
@@ -1069,6 +1102,12 @@ namespace ast_funcs {
 						continue;
 					}
 
+					/* TEST */
+					if (dest->reg == target) {
+						node_var(node->lex->dissassembly->operands.front());
+						continue;
+					}
+
 				}
 				else if (!routine && node->has_expr(ast_dec::expr_type::table_end)) { /* No routine and end of table garunteed locvar. */
 					node_var(node->lex->dissassembly->operands.front());
@@ -1127,6 +1166,17 @@ namespace ast_funcs {
 				std::printf("[AST] Setting table node ends.\n");
 		#endif
 		ast_post::table::set_node_end(ast);
+
+		#if display_analysis
+				std::printf("[AST] Setting table indexes exprs.\n");
+		#endif
+		ast_post::table::set_indexs(ast);
+
+		#if display_analysis
+				std::printf("[AST] Setting arith exprs.\n");
+		#endif
+		ast_post::arith::set_arith_exprs(ast);
+
 		return;
 	}
 }

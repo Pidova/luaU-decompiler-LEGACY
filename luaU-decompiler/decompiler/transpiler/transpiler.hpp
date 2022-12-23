@@ -23,7 +23,10 @@ namespace transpiler {
 		/* Comment */
 		bool include_header = false; /* Includes header per proto and main along with extra stuff like time and full bytecode. */
 		bool include_data = false; /* Includes bytecode, disasm per line */
-		bool include_metrics = false; /* Includes registers data TANSPILER_DEBUG, TANSPILER_DEBUG_OPERANDS need to be true for it too work can be found in debug.hpp (more info there) */
+
+		/* Misc */
+		bool smart_variable = false; /* "Smart" variable names. **Ignores prefix(unless unkown) but keeps sufffix** */
+	
 	};
 
 	std::string transpile(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_config>& config);

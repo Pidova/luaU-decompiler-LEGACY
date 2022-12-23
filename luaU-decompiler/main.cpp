@@ -7,11 +7,7 @@
 
 std::int32_t main() {
 
-	const char* const code = "while (true) do print (rexi) end;";
-		/*
-		
-		
-		repeat \
+	const char* const code = "repeat \
 			local a = peen(); \
 			while (wowo and iaia and iaai and iao and aoioa) do \
 				a = 1000;\
@@ -28,9 +24,8 @@ std::int32_t main() {
 		 until((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak));\
 		print(111);\
 		oopp[\"g\"] = all; \
-		print ({a[10]}); oopp[aaa] = all;
+		print ({a[10]}); oopp[aaa] = all;";
 
-		*/
 	/* Compile. */
 	std::size_t size = 0u;
 	const auto compilation = luau_compile(code, std::strlen(code), NULL, &size);
