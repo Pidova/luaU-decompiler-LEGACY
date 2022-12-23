@@ -93,6 +93,12 @@ void emitter::for_n_loop(std::string& dest, const std::string& var, const std::s
     return;
 }
 
+void emitter::loop(std::string& dest, const std::string& type, const std::string& data, const char* const end) {
+    dest += type + "( " + data + " )" + end;
+    return;
+}
+
+
 void emitter::end_of_line(std::string& dest) {
     dest += ";\n";
     return;

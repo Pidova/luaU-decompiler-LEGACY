@@ -7,21 +7,29 @@
 
 std::int32_t main() {
 
-	const char* const code = "local myArray = { 1, {1, 3, 4}, {3, 4, 5}, 4, 1, {1, 3, 4}, {3, 4, 5}, 4, 1, {1, 3, 4}, {3, 4, 1, {1, 3, 4}, {3, 4, 5}, 4, 1}, 4, }\
-						\
-		for i, v in ipairs(myArray) do\
-			print(tostring(i) .. \" - \" ..v)\
-			end";
+	const char* const code = "while (true) do print (rexi) end;";
 		/*
 		
+		
 		repeat \
+			local a = peen(); \
+			while (wowo and iaia and iaai and iao and aoioa) do \
+				a = 1000;\
+		if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end\
+				printf (AA)\
+			end\
 			if (cmp1 == cmp2) then \
 				 print (119); \
 				 break; \
 			end; \
-		 until(oaao and aoaoap == ajajk and ioaoa == aoak and aoapop == ujaja and lmao == kmao);\
+			if (a or a == 100) then break; end;\
+			if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end \
+			a = 1000; \
+		 until((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak));\
 		print(111);\
-		oopp[\"g\"] = all; local a = { 10, [1000] = www, 1, 2, {[1000] = www, 1}, {[1000] = www, 1}, 1, [1000] = www }; print ({a[10]}); oopp[aaa] = all;
+		oopp[\"g\"] = all; \
+		print ({a[10]}); oopp[aaa] = all;
+
 		*/
 	/* Compile. */
 	std::size_t size = 0u;

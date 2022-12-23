@@ -171,11 +171,13 @@ namespace registers {
 
 }
 
-std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr <ast_dec::block> block, const std::shared_ptr<transpiler::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
+std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<transpiler::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
 
 	std::string decompilation = "";
 
-	for (const auto& node : block->nodes) {
+	/* Go through everything linearly everything has already passed through doing it linearly lessers headaches. */
+	const auto all = ast->main_block->visit_all();
+	for (const auto& node : all) {
 
 		/* Fix lv name. */
 		if (node->dest_loc.is_dest_loc && !node->dest_loc.set_prefix) {
@@ -310,30 +312,92 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 						break;
 					}
 
+					case ast_dec::expr_type::condition_true: {
+						regs.back()[flag_compare]->set<registers::type::expr>("true");
+						break;
+					}
 					case ast_dec::expr_type::while_: {
 
-						
-						/* Emit while cmp based on compare operand count. */
-						if (node->lex->count_operand_expr<lexer_dec::operand_types::compare>() == 2u) {
+						std::string compiled = "";
 
-							/* while (?? ?? ??) */
+						/* Has compare **Compile compare too get emitted** */
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::compare>()) {
 
-							const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
-							const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
+							if (node->lex->count_operand_expr<lexer_dec::operand_types::compare>() == 2u) {
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", cmp_1->data, cmp_2->data);
+								/* while (?? ?? ??) */
+
+								const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
+								const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
+
+								emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", regs.back()[flag_compare]->data + cmp_1->data, cmp_2->data);
+							}
+							else {
+
+								/* while (??) */
+
+								const auto cmp = regs.back()[node->lex->dissassembly->operands[0]->reg];
+
+								emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", "", regs.back()[flag_compare]->data + cmp->data);
+							}
+
 						}
 						else {
 
-							/* while (??) */
+							/* Append compare flag. */
+							compiled = regs.back()[flag_compare]->data;
 
-							const auto cmp = regs.back()[node->lex->dissassembly->operands[0]->reg];
-
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", cmp->data);
 						}
+
+						/* Emit compiled */
+						emitter::loop(decompilation, "while", compiled);
 
 						/* Replicate next. */
 						regs.emplace_back(regs.back().clone());
+
+						/* Clear compare flag. */
+						regs.back()[flag_compare]->clear(true);
+
+						break;
+					}
+					case ast_dec::expr_type::until_: {
+
+						std::string compiled = "";
+
+						/* Has compare **Compile compare too get emitted** */
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::compare>()) {
+
+							if (node->lex->count_operand_expr<lexer_dec::operand_types::compare>() == 2u) {
+
+								/* while (?? ?? ??) */
+
+								const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
+								const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
+
+								emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", regs.back()[flag_compare]->data + cmp_1->data, cmp_2->data);
+							}
+							else {
+
+								/* while (??) */
+
+								const auto cmp = regs.back()[node->lex->dissassembly->operands[0]->reg];
+
+								emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", "", regs.back()[flag_compare]->data + cmp->data);
+							}
+
+						}
+						else {
+
+							/* Append compare flag. */
+							compiled = regs.back()[flag_compare]->data;
+
+						}
+
+						/* Emit compiled */
+						emitter::loop(decompilation, "until", compiled, ";\n");
+
+						/* Remove current register. */
+						regs.pop_back();
 
 						/* Clear compare flag. */
 						regs.back()[flag_compare]->clear(true);
@@ -1493,6 +1557,10 @@ std::string transpile_block(const std::shared_ptr<ast_dec::ast>& ast, const std:
 				if (val == multret)
 					val = fix_multret(ast, node);
 
+				/* Fix val. */
+				if (!val)
+					val = 1u;
+
 				/* Iterate */
 				for (auto on = start; on < (start + val); ++on) {
 
@@ -1833,9 +1901,7 @@ void transpile_ast(const std::shared_ptr<ast_dec::ast>& main_ast, const std::sha
 	std::vector<registers::reg_scope> scopes = { main_scope };
 
 	/* Transpile main block. */
-	const auto main = transpile_block(main_ast, main_ast->main_block, config, scopes);
-	str += main; 
-
+	str += transpile_blocks(main_ast, config, scopes);
 	return;
 }
 

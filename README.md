@@ -1,30 +1,32 @@
 # luaU-decompiler
-# Rn its supper unfinished but the old one i made is getting ported over to this feel free to contribute
 # Description
 
-  * This is a luaU decompiler for https://github.com/Roblox/luau/
-  
+    * This is a decompiler LuaU: https://github.com/Roblox/luau/
+    * It is based off of a ast, abstract syntax tree. Each routine and expression has it's own pass through with some of the routines sharing some stuff.
+    * Everything you need for debugging can be found in the debugging files, "debug.hpp", "ast_config.hpp", etc.
+
 # Usage
 
-  Code:
-  * If you wan't to test it out with code just go to main.cpp where it'll get compiled and decompiled and you can compare results.
+    Code:
+        * If you wan't to test it out with code just go to main.cpp where it'll get compiled and decompiled and you can compare results.
   
-  Bytecode:
-  * If you have something that has already been compiled just create a char point for it and pass it through luau_load get proto and make ast from it with     config. Just refer to main.cpp.
+    Bytecode:
+        * If you have something that has already been compiled just create a char point for it and pass it through luau_load get proto and make ast from it with     config. Just refer to main.cpp.
 
 
 # Config
 
-  * Configs for the decompiler are transpiler::transpiler_config
+    Configs for the decompiler are transpiler::transpiler_config
  
 # Help
  
-  * if you find a bug with it or something that can be added let me know in Issues.
+    If you find a bug with it or something that can be added let me know in Issues.
   
 # Modifications
   
-  * Some stuff has been changed with luaU to make it easier to decompile and represent in the ast.
-    
-# Changes
-    
-  * Will somewhat try to keep the decompiler up to date whit the recent ISA changes for luaU.
+    Some stuff has been changed with LuaU to make it easier to decompile and represent in the ast (check luau_load).
+
+# Updating
+
+    Updating too the latest LuaU is pretty easy. You can add the new files from LuaU repository for the new stuff.
+    If they added new instructions to their ISA this will be updated in some time too match it.

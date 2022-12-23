@@ -1,5 +1,5 @@
 #include <algorithm>
-#include <iostream>
+#include "ast_config.hpp"
 #include "ast_dec.hpp"
 #include "post_ast.hpp"
 
@@ -97,7 +97,8 @@ namespace ast_funcs {
 
 	namespace branches {
 		
-		template <ast_dec::expr_type tt, bool loadb = false /* loadb influences compare (conditional operations) */>
+		/* Set branches conditons in routine with given range. */
+		template <ast_dec::expr_type tt /* */, bool loadb = false /* loadb influences compare (conditional operations) */>
 		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end) {
 
 			std::uintptr_t ignore_till_addr = 0u;
@@ -485,31 +486,93 @@ namespace ast_funcs {
 					nodes.emplace_back(jmp_back);
 				}
 
-			/* We need to get range of until/while rotuines conditions. */
+
+			/* We need to get range of until/while routines conditions. */
 			for (const auto& jumpback : nodes) {
+
+				std::shared_ptr<ast_dec::node> marked_node = nullptr;
 
 				/* See if jumpback is a branch. */
 				if (jumpback->lex->type != lexer_dec::inst_type::branch_condition && jumpback->lex->type != lexer_dec::inst_type::branch)
 					throw std::exception("until/while branch jumpback isn't a branch.");
 
-				const auto nodes_routine = ast->main_block->visit_range(jumpback->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr, jumpback->address);
+				const auto jmp_addr = jumpback->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+				const auto jmp_node = ast->main_block->visit_addr(jmp_addr);
+				const auto nodes_routine = ast->main_block->visit_range_current(jmp_addr, jumpback->address);
+				const auto condition = ast->main_block->visit_range_type_next<lexer_dec::inst_type::branch_condition>(jmp_addr, jumpback->address);
 
 
-				std::shared_ptr<ast_dec::node> marked_node = nullptr;
-				
+			    auto target_2 = 0;
+			    auto target_1 = 0;
+				bool used_target_1 = false;
+				bool used_target_2 = false;
+
+
+				/* Checks operands if targets get used or not but if it does get used just resets target. */
+				std::function<void(const std::shared_ptr<LuaU_dissassembler::operand>&, const lexer_dec::operand_types)> check_usage = [&](const std::shared_ptr<LuaU_dissassembler::operand>& operand, const lexer_dec::operand_types tt) mutable {
+
+					const auto val = operand->reg;
+
+					if (val == target_1)
+						used_target_1 = false;
+
+					if (target_2 != -1 && signed(val) == target_2)
+						used_target_2 = false;
+
+					return;
+				};
+
 
 				if (jumpback->has_expr(ast_dec::expr_type::until_)) {
+
+
+					bool break_done = false; /* Hit a break so cannot concat until end. */
 
 					/* End of routine is given with until. Find begging. */
 					for (const auto& node : nodes_routine) {
 
+
+						node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
+						node->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
+						node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
+
+
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+							const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+							/* Check target usage. Abrubt end. */
+							if (dest == target_1) {
+
+								/* Set twice without used. Abrubt end. */
+								if (used_target_1) {
+									//goto node_end;
+								}
+
+								used_target_1 = true;
+							}
+
+							if (target_2 != -1 && signed(dest) == target_2) {
+
+								/* Set twice without used. Abrubt end. */
+								if (used_target_2) {
+									//goto node_end;
+								}
+
+								used_target_2 = true;
+							}
+
+						}
+
 						if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
 
-							/* Break */
+							/* Break **Not definite jump to end of until routine or end of while can mean break of any conditional** */
 							if (node->lex->dissassembly->op == LuauOpcode::LOP_JUMP || node->lex->dissassembly->op == LuauOpcode::LOP_JUMPX) {
 
-								if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address)
+								if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
+									break_done = true;
 									node->add_expr<ast_dec::expr_type::break_>();
+								}
 
 								continue;
 							} 
@@ -524,24 +587,19 @@ namespace ast_funcs {
 								break;
 							}
 
-							/* 
-								Jumps too jumpback address.
-									* Can mean justs ands in the compare condition.
-									* If there is a compare after the jumpback it must exceed the jumpback if not then the loop is just a until(true/false);
-							*/
-							if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr == jumpback->address) {
+							/* Find begin of until concat routine.*/
+							if (!break_done) {
 
-								const auto previous = ast->main_block->visit_previous_addr(jumpback->address);
 
-								/* Isn't a until(true/false) loop. */
-								if (previous->lex->type == lexer_dec::inst_type::branch_condition || previous->lex->type == lexer_dec::inst_type::branch) {
-									branches::set<ast_dec::expr_type::until_>(ast, node->address, jumpback->address);
-									break;
-								}
-								else { /* Is a until(true/false) loop. */
-									/* 	until(true/false) loop data will get handeled by transpiler if compareflag is 0. */
-									break;
-								}
+								/* 
+									If node is valid for until concat routine, "condition_nonmutable" will be an expr so it wont get changed into an if/elseif etc.
+									"and, or" may take place in middle.
+								*/
+
+								used_target_1 = false;
+								used_target_2 = false;
+								target_2 = (node->lex->dissassembly->op == LuauOpcode::LOP_SETTABLE) ? node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg : -1; /* Index for SETTABLE. */
+								target_1 = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg; /* Source data can be idx. */
 
 							}
 
@@ -550,7 +608,14 @@ namespace ast_funcs {
 					}
 
 				}
-				else {
+				else { /* While loop */
+
+					/* No conditions in it (Garunteed while(true) do) */
+					if (condition == nullptr) {
+						jmp_node->add_expr<ast_dec::expr_type::while_>();
+						jmp_node->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
+						continue;
+					}
 
 					/* Begining of routine is given with until. Find end. */
 					for (const auto& node : nodes_routine) {
@@ -565,9 +630,6 @@ namespace ast_funcs {
 
 								continue;
 							}
-
-
-
 
 
 						}
@@ -968,12 +1030,12 @@ namespace ast_funcs {
 					for (const auto& call : calls) {
 						
 						const auto node_end = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::call_routine_end>(call->address, { ast_dec::expr_type::call_routine_start });
-						
+			
 						/* Target dest reg used in call routine dest. */
 						for (const auto& call_node : ast->main_block->visit_range(call->address, node_end->address))
 							if (call_node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && call_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg == target)
 								bad = true;
-						
+					
 					}
 					if (bad)
 						continue;
@@ -1020,17 +1082,50 @@ namespace ast_funcs {
 	}
 
 	void init_ast(std::shared_ptr<ast_dec::ast>& ast) {
+
+		#if display_analysis
+				std::printf("[AST] Setting arguments.\n");
+		#endif
 		ast_funcs::arguments::set(ast);
+
+		#if display_analysis
+				std::printf("[AST] Setting call routines.\n");
+		#endif
 		ast_funcs::calls::set_routines(ast);
+
+		#if display_analysis
+				std::printf("[AST] Setting concat routines.\n");
+		#endif
 		ast_funcs::concats::set_routines(ast);
+
+		#if display_analysis
+				std::printf("[AST] Setting table routines.\n");
+		#endif
 		ast_funcs::tables::set_routines(ast);
+
+		#if display_analysis
+				std::printf("[AST] Setting while/repeat routines.\n");
+		#endif
 		ast_funcs::loops::set_whilerep_routines(ast); /* Needed after concat can mess up if before or after. (expr_type::scope_end needed only for while end) */
+		
+		#if display_analysis
+				std::printf("[AST] Setting for routines.\n");
+		#endif
 		ast_funcs::loops::set_for_routines(ast);
+
+		#if display_analysis
+				std::printf("[AST] Setting locvars.\n");
+		#endif
 		ast_funcs::locvars::set_lv(ast, ast->arg_regs.size());
+
 		return;
 	}
 
 	void post_ast(std::shared_ptr<ast_dec::ast>& ast) {
+
+		#if display_analysis
+				std::printf("[AST] Setting table node ends.\n");
+		#endif
 		ast_post::table::set_node_end(ast);
 		return;
 	}
@@ -1042,15 +1137,17 @@ namespace blocks {
 	std::tuple <std::vector<std::shared_ptr<ast_dec::node>>, std::uintptr_t /* Start next pc. */, std::uintptr_t /* Final instruction. */> init_current_block(std::shared_ptr<ast_dec::ast>& ast, std::uintptr_t pc, std::vector<std::uintptr_t>& branch_ends) {
 	
 		std::vector<std::shared_ptr<ast_dec::node>> retn;
-	
+
 		/* Init basic node data. */
 		do {
 			
 			auto current_dissassembly = ast->dissassembly[pc];
 
 			/* Pc is already at a branch ending. So just return empty vector. */
-			if (std::binary_search(branch_ends.begin(), branch_ends.end(), pc))
-				break;
+			if (std::binary_search(branch_ends.begin(), branch_ends.end(), pc)) {
+				branch_ends.erase(std::remove(branch_ends.begin(), branch_ends.end(), pc), branch_ends.end());
+				return std::make_tuple(retn, pc, pc);
+			}
 
 			/* Set current node. */
 			auto node = std::make_shared<ast_dec::node>();
@@ -1060,6 +1157,16 @@ namespace blocks {
 			node->address = pc;
 			node->lex = lexer_dec::lexer(current_dissassembly);
 			
+			#if display_analysis
+				std::printf("[AST-dissassembly] %llu %s ", pc, current_dissassembly->data.c_str());
+				if (node->lex->type == lexer_dec::inst_type::branch || node->lex->type == lexer_dec::inst_type::branch_condition) {
+					std::printf(" - %llu\n", node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
+				}
+				else {
+					std::printf("\n");
+				}
+			#endif	
+
 			/* Branch/end so break. */
 			if (node->lex->type == lexer_dec::inst_type::branch || node->lex->type == lexer_dec::inst_type::branch_condition || (pc + current_dissassembly->len) == ast->p->sizecode)
 				break;		
@@ -1068,7 +1175,7 @@ namespace blocks {
 
 		} while (true /* Earlier code will exit if hit a branch or passed branch ends. */);
 		
-		return std::make_tuple(retn, pc + ast->dissassembly[pc]->len /* Skip current instruction. */, pc);
+		return std::make_tuple(retn, pc + ast->dissassembly[pc]->len, pc);
 	}
 
 
@@ -1077,6 +1184,7 @@ namespace blocks {
 
 		std::uintptr_t pc = 0u;
 		std::vector<std::uintptr_t> branch_ends;
+		std::vector<std::uintptr_t> branch_ends_clone; /* Same as branch ends but a clone used for certain things. */
 		std::unordered_map <std::uintptr_t /* PC(start) */, std::tuple <std::uintptr_t  /* PC(end) */, std::uintptr_t  /* PC(end(end + curr->len)) */, std::vector<std::shared_ptr<ast_dec::node>> /* Nodes */>> linear_blocks; /* Block data for scopes. */
 
 
@@ -1095,11 +1203,19 @@ namespace blocks {
 				if (!temp_lex->has_operand_expr<lexer_dec::operand_types::memaddr>())
 					throw std::exception("Jump with no memaddr operand in lexer at set_blocks.");
 
+				/* Jump is negative don't take. */
+				if (temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0)
+					continue;
+
 				branch_ends.emplace_back(temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front ()->jmp_addr);
 				
 			}
 		
 		}
+
+		/* Clone branch ends. */
+		branch_ends_clone.reserve(branch_ends.size());
+		std::copy(branch_ends.begin(), branch_ends.end(), branch_ends_clone.begin());
 
 
 		/* Set main block. */
@@ -1108,36 +1224,105 @@ namespace blocks {
 
 		/* Append blocks */
 		do {
-			
-			const auto block = init_current_block(ast, pc, branch_ends);
+			const auto block = init_current_block(ast, pc, branch_ends_clone);
 			linear_blocks.insert(std::make_pair(pc, std::make_tuple(std::get<2>(block), std::get<1>(block), std::get<0>(block))));
-
 			pc = std::get<1>(block);
+		} while (pc < ast->p->sizecode && (pc + ast->dissassembly[pc]->len) < ast->p->sizecode /* Pc didn't exceed sizecode. */);
 
-		} while (pc < ast->p->sizecode /* Pc didn't exceed sizecode. */);
-
-
+		
 		/* Reset PC. */
 		pc = 0u;
-	
 
-		/* Init main. (Block search is dependent on main so needs to be seperate from everything). */
+		/* Init main (Block search is dependent on main so needs to be seperate from everything). */
 		ast->main_block->node_start = pc;
 		ast->main_block->node_end = std::get<0>(linear_blocks[pc]);
 		ast->main_block->nodes = std::get<2>(linear_blocks[pc]);
+		
 
-
-		/* Set pc. */
-		pc = std::get<1>(linear_blocks[pc]);;
-
-
-		/* Assemble blocks. */
+		/* Assemble blocks */
 		while (pc < ast->p->sizecode /* Pc didn't exceed sizecode. */) {
 
-			// const auto& block = linear_blocks[pc];
+			const auto node_block = linear_blocks[pc];
+			const auto nodes = std::get<2>(node_block);
 
+	        /* Adbrupt end.*/
+			if (!nodes.size()) {
+				break;
+			}
+
+			/* End */
+			const auto jump_node = nodes.back();
+			if (jump_node->lex->type == lexer_dec::inst_type::branch || jump_node->lex->type == lexer_dec::inst_type::branch_condition) {
+
+				const auto jmp = jump_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp + jump_node->address + 1u;
+				const auto next_node_block = linear_blocks[jmp];
+
+				auto current = ast->find_block(pc); /* Block too place all info in. */
+				auto jump_block = ast->find_block(jmp); /* Jump taken block */
+				auto nojump_block = ast->find_block(jump_node->address + jump_node->lex->dissassembly->len); /* Branch not taken jump. */
+
+				/* Current is always available something bad happened. */
+				if (current == nullptr)
+					throw std::exception("Current block is null.");
+
+
+				switch (jump_node->lex->type) {
+
+					case lexer_dec::inst_type::branch: {
+
+						/* Construct branch taken. */
+						if (jump_block == nullptr) {
+							jump_block = std::make_shared<ast_dec::block>();
+							jump_block->node_start = jmp;
+							jump_block->node_end = std::get<0>(linear_blocks[jmp]);
+							jump_block->nodes = std::get<2>(linear_blocks[jmp]);
+						}
+
+						/* Add jump taken. */
+						current->branches.emplace_back(jump_block);
+						break;
+					}
+
+					case lexer_dec::inst_type::branch_condition: {
+
+						/* Construct branch taken. */
+						if (jump_block == nullptr) {
+							jump_block = std::make_shared<ast_dec::block>();
+							jump_block->node_start = jmp;
+							jump_block->node_end = std::get<0>(linear_blocks[jmp]);
+							jump_block->nodes = std::get<2>(linear_blocks[jmp]);
+						}
+
+						/* Construct no branch taken. */
+						if (nojump_block == nullptr) {
+							nojump_block = std::make_shared<ast_dec::block>();
+							nojump_block->node_start = jump_node->address + jump_node->lex->dissassembly->len;
+							nojump_block->node_end = std::get<0>(linear_blocks[jump_node->address + jump_node->lex->dissassembly->len]);
+							nojump_block->nodes = std::get<2>(linear_blocks[jump_node->address + jump_node->lex->dissassembly->len]);
+						}
+
+
+						/* Add jump taken. */
+						current->branches.emplace_back(jump_block);
+						current->branches.emplace_back(nojump_block);
+
+						break;
+					}
+
+					default: {
+						throw std::exception("Unexpected jump inst type.");
+					}
+
+				}
+
+			}
+
+			/* Set pc */
+			pc = std::get<1>(node_block);
 		};
+
 		
+
 		return;
 	}
 
@@ -1169,6 +1354,9 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 		}
 
 		/* Set current proto blocks. */
+		#if display_analysis
+				std::printf("[AST] Initing blocks.\n");
+		#endif
 		blocks::set_blocks(current_proto);
 
 		/* Gen children proto to analyze. */
@@ -1183,10 +1371,28 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 			protos_ast.emplace_back(child_ast);
 		}
 
-		
+		#if display_analysis
+				std::printf("[AST] Initing ast.\n");
+		#endif
 		ast_funcs::init_ast(current_proto); /* Init ast */
+
+
+		#if display_analysis
+				std::printf("[AST] Post processing ast.\n");
+		#endif
 		ast_funcs::post_ast(current_proto); /* Post ast */
 
+
+		#if display_analysis
+				std::printf("[AST] Setting end pc.\n");
+		#endif
+		current_proto->pc_end = current_proto->main_block->visit_all().back()->address;
+		
+
+		#if display_analysis
+				std::printf("[AST] Finished with current ast.\n");
+		#endif
+		std::cout << current_proto->tree_str() << std::endl;
 
 		/* Remove current. */
 		protos_ast.erase(std::remove(protos_ast.begin(), protos_ast.end(), current_proto), protos_ast.end());

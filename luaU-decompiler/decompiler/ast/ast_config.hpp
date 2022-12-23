@@ -1,5 +1,3 @@
-#pragma once
-
 /* 
 
 False: 
@@ -23,3 +21,7 @@ True:
 #else /* Nothing */
 	#define control_flow_vars_ignore_useless false
 #endif
+
+
+#define display_analysis true /* Prints pass throughs for ast. */
+#define display_warnings true /* Prints warnings. */

@@ -42,4 +42,7 @@ namespace emitter {
 	/* For nloop */
 	void for_n_loop(std::string& dest, const std::string& var, const std::string& iter);
 
+	/* Loop express(while, until) **use compare for final compare and compare flag for concatation** */
+	void loop(std::string& dest, const std::string& type, const std::string& data, const char* const end = " do\n" /* Defualt while loop. */);
+
 }

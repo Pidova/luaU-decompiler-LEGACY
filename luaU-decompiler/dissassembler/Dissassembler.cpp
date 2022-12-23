@@ -666,30 +666,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 
 						buffer->data += std::to_string(operand_value) + split;
 						current_operand->jmp = operand_value;
-						current_operand->jmp_addr = current_operand->jmp + buffer->addr;
-
-						/* Fix jmp. */
-						switch (buffer->op) {
-
-							case LuauOpcode::LOP_JUMPXEQKNIL:
-							case LuauOpcode::LOP_JUMPXEQKB:
-							case LuauOpcode::LOP_JUMPXEQKN:
-							case LuauOpcode::LOP_JUMPXEQKS:
-							case LuauOpcode::LOP_JUMPIFEQ:
-							case LuauOpcode::LOP_JUMPIFLE:
-							case LuauOpcode::LOP_JUMPIFLT:
-							case LuauOpcode::LOP_JUMPIFNOTEQ:
-							case LuauOpcode::LOP_JUMPIFNOTLE:
-							case LuauOpcode::LOP_JUMPIFNOTLT: {
-								++current_operand->jmp_addr;
-								break;
-							}
-
-							default: {
-								break;
-							}
-
-						}
+						current_operand->jmp_addr = current_operand->jmp + buffer->addr + 1u;
 
 						break;
 					}
@@ -842,8 +819,6 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 
 	/* Calulate lenght. */
 	buffer->len = (std::uint8_t(reinterpret_cast<const std::uintptr_t>(buffer->code) - reinterpret_cast<const std::uintptr_t>(start_pc)) / sizeof(Instruction)) + 1u;
-	
-	std::printf("%llu %s\n", pc, buffer->data.c_str ());
 
 	return;
 }

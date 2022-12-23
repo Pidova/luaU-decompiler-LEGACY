@@ -1,8 +1,10 @@
 #pragma once
 #include <algorithm>
+#include <iostream>
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include "ast_dec.hpp"
 #include "../../dissassembler/Dissassembler.hpp"
 #include "../lexer/lexer_dec.hpp"
 
@@ -23,49 +25,57 @@ namespace ast_dec {
 		newclosure /* (function()  end)*/
 	};
 
-	/* Expression type. */
+	/* Expression type. {desc, intended usage/set for mostly} */
 	enum class expr_type : std::uint8_t {
-		lex, /* Specific type refer to lexer. */
+		lex, /* Specific type refer to lexer. [PLACEHOLDER] */
 
-		arith, /* r1 += r1 + r1 */
-		arithK, /* r1 += r1 + 1 */
+		arith, /* r1 += r1 + r1 [AST] */
+		arithK, /* r1 += r1 + 1 [AST] */
 
-		for_iv_start, /* for i,v in pairs ({ 1 }) do */
-		for_start, /* for ?? in ?? do */
-		for_n_start, /* for ?? in ?? do (numeral) */
+		for_iv_start, /* for i,v in pairs ({ 1 }) do [ALL] */
+		for_start, /* for ?? in ?? do [ALL] */
+		for_n_start, /* for ?? in ?? do (numeral) [ALL] */
 
-		repeat_, /* repeat */
-		while_, /* while () follows condition. */
-		until_, /* until () follows condition. */
-		break_, /* break */
-		scope_end, /* scope end (generic) */
+		repeat_, /* repeat [ALL] */
+		while_, /* while () follows condition(not jumpback). [ALL] */
+		until_, /* until () follows condition(typically jumpback). [ALL] */
+		break_, /* break [ALL] */
+		scope_end, /* scope end (generic) [ALL] */
 
-		call_routine_start, /* Call routine start. */
-		call_routine_end, /* Call routine end. */
+		call_routine_start, /* Call routine start. [AST] */
+		call_routine_end, /* Call routine end. [AST] */
 
-		concat_routine_start, /* Concat routine start. */
-		concat_routine_end, /* Concat routine end. */
+		concat_routine_start, /* Concat routine start. [AST] */
+		concat_routine_end, /* Concat routine end. [AST] */
 
-		if_, /* if () */
-		elseif_, /* elseif () */
-		else_, /* else */
-	    condition_and, /* if/elseif/nested(and) appends to if_statements (Can be applied to until or while) */
-		condition_or, /* if/elseif/nested(or)  appends to if_statements (Can be applied to until or while) */
-		condition_nonmutable, /* Condition that cannot be converted into while/if/elseif etc. */
+		if_, /* if () [ALL] */
+		elseif_, /* elseif () [ALL] */
+		else_, /* else [ALL] */
+	    condition_and, /* if/elseif/nested(and) appends to if_statements (Can be applied to until or while) [ALL] */
+		condition_or, /* if/elseif/nested(or)  appends to if_statements (Can be applied to until or while) [ALL] */
+		condition_nonmutable, /* Condition that cannot be converted into while/if/elseif etc. [AST] */
+		condition_concat_start, /* Concat a condition(universal) (start). [AST] */
+		condition_concat_end, /* Concat a condition(universal) (end). [AST] */
+		condition_true, /* Sets compare flag too true garunteing that while true expressions get set as true (expr type). [ALL] */
 
-		close, /*   %s ) */
-		open, /* ( %s   */
+		close, /*   %s ) [ALL] */
+		open, /* ( %s   [ALL] */
 
-		table_start, /* Table { */
-		table_element, /* Element in table. (Not usable for setlist cause of concatation) */
-		table_end, /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) */
+		table_start, /* Table { [ALL] */
+		table_element, /* Element in table. (Not usable for setlist cause of concatation) [ALL] */
+		table_end, /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) [ALL] */
 
-		closure_local, /* local function test () */
-		closure_global, /* function test () */
-		closure_newclosure, /* (function()  end)*/
+		closure_local, /* local function test () [ALL] */
+		closure_global, /* function test () [ALL] */
+		closure_newclosure, /* (function()  end) [ALL] */
 
-		dead_instruction, /* Instruction gets ignored. *Will run exprs but not instruction in transpiler. */
-		conditional /* Condition flag will get written too dest. (Used for branching opcodes including loadb +jmp **Will clear compare flag if conditional is not loadb) */
+		dead_instruction, /* Instruction gets ignored. *Will run exprs but not instruction in transpiler. [TRANSPILER] */
+		conditional /* Condition flag will get written too dest. (Used for branching opcodes including loadb +jmp **Will clear compare flag if conditional is not loadb) [ALL] */
+	};
+
+	enum class element {
+		front,
+		back
 	};
 
 	struct node {
@@ -98,21 +108,44 @@ namespace ast_dec {
 
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */
 		
-		/* Node functions. */
+		/* Node functions */
+
+		/* Appends expr */
 		template <expr_type type>
-		void add_expr(const std::size_t count = 1u) {
+		void add_expr(const std::size_t count = 1u, const element ele = element::back) {
 
 			/* Replace only lex with type. */
 			if (this->expr.size() && this->expr.front().first == ast_dec::expr_type::lex /* Used as place holder. */) {
 				this->expr.front().first = type;
 				this->expr.front().second = count;
 			}
-			else 
-				this->expr.emplace_back(std::make_pair(type, count));
+			else {
+				
+				const auto pair = std::make_pair(type, count);
+
+				if (ele == element::back) {
+					this->expr.emplace_back(pair);
+				}
+				else {
+					this->expr.insert(this->expr.begin(), pair);
+				}
+
+			}
 				
 			return;
 		}
 
+		/* Adds expression if type isn't a expr. */
+		template <expr_type type>
+		void add_existance(const std::size_t count = 1u, const element ele = element::back) {
+
+			if (!this->has_expr(type))
+				this->add_expr<type>(count, ele);
+
+			return;
+		}
+
+		/* Expr exists? */
 		bool has_expr(expr_type type) {
 			for (const auto& i : this->expr)
 				if (i.first == type)
@@ -130,6 +163,7 @@ namespace ast_dec {
 			return count;
 		}
 
+		/* Turns expr pair into a string. */
 		std::string expr_str(const std::pair <expr_type, std::size_t>& p) {
 
 			std::string retn = "";
@@ -163,6 +197,9 @@ namespace ast_dec {
 				case expr_type::condition_and: { retn += "and";  break; }
 				case expr_type::condition_or: { retn += "or";  break; }
 				case expr_type::condition_nonmutable: { retn += "condition_nonmutable";  break; }
+				case expr_type::condition_concat_start: { retn += "condition_concat_start";  break; }
+				case expr_type::condition_concat_end: { retn += "condition_concat_end";  break; }
+				case expr_type::condition_true: { retn += "condition_true"; break; }
 
 				case expr_type::close: { retn += "close";  break; }
 				case expr_type::open: { retn += "open";  break; }
@@ -197,7 +234,7 @@ namespace ast_dec {
 		std::uintptr_t node_end = 0u; /* PC final instruction. */
 
 		std::vector<std::shared_ptr<node>> nodes; /* Nodes in block. */
-		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks(serves as end) don't count, jump backs will refer to other nodes(may get fragmented)), 0 no jumps.  */
+		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks don't count, jump backs will refer to other nodes(may get fragmented)), 0 no jumps.  */
 
 
 		/* All visits gets sorted automatically by address. */
@@ -208,6 +245,7 @@ namespace ast_dec {
 
 			std::vector<std::shared_ptr<node>> retn;
 			std::vector<block*> scopes = { this };
+			std::vector<block*> analyzed_scopes = { this };
 
 			do {
 				
@@ -232,11 +270,12 @@ namespace ast_dec {
 				/* Add nested blocks. */
 				for (const auto& i : current_block->branches)
 					scopes.emplace_back(i.get());
-			
+
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 				
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn); 
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
@@ -280,6 +319,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size ());
@@ -349,7 +389,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
-				
+
 			} while (scopes.size());
 
 			throw std::exception("Returning no data for visit_addr.");
@@ -391,6 +431,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
@@ -433,6 +474,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
@@ -508,6 +550,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
@@ -515,6 +558,80 @@ namespace ast_dec {
 			return retn;
 		}
 		
+
+		/* Visits all inst type in range. (Includes being, end) */
+		template<lexer_dec::inst_type inst>
+		std::vector<std::shared_ptr<node>> visit_range_type(const std::uintptr_t begin, const std::uintptr_t end) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			std::vector<block*> scopes = { this };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					if (i->address >= start && i->address <= end && i->lex->type == inst) {
+						retn.emplace_back(i);
+					}
+
+				}
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
+				this->sort_addr(retn); /* Sort retn by address. */
+
+			} while (scopes.size());
+
+			return retn;
+		}
+
+
+		/* Visits next inst type in range. (Includes being, end) */
+		template<lexer_dec::inst_type inst>
+		std::shared_ptr<node> visit_range_type_next(const std::uintptr_t begin, const std::uintptr_t end) {
+
+			std::vector<block*> scopes = { this };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					if (i->address >= begin && i->address <= end && i->lex->type == inst) {
+						return i;
+					}
+
+				}
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				this->remove_dupes(scopes); /* Remove duplicates. */
+
+			} while (scopes.size());
+
+			#if display_warnings 
+					std::printf("[WARNING] Nothing will be returned for visit_range_type_next.\n");
+			#endif
+
+			return nullptr;
+		}
 
 		/* Visits node with previous node with given register as dest. */
 		std::shared_ptr<node> visit_previous_dest_register(const std::uintptr_t on_address, const std::uint16_t target_reg) {
@@ -586,6 +703,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
@@ -759,6 +877,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
@@ -796,13 +915,18 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
 			/* Nothing. */
-			if (!retn.size())
-				throw std::exception("Returning no data for visit_range.");
+			if (!retn.size()) {
+				#if display_warnings 
+					std::printf("[WARNING] No will be returned for visit_range.\n");
+				#endif
+			}
+				
 
 			return retn;
 		}
@@ -834,6 +958,7 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
@@ -849,19 +974,16 @@ namespace ast_dec {
 
 			/* Removes scope dupes. */
 			void remove_dupes(std::vector<block*>& scopes) {
+				std::sort(scopes.begin(), scopes.end());
+				scopes.erase(std::unique(scopes.begin(), scopes.end()), scopes.end());
+				return;
+			}
 
-				for (const auto& target : scopes) {
-					auto count = 0u;
-					for (const auto& on : scopes) {
-						if (on->node_start == target->node_start && on->node_end == target->node_end) {
-							++count;
-							if (count > 1u) {
-								scopes.erase(std::remove(scopes.begin(), scopes.end(), on), scopes.end());
-							}
-						}
-					}
-				}
-
+			/* Removes node dupes. (removes by address) */
+			void remove_dupes(std::vector<std::shared_ptr<node>>& nodes) {
+				std::sort(nodes.begin(), nodes.end());
+				nodes.erase(std::unique(nodes.begin(), nodes.end()), nodes.end());
+				return;
 			}
 
 			/* Sorts nodes by addr. */
@@ -883,12 +1005,145 @@ namespace ast_dec {
 		std::string closure_name = ""; /* Closure name. (Suffix) */
 
 		std::vector<std::int16_t> arg_regs; /* Register for arguments to be placed in. *-1 means: ... */
+		/* No node can refrence the same address all nodes are unique but branches can reference the same jump. */
 		std::shared_ptr <block> main_block; /* Main block. */
 		
 		std::unordered_map<std::uintptr_t /* Idx */, std::pair <std::string /* Value */, std::uint16_t /* Reg*/>> upvalues;
 
 		std::vector<std::shared_ptr <ast>> protos; /* Any children protos. Relates to proto->p */
 
+		/* Finds block by start address. */
+		std::shared_ptr <block> find_block(const std::uintptr_t addr) {
+
+			/* Append all blocks. */
+			std::vector<std::shared_ptr <block>> scopes = { this->main_block };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				if (current_block->node_start == addr)
+					return current_block;
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches) 
+					scopes.emplace_back(i);
+				
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				std::sort(scopes.begin(), scopes.end());
+				scopes.erase(std::unique(scopes.begin(), scopes.end()), scopes.end());
+
+			} while (scopes.size());
+
+			return nullptr;
+		}
+
+		/* Turns ast into tree string. */
+		std::string tree_str() {
+
+			std::unordered_map <std::uintptr_t /* addr */, std::size_t /* amt */> indent_multiplier;
+			std::string retn = "";
+			std::uintptr_t pc = 0u;
+			std::string indenting = "";
+			std::vector<std::uintptr_t> labels;
+
+			const auto branch = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(this->main_block->visit_next_type<lexer_dec::inst_type::branch>(true));
+			const auto contional = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(this->main_block->visit_next_type<lexer_dec::inst_type::branch_condition>(true));
+
+			/* Append jump backs. */
+			for (const auto& node : branch) {
+				labels.emplace_back(node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
+			}
+
+			for (const auto& node : contional) {
+				if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0) {
+					labels.emplace_back(node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
+				}
+			}
+
+			/* Append first */
+			indent_multiplier.insert(std::make_pair(pc, 0u));
+
+			do {
+
+				const auto block = this->find_block(pc);
+				const auto mult = indent_multiplier[pc];
+
+				/* Compile indent */
+				for (auto i = 0u; i < mult; ++i)
+					indenting += "	";
+
+
+				/* Compile nodes str */
+				for (const auto& node : block->nodes) {
+
+					auto dism = indenting + std::to_string (node->address) + " " + node->lex->dissassembly->data;
+
+					/* Add label */
+					if (std::find(labels.begin(), labels.end(), node->address) != labels.end()) {
+						retn += "label_" + std::to_string(node->address) + ":\n";
+					}
+
+					/* Goto */
+					if (node->lex->type == lexer_dec::inst_type::branch || (node->lex->type == lexer_dec::inst_type::branch_condition && (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0 || std::find(labels.begin (), labels.end(), node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) != labels.end()))) {
+						dism += " goto label_" + std::to_string (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) + ";";
+					}
+					
+					dism += " ( ";
+					for (const auto& p : node->expr)
+						dism += node->expr_str(p) + " ";
+					dism += ")\n";
+
+					retn += dism;
+				}
+
+
+				/* Set mults */
+				if (block->branches.size() ==  2u) {
+
+					const auto branch_taken = block->branches.front()->node_start;
+					const auto branch_not_taken = block->branches.back()->node_start;
+					
+					/* Most greater relative too branch_taken. */
+					auto greater = 0u;
+					for (const auto& i : indent_multiplier)
+						if (i.first > greater && i.first < branch_taken) {
+							greater = i.first;
+						}
+
+					/* Add indent to greater. */
+					if (greater) {
+
+						if (indent_multiplier.find(branch_taken) == indent_multiplier.end()) {
+							indent_multiplier.insert(std::make_pair(branch_taken, indent_multiplier[greater]));
+							labels.emplace_back(branch_taken);
+						}
+
+					}
+
+					if (indent_multiplier.find(branch_taken) == indent_multiplier.end()) {
+						indent_multiplier.insert(std::make_pair(branch_taken, mult));
+					}
+
+					if (indent_multiplier.find(branch_not_taken) == indent_multiplier.end()) {
+						indent_multiplier.insert(std::make_pair(branch_not_taken, mult + 1u));
+					}
+
+				}	
+
+
+				/* Set pc */
+				pc = block->node_end + block->visit_addr(block->node_end)->lex->dissassembly->len;
+				indenting.clear();
+
+			} while (pc < this->pc_end);
+
+
+			return retn;
+		}
 	};
 
 	std::shared_ptr<ast> gen_ast(Proto* proto);
