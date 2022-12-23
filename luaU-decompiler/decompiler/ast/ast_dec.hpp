@@ -218,7 +218,7 @@ namespace ast_dec {
 				case expr_type::conditional: { retn += "conditional";  break; }
 
 				default: {
-					throw std::exception("Unkown expr for expr string.");
+					throw std::runtime_error("Unkown expr for expr string.");
 				}
 
 			}
@@ -328,7 +328,7 @@ namespace ast_dec {
 
 			/* Nothing. */
 			if (!retn.size())
-				throw std::exception("Returning no data for visit_next_inst.");
+				throw std::runtime_error("Returning no data for visit_next_inst.");
 
 			return retn;
 		}
@@ -394,7 +394,7 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			throw std::exception("Returning no data for visit_addr.");
+			throw std::runtime_error("Returning no data for visit_addr.");
 		}
 
 
@@ -513,7 +513,7 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			throw std::exception("Returning no data for visit_addr.");
+			throw std::runtime_error("Returning no data for visit_addr.");
 		}
 
 
@@ -673,7 +673,7 @@ namespace ast_dec {
 
 			/* Node is null. */
 			if (retn == nullptr)
-				throw std::exception("Couldn't find previous dest based on register.");
+				throw std::runtime_error("Couldn't find previous dest based on register.");
 
 			return retn;
 		}
@@ -711,7 +711,7 @@ namespace ast_dec {
 			} while (scopes.size());
 
 			if (!retn.size ())
-				throw std::exception("Returning no data for visit_addr.");
+				throw std::runtime_error("Returning no data for visit_addr.");
 
 			return retn;
 		}
@@ -755,7 +755,7 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			throw std::exception("Returning no data for visit_relative_inst.");
+			throw std::runtime_error("Returning no data for visit_relative_inst.");
 		}
 
 
@@ -800,7 +800,7 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			throw std::exception("Returning no data for visit_relative_inst.");
+			throw std::runtime_error("Returning no data for visit_relative_inst.");
 		}
 
 
@@ -855,7 +855,7 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			throw std::exception("Returning no data for visit_relative_next_expr.");
+			throw std::runtime_error("Returning no data for visit_relative_next_expr.");
 		}
 
 
@@ -885,7 +885,7 @@ namespace ast_dec {
 			} while (scopes.size());
 
 			if (!retn.size ())
-				throw std::exception("Returning no data for visit_all.");
+				throw std::runtime_error("Returning no data for visit_all.");
 
 			return retn;
 		}
@@ -967,7 +967,7 @@ namespace ast_dec {
 
 			/* Nothing. */
 			if (!retn.size())
-				throw std::exception("Returning no data for visit_range.");
+				throw std::runtime_error("Returning no data for visit_range.");
 
 			return retn;
 		}

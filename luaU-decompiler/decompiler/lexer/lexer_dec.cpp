@@ -342,7 +342,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		}
 
 		default: {
-			throw std::exception("Unkown opcode when lexing.");
+			throw std::runtime_error("Unkown opcode when lexing.");
 		}
 
 	}

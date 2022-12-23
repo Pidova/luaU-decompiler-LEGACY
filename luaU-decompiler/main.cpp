@@ -8,24 +8,31 @@
 std::int32_t main() {
 
 	const char* const code = "repeat \
-			local a = peen(); \
-			while (wowo and iaia and iaai and iao and aoioa) do \
-				a = 1000;\
-		if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end\
-				printf (AA)\
-			end\
-			if (cmp1 == cmp2) then \
-				 print (119); \
-				 break; \
-			end; \
-			if (a or a == 100) then break; end;\
-			if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end \
-			a = 1000; \
-		 until((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak));\
+		print (1);\
+		until(ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame and ai or ia or aa );\
+		";
+
+	/*
+	
+	repeat \
+				local a = peen(); \
+					while (wowo and iaia and iaai and iao and aoioa) do \
+						a = 1000;\
+						if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end\
+						printf (AA)\
+					end\
+					if (cmp1 == cmp2) then \
+						 print (119); \
+						 break; \
+					end; \
+				if (a or a == 100) then break; end;\
+				if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end \
+				a = 1000; \
+		    until((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak));\
 		print(111);\
 		oopp[\"g\"] = all; \
-		print ({a[10]}); oopp[aaa] = all;";
-
+		print ({a[10]}); oopp[aaa] = all;
+	*/
 	/* Compile. */
 	std::size_t size = 0u;
 	const auto compilation = luau_compile(code, std::strlen(code), NULL, &size);

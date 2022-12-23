@@ -68,7 +68,7 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
         }
 
         default: {
-            throw std::exception("Unkown opcode when trying too emit compare.");
+            throw std::runtime_error("Unkown opcode when trying too emit compare.");
         }
   
     }
@@ -236,8 +236,9 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         }
 
         default: {
-            throw std::exception("Unkown opcode when trying too emit arithmetic.");
+            throw std::runtime_error("Unkown opcode when trying too emit arithmetic.");
         }
+
     }
 
     return;
@@ -263,7 +264,7 @@ void emitter::unary(const LuauOpcode op, std::string& dest, const std::string& s
         }
 
         default: {
-            throw std::exception("Unkown opcode when trying too emit unary.");
+            throw std::runtime_error("Unkown opcode when trying too emit unary.");
         }
 
     }

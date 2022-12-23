@@ -1,4 +1,5 @@
 #pragma once
+#include <stdexcept>
 #include <functional>
 #include "../../luau-master/Common/include/Luau/Bytecode.h"
 #include "../../luau-master/VM/src/lobject.h"

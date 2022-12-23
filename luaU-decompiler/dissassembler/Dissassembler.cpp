@@ -498,7 +498,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 				}
 
 				default: {
-					throw std::exception("Unkown opcode in dissassembler.");
+					throw std::runtime_error("Unkown opcode in dissassembler.");
 				}
 
 			}
@@ -572,7 +572,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 					}
 
 					default: {
-						throw std::exception("Unkown operand type.");
+						throw std::runtime_error("Unkown operand type.");
 					}
 
 				}

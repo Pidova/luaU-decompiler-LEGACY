@@ -48,7 +48,7 @@ namespace ast_funcs {
 					}
 
 					default: {
-						throw std::exception("Unkown opcode for closure_type.");
+						throw std::runtime_error("Unkown opcode for closure_type.");
 					}
 
 				}
@@ -83,7 +83,7 @@ namespace ast_funcs {
 
 					/* Shouldn't happen but incase it does. */
 					default: {
-						throw std::exception("Unkown expression for closure_type.");
+						throw std::runtime_error("Unkown expression for closure_type.");
 					}
 
 				}
@@ -466,7 +466,7 @@ namespace ast_funcs {
 			for (const auto& forloop : fornloops) {
 
 				const auto loop = ast->main_block->visit_addr(forloop->lex->dissassembly->operands[1]->jmp_addr);
-				loop->add_expr<ast_dec::expr_type::for_n_start>();
+				//loop->add_expr<ast_dec::expr_type::for_n_start>();
 				forloop->add_expr<ast_dec::expr_type::scope_end>();
 
 				loop->loop_extra.end_node = forloop;
@@ -527,7 +527,7 @@ namespace ast_funcs {
 
 				/* See if jumpback is a branch. */
 				if (jumpback->lex->type != lexer_dec::inst_type::branch_condition && jumpback->lex->type != lexer_dec::inst_type::branch)
-					throw std::exception("until/while branch jumpback isn't a branch.");
+					throw std::runtime_error("until/while branch jumpback isn't a branch.");
 
 				const auto jmp_addr = jumpback->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 				const auto jmp_node = ast->main_block->visit_addr(jmp_addr);
@@ -614,7 +614,7 @@ namespace ast_funcs {
 							if ((node->address + node->lex->dissassembly->len) == jumpback->address) {
 
 								if (node_nonmutable(node))
-									throw std::exception("Until node cannot non-mutable.");
+									throw std::runtime_error("Until node cannot non-mutable.");
 
 								node->add_expr<ast_dec::expr_type::condition_nonmutable>();
 								break;
@@ -629,10 +629,10 @@ namespace ast_funcs {
 									"and, or" may take place in middle.
 								*/
 
-								used_target_1 = false;
-								used_target_2 = false;
-								target_2 = (node->lex->dissassembly->op == LuauOpcode::LOP_SETTABLE) ? node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg : -1; /* Index for SETTABLE. */
-								target_1 = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg; /* Source data can be idx. */
+								//used_target_1 = false;
+								//used_target_2 = false;
+								//target_2 = (node->lex->dissassembly->op == LuauOpcode::LOP_SETTABLE) ? node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg : -1; /* Index for SETTABLE. */
+								//target_1 = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg; /* Source data can be idx. */
 
 							}
 
@@ -979,7 +979,7 @@ namespace ast_funcs {
 
 				}
 				else {
-					throw std::exception("Expected NEWTABLE or DUPTABLE instruction to init table.");
+					throw std::runtime_error("Expected NEWTABLE or DUPTABLE instruction to init table.");
 				}
 
 			}
@@ -1244,18 +1244,21 @@ namespace blocks {
 			const auto temp_lex = lexer_dec::lexer(dism.second);
 
 			/* Don't log if jumpback. */
-			if (temp_lex->dissassembly->op == LuauOpcode::LOP_JUMPBACK)
+			if (temp_lex->dissassembly->op == LuauOpcode::LOP_JUMPBACK) {
 				continue;
+			}
 
 			if (temp_lex->type == lexer_dec::inst_type::branch || temp_lex->type == lexer_dec::inst_type::branch_condition) {
 
 				/* Jump with no memaddr operand idk how this has happened. */
-				if (!temp_lex->has_operand_expr<lexer_dec::operand_types::memaddr>())
-					throw std::exception("Jump with no memaddr operand in lexer at set_blocks.");
+				if (!temp_lex->has_operand_expr<lexer_dec::operand_types::memaddr>()) {
+					throw std::runtime_error("Jump with no memaddr operand in lexer at set_blocks.");
+				}
 
 				/* Jump is negative don't take. */
-				if (temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0)
+				if (temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0) {
 					continue;
+				}
 
 				branch_ends.emplace_back(temp_lex->operand_expr<lexer_dec::operand_types::memaddr>().front ()->jmp_addr);
 				
@@ -1312,8 +1315,9 @@ namespace blocks {
 				auto nojump_block = ast->find_block(jump_node->address + jump_node->lex->dissassembly->len); /* Branch not taken jump. */
 
 				/* Current is always available something bad happened. */
-				if (current == nullptr)
-					throw std::exception("Current block is null.");
+				if (current == nullptr) {
+					throw std::runtime_error("Current block is null.");
+				}
 
 
 				switch (jump_node->lex->type) {
@@ -1360,7 +1364,7 @@ namespace blocks {
 					}
 
 					default: {
-						throw std::exception("Unexpected jump inst type.");
+						throw std::runtime_error("Unexpected jump inst type.");
 					}
 
 				}

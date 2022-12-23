@@ -1,4 +1,5 @@
 #pragma once
+#include <stdexcept>
 #include "../lexer/lexer_dec.hpp"
 
 /*

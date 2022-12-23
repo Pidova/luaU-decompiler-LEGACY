@@ -140,7 +140,7 @@ namespace registers {
 
 			}
 
-			throw std::exception("Unkown type for register str.");
+			throw std::runtime_error("Unkown type for register str.");
 		}
 
 		std::shared_ptr<reg> clone() {
@@ -369,7 +369,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 							const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 
 							if (!node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
-								throw std::exception("No dest operand for table start.");
+								throw std::runtime_error("No dest operand for table start.");
 
 							if (!table_start_new_node) {
 								regs.back()[reg]->sub_data.clear();
@@ -808,7 +808,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					}
 
 					default: {
-						throw std::exception("Unkown operand type for debug.");
+						throw std::runtime_error("Unkown operand type for debug.");
 					}
 
 				}
@@ -1383,14 +1383,14 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				if (arg == multret) {
 					
 					if (!prev->lex->has_operand_expr<lexer_dec::operand_types::dest>())
-						throw std::exception("Previous doesn't have dest for call mulret.");
+						throw std::runtime_error("Previous doesn't have dest for call mulret.");
 
 					arg = prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg - call;
 				}
 				if (retn == multret) {
 
 					if (!prev->lex->has_operand_expr<lexer_dec::operand_types::dest>())
-						throw std::exception("Previous doesn't have dest for call mulret.");
+						throw std::runtime_error("Previous doesn't have dest for call mulret.");
 
 					retn = prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg - call;
 				}
@@ -1648,7 +1648,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 					}
 					else {
-						throw std::exception("Tried to create upvalue on not vararg register.");
+						throw std::runtime_error("Tried to create upvalue on not vararg register.");
 					}
 
 				}
@@ -1908,7 +1908,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					}
 
 					default: {
-						throw std::exception("Unkown instruction for set tables.");
+						throw std::runtime_error("Unkown instruction for set tables.");
 					}
 
 				}
@@ -2041,7 +2041,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 			}
 
 			default: {
-				throw std::exception("Unkown instruction for transpiler.");
+				throw std::runtime_error("Unkown instruction for transpiler.");
 			}
 
 		}
