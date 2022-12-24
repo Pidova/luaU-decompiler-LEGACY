@@ -8,11 +8,16 @@
 std::int32_t main() {
 
 	const char* const code = "repeat \
+if(a) then  break; elseif (ai) then break; end;\
 		print (1);\
-		until(ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame and ai or ia or aa );\
+		until(((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)) or ((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)));\
+		print (1);\
 		";
 
 	/*
+	repeat \
+		print (1);\
+		until(((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)) or ((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)));\
 	
 	repeat \
 				local a = peen(); \

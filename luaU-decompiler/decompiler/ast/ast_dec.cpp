@@ -179,6 +179,116 @@ namespace ast_funcs {
 			return;
 		}
 
+		/* Sets valid branch routines for a range with expr: "condition_routine" */
+		void set_valid_branch_routine(std::shared_ptr<ast_dec::ast>& ast) {
+
+			const auto all = ast->main_block->visit_all();
+
+		    auto condition = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_type<lexer_dec::inst_type::branch_condition>(false))->lex->operand_expr<lexer_dec::operand_types::compare>();
+			auto target_1 = condition.front()->reg;
+			auto target_2 = (condition.size () > 1u) ? condition.back()->reg : -1;
+			bool used_target_1 = false;
+			bool used_target_2 = false;
+
+			std::shared_ptr<ast_dec::node> start_node = nullptr;
+
+			/* Checks operands if targets get used or not but if it does get used just resets target. */
+			std::function<void(const std::shared_ptr<LuaU_dissassembler::operand>&, const lexer_dec::operand_types)> check_usage = [&](const std::shared_ptr<LuaU_dissassembler::operand>& operand, const lexer_dec::operand_types tt) mutable {
+
+				const auto val = operand->reg;
+
+				if (val == target_1)
+					used_target_1 = false;
+
+				if (target_2 != -1 && signed(val) == target_2)
+					used_target_2 = false;
+
+				return;
+			};
+
+
+
+			for (const auto& node : all) {
+
+				node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
+				node->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
+				node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
+
+
+				if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+					const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+					/* Check target usage. Abrubt end. */
+					if (dest == target_1) {
+
+						/* Set start node for buffer. */
+						if (start_node == nullptr) {
+							start_node = node;
+						}
+
+						/* Set twice without used. Abrubt end. */
+						if (used_target_1) {
+							used_target_1 = false;
+							used_target_2 = false;
+							start_node = nullptr;
+							continue;
+						}
+
+						used_target_1 = true;
+					}
+
+					if (target_2 != -1 && signed(dest) == target_2) {
+
+						/* Set start node for buffer. */
+						if (start_node == nullptr) {
+							start_node = node;
+						}
+
+						/* Set twice without used. Abrubt end. */
+						if (used_target_2) {
+							used_target_1 = false;
+							used_target_2 = false;
+							start_node = nullptr;
+							continue;
+						}
+
+						used_target_2 = true;
+					}
+
+				}
+
+				if (node->lex->type == lexer_dec::inst_type::branch_condition) {
+
+					/* Start node is null so just use current node. */
+					if (start_node == nullptr) {
+						start_node = node;
+					}
+
+					/* Append condition routine expr. */
+					start_node->add_expr<ast_dec::expr_type::condition_routine_start>();
+					node->add_expr<ast_dec::expr_type::condition_routine_end>();
+
+					const auto range_br = ast->main_block->visit_range(start_node->address, node->address);
+					for (const auto& i : range_br) {
+						i->add_expr<ast_dec::expr_type::condition_routine>();
+					}
+
+					/* Set next. */
+					condition = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_type<lexer_dec::inst_type::branch_condition>(false))->lex->operand_expr<lexer_dec::operand_types::compare>();
+					target_1 = condition.front()->reg;
+					target_2 = (condition.size() > 1u) ? condition.back()->reg : -1;
+					used_target_1 = false;
+					used_target_2 = false;
+					start_node = nullptr;
+
+				}
+
+			}
+
+			return;
+		}
+
 	}
 
 	namespace arguments {
@@ -532,139 +642,77 @@ namespace ast_funcs {
 				const auto jmp_addr = jumpback->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 				const auto jmp_node = ast->main_block->visit_addr(jmp_addr);
 				const auto nodes_routine = ast->main_block->visit_range_current(jmp_addr, jumpback->address);
-				const auto condition = ast->main_block->visit_range_type_next<lexer_dec::inst_type::branch_condition>(jmp_addr, jumpback->address);
+				const auto condition = ast->main_block->visit_expr_routine_range_touching<ast_dec::expr_type::condition_routine_start, ast_dec::expr_type::condition_routine_end>(jmp_addr, jumpback->address);
 
 
-			    auto target_2 = 0;
-			    auto target_1 = 0;
-				bool used_target_1 = false;
-				bool used_target_2 = false;
-
-
-				/* Checks operands if targets get used or not but if it does get used just resets target. */
-				std::function<void(const std::shared_ptr<LuaU_dissassembler::operand>&, const lexer_dec::operand_types)> check_usage = [&](const std::shared_ptr<LuaU_dissassembler::operand>& operand, const lexer_dec::operand_types tt) mutable {
-
-					const auto val = operand->reg;
-
-					if (val == target_1)
-						used_target_1 = false;
-
-					if (target_2 != -1 && signed(val) == target_2)
-						used_target_2 = false;
-
-					return;
-				};
 
 
 				if (jumpback->has_expr(ast_dec::expr_type::until_)) {
 
+					/* No conditions in it (Garunteed repeat (true) do) */
+					if (!condition.size()) {
+						jmp_node->add_expr<ast_dec::expr_type::repeat_>();
+						jumpback->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
+					}
+					else {
 
-					bool break_done = false; /* Hit a break so cannot concat until end. */
+						const auto cond =  condition.back();
 
-					/* End of routine is given with until. Find begging. */
-					for (const auto& node : nodes_routine) {
-
-
-						node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
-						node->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
-						node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
-
-
-						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
-
-							const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-
-							/* Check target usage. Abrubt end. */
-							if (dest == target_1) {
-
-								/* Set twice without used. Abrubt end. */
-								if (used_target_1) {
-									//goto node_end;
-								}
-
-								used_target_1 = true;
-							}
-
-							if (target_2 != -1 && signed(dest) == target_2) {
-
-								/* Set twice without used. Abrubt end. */
-								if (used_target_2) {
-									//goto node_end;
-								}
-
-								used_target_2 = true;
-							}
-
+						if (cond.second->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
+							cond.first->add_expr<ast_dec::expr_type::condition_concat_start>();
+							cond.second->add_expr<ast_dec::expr_type::condition_concat_end>();
+						}
+						else {
+							/* Last conditon doesn't jump out possible repeat until(true)*/
+							jmp_node->add_expr<ast_dec::expr_type::repeat_>();
+							jumpback->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
 						}
 
-						if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
+					}				
 
-							/* Break **Not definite jump to end of until routine or end of while can mean break of any conditional** */
-							if (node->lex->dissassembly->op == LuauOpcode::LOP_JUMP || node->lex->dissassembly->op == LuauOpcode::LOP_JUMPX) {
+				}
+				else { /* While loop */
 
-								if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
-									break_done = true;
-									node->add_expr<ast_dec::expr_type::break_>();
-								}
+					/* No conditions in it (Garunteed repeat (true) do) */
+					if (!condition.size()) {
+						jmp_node->add_expr<ast_dec::expr_type::repeat_>();
+						jumpback->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
+					}
+					else {
+						const auto cond = condition.front();
 
-								continue;
-							} 
-
-							/* Only has one compare or couldnt find anything else. */
-							if ((node->address + node->lex->dissassembly->len) == jumpback->address) {
-
-								if (node_nonmutable(node))
-									throw std::runtime_error("Until node cannot non-mutable.");
-
-								node->add_expr<ast_dec::expr_type::condition_nonmutable>();
-								break;
-							}
-
-							/* Find begin of until concat routine.*/
-							if (!break_done) {
-
-
-								/* 
-									If node is valid for until concat routine, "condition_nonmutable" will be an expr so it wont get changed into an if/elseif etc.
-									"and, or" may take place in middle.
-								*/
-
-								//used_target_1 = false;
-								//used_target_2 = false;
-								//target_2 = (node->lex->dissassembly->op == LuauOpcode::LOP_SETTABLE) ? node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg : -1; /* Index for SETTABLE. */
-								//target_1 = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg; /* Source data can be idx. */
-
-							}
-
+						if (cond.second->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
+							cond.first->add_expr<ast_dec::expr_type::condition_concat_start>();
+							cond.second->add_expr<ast_dec::expr_type::condition_concat_end>();
+						}
+						else {
+							/* Last conditon doesn't jump out possible repeat until(true)*/
+							jmp_node->add_expr<ast_dec::expr_type::repeat_>();
+							jumpback->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
 						}
 
 					}
 
 				}
-				else { /* While loop */
 
-					/* No conditions in it (Garunteed while(true) do) */
-					if (condition == nullptr) {
-						jmp_node->add_expr<ast_dec::expr_type::while_>();
-						jmp_node->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
-						continue;
+				/* Add breaks by getting second condition that doesn't have concat and marking. */
+				for (const auto& c : condition) {
+
+					if (!c.second->has_expr(ast_dec::expr_type::condition_concat_end) && c.second->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
+						c.second->add_expr<ast_dec::expr_type::condition_concat_start>();
+						c.second->add_expr<ast_dec::expr_type::condition_break>();
 					}
 
-					/* Begining of routine is given with until. Find end. */
-					for (const auto& node : nodes_routine) {
+				}
 
-						if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
+				/* End of routine is given with until. Find begging. */
+				for (const auto& node : nodes_routine) {
 
-							/* Break */
-							if (node->lex->dissassembly->op == LuauOpcode::LOP_JUMP || node->lex->dissassembly->op == LuauOpcode::LOP_JUMPX) {
+					/* Break **Not definite jump to end of until routine or end of while can mean break of any conditional** */
+					if (node->lex->dissassembly->op == LuauOpcode::LOP_JUMP || node->lex->dissassembly->op == LuauOpcode::LOP_JUMPX) {
 
-								if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address)
-									node->add_expr<ast_dec::expr_type::break_>();
-
-								continue;
-							}
-
-
+						if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
+							node->add_expr<ast_dec::expr_type::break_>();
 						}
 
 					}
@@ -1143,6 +1191,11 @@ namespace ast_funcs {
 		ast_funcs::tables::set_routines(ast);
 
 		#if display_analysis
+				std::printf("[AST] Setting valid branch routines.\n");
+		#endif
+		ast_funcs::branches::set_valid_branch_routine(ast);
+
+		#if display_analysis
 				std::printf("[AST] Setting while/repeat routines.\n");
 		#endif
 		ast_funcs::loops::set_whilerep_routines(ast); /* Needed after concat can mess up if before or after. (expr_type::scope_end needed only for while end) */
@@ -1373,6 +1426,7 @@ namespace blocks {
 
 			/* Set pc */
 			pc = std::get<1>(node_block);
+
 		};
 
 		

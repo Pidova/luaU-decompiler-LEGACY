@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include <tuple>
 #include "ast_dec.hpp"
 #include "../../dissassembler/Dissassembler.hpp"
 #include "../lexer/lexer_dec.hpp"
@@ -55,8 +56,16 @@ namespace ast_dec {
 		condition_or, /* if/elseif/nested(or)  appends to if_statements (Can be applied to until or while) [ALL] */
 		condition_nonmutable, /* Condition that cannot be converted into while/if/elseif etc. [AST] */
 		condition_concat_start, /* Concat a condition(universal) (start). [AST] */
-		condition_concat_end, /* Concat a condition(universal) (end). [AST] */
+		condition_concat_end, /* Concat a condition(universal) (end will get written too compare flag). [AST] */
 		condition_true, /* Sets compare flag too true garunteing that while true expressions get set as true (expr type). [ALL] */
+		condition_parameter, /* Parameter register for condition (used so value cant be turned into variable, gets all values not just source/value). [ALL] */
+		condition_flag, /* Writes result to flag. */
+		condition_break, /* Conditon leads too break. */
+
+		condition_routine, /* Means instruction is apart of a conditional routine (will only account for valid data not known args or vars, some will get in like if instruction before branch is locvar) **Does not mean it can't be an arguement!!** [AST] */
+		condition_routine_start, 
+		condition_routine_end,
+
 
 		close, /*   %s ) [ALL] */
 		open, /* ( %s   [ALL] */
@@ -201,6 +210,12 @@ namespace ast_dec {
 				case expr_type::condition_concat_start: { retn += "condition_concat_start";  break; }
 				case expr_type::condition_concat_end: { retn += "condition_concat_end";  break; }
 				case expr_type::condition_true: { retn += "condition_true"; break; }
+				case expr_type::condition_parameter: { retn += "condition_parameter"; break; }
+				case expr_type::condition_routine: { retn += "condition_routine"; break; }
+				case expr_type::condition_routine_start: { retn += "condition_routine_start"; break; }
+				case expr_type::condition_routine_end: { retn += "condition_routine_end"; break; }
+				case expr_type::condition_flag: { retn += "condition_flag"; break; }
+				case expr_type::condition_break: { retn += "condition_break"; break; }
 
 				case expr_type::close: { retn += "close";  break; }
 				case expr_type::open: { retn += "open";  break; }
@@ -285,6 +300,50 @@ namespace ast_dec {
 			return retn;
 		}
 
+
+		/* Visits first/all types in a block. */
+		template<lexer_dec::inst_type type>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_type(const bool all /* All nodes with instruction. */) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			std::vector<block*> scopes = { this };
+			std::vector<block*> analyzed_scopes = { this };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					if (i->lex->type == type) {
+
+						if (all) { /* Has all so emblace node. */
+							retn.emplace_back(i);
+						}
+						else {/* Not all so return node. */
+							return i;
+						}
+
+					}
+
+				}
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
+				this->sort_addr(retn); /* Sort retn by address. */
+
+			} while (scopes.size());
+
+			return retn;
+		}
 
 		/* Visits next/all opcode from addr. (Ignores current.) */
 		template<LuauOpcode op>
@@ -858,6 +917,121 @@ namespace ast_dec {
 			throw std::runtime_error("Returning no data for visit_relative_next_expr.");
 		}
 
+		/* Visits expr routines (doesn't count for target). */
+		template<expr_type target, expr_type close>
+		std::variant<std::vector<std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>, std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>  visit_expr_routine(const bool all /* All nodes with instruction. */) {
+
+			bool inside = false;
+			std::vector <std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>> retn;
+			std::shared_ptr<node> begin = nullptr;
+			std::vector<block*> scopes = { this };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+			
+					if (i->has_expr(target)) {
+						inside = true;
+						begin = i;
+					}
+
+					/* If found op dec if count isnt 0. If it is 0 then return node. */
+					if (inside && i->has_expr(close)) {
+
+						if (all) { /* Has all so emblace node. */
+							retn.emplace_back(std::make_pair(begin, i));
+						}
+						else { /* Not all so return node. */
+							return std::make_pair(begin, i);
+						}
+
+						inside = false;
+					}
+
+				}
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
+				this->sort_addr(retn);
+
+			} while (scopes.size());
+
+			if (!retn.size()) {
+				#if display_warnings 
+					std::printf("[WARNING] Returning no data for visit_expr_routine.\n");
+				#endif				
+			}
+			
+			return retn;
+		}
+
+
+		/* Visits expr routines in range (includes start and end). */
+		template<expr_type target, expr_type close>
+		std::vector<std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>> visit_expr_routine_range(const std::uintptr_t start, const std::uintptr_t end) {
+
+			std::vector <std::pair <std::shared_ptr<node>, std::shared_ptr<node>>> retn;
+
+			const auto routines = std::get<std::vector<std::pair <std::shared_ptr<node>, std::shared_ptr<node>>>>(this->visit_expr_routine<target, close>(true));
+			for (const auto& i : routines) {
+				
+				if (i.first->address >= start && i.second->address <= end)
+					retn.emplace_back(i);
+
+			}
+
+			this->remove_dupes(retn);
+			this->sort_addr(retn);
+
+			return retn;
+		}
+
+		/* Visits expr routines in range that are touching and concats them to one object. (includes start and end).*/
+		template<expr_type target, expr_type close>
+		std::vector<std::pair<std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End*/>> visit_expr_routine_range_touching(const std::uintptr_t start, const std::uintptr_t end) {
+
+			std::shared_ptr<node> begin = nullptr;
+			std::shared_ptr<node> prev_last = nullptr;
+			std::vector<std::pair<std::shared_ptr<node>, std::shared_ptr<node>>> retn;
+
+			const auto routines = this->visit_expr_routine_range<target, close>(start, end);
+			for (const auto& i : routines) {
+				
+				/* Add missing */
+				if (begin == nullptr) {
+					begin = i.first;
+				}
+
+				if (prev_last != nullptr) {
+
+					if ((prev_last->address + prev_last->lex->dissassembly->len) != i.first->address) {
+						retn.emplace_back(std::make_pair(begin, i.second));
+						begin = nullptr;
+						prev_last = nullptr;
+					}
+
+				}
+
+				prev_last = i.second;
+
+			}
+
+			if (begin != nullptr) {
+				retn.emplace_back(std::make_pair(begin, prev_last));
+			}
+
+			return retn;
+		}
 
 		/* Visits all blocks in ast.  */
 		std::vector <std::shared_ptr<node>> visit_all() {
@@ -981,6 +1155,13 @@ namespace ast_dec {
 				return;
 			}
 
+			/* Removes node dupes from pair. (removes by address) */
+			void remove_dupes(std::vector<std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>& nodes) {
+				std::sort(nodes.begin(), nodes.end());
+				nodes.erase(std::unique(nodes.begin(), nodes.end()), nodes.end());
+				return;
+			}
+
 			/* Removes node dupes. (removes by address) */
 			void remove_dupes(std::vector<std::shared_ptr<node>>& nodes) {
 				std::sort(nodes.begin(), nodes.end());
@@ -995,6 +1176,12 @@ namespace ast_dec {
 				return;
 			}
 
+			/* Sorts nodes by addr. */
+			void sort_addr(std::vector<std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>& nodes) {
+				if (nodes.size())
+					std::sort(nodes.begin(), nodes.end(), [](const std::pair <std::shared_ptr<node>, std::shared_ptr<node>>& a, const std::pair <std::shared_ptr<node>, std::shared_ptr<node>>& b) -> bool { return a.first->address < b.first->address; });
+				return;
+			}
 	};
 
 	struct ast {
