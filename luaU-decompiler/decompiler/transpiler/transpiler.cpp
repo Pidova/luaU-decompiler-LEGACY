@@ -1,5 +1,6 @@
 #include <variant>
 #include <sstream>
+#include <unordered_map>
 #include "transpiler.hpp"
 #include "../emitter/emitter.hpp"
 #include "../debug.hpp"
@@ -1147,11 +1148,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					for (auto i = 0u; i < expr.second; ++i)
 						switch (expr.first) {
 
-							case ast_dec::expr_type::open: {
+							case ast_dec::expr_type::condition_open: {
 								emitter::str(regs.back()[flag_compare]->data, " ( ");
 								break;
 							}
-
 
 							default: {
 								break;
@@ -1180,8 +1180,13 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 								break;
 							}
 
-							case ast_dec::expr_type::close: {
+							case ast_dec::expr_type::condition_close: {
 								emitter::str(regs.back()[flag_compare]->data, " ) ");
+								break;
+							}
+
+							case ast_dec::expr_type::condition_open_post: {
+								emitter::str(regs.back()[flag_compare]->data, " ( ");
 								break;
 							}
 
@@ -1706,6 +1711,62 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				break;
 			}
 			
+			/* Not needed upvalues are already set ahead of time by ast. */
+			case LuauOpcode::LOP_CAPTURE: {
+				break;
+			}
+
+			/* Closures */
+			case LuauOpcode::LOP_NEWCLOSURE:
+			case LuauOpcode::LOP_DUPCLOSURE: {
+
+				std::size_t proto_idx = 0u;
+
+				/* Get idx */
+				if (node->lex->has_operand_expr<lexer_dec::operand_types::kvalue>()) {
+					proto_idx = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_idx;
+				}
+				else {
+					proto_idx = node->lex->operand_expr<lexer_dec::operand_types::proto>().front()->proto;
+				}
+
+				
+				const auto proto_ast = ast->protos[proto_idx];
+
+				
+				/* Compile args */
+				std::string args = "";
+				for (const auto arg : proto_ast->arg_regs) {
+					args += ((arg == -1) ? "..." : config->argument_prefix + std::to_string(arg)) + ((arg == proto_ast->arg_regs.back()) ? "" : ", ");
+				}
+
+				/* Compile function */
+				switch (proto_ast->closure_type) {
+
+					case ast_dec::closure_type::global: {
+						emitter::function(decompilation, "function", proto_ast->closure_name, args, proto_ast->closure_decompilation, "end");
+						break;
+					}
+					
+					case ast_dec::closure_type::newclosure: {
+						emitter::function(decompilation, "(function", "", args, proto_ast->closure_decompilation, "end)");
+						break;
+					}
+
+					case ast_dec::closure_type::local: {
+						emitter::function(decompilation, "local function", proto_ast->closure_name, args, proto_ast->closure_decompilation, "end");
+						break;
+					}
+
+					default: {
+						throw std::runtime_error("Unkown ast closure type for dupclosure/newclosure.");
+					}
+
+				}
+
+
+				break;
+			}
 
 			/* Getvarargs */
 			case LuauOpcode::LOP_GETVARARGS: {
@@ -1764,6 +1825,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 			case LuauOpcode::LOP_FASTCALL2K: {
 				break;
 			}
+
 
 
 			/* Loop */
@@ -2069,9 +2131,84 @@ std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast,
 	
 	std::string retn = "";
 
-	/* Transpile main. */
-	transpile_ast(main_ast, config, retn);
+	/* Form protos linearly. */
+	std::vector <std::shared_ptr<ast_dec::ast>> linear_on;
+	std::unordered_map <std::shared_ptr<ast_dec::ast>, std::vector<std::shared_ptr<ast_dec::ast>>> linear;
 
-	return retn;
+	linear.insert(std::make_pair(main_ast, main_ast->protos));
+	linear_on.insert(linear_on.end(), main_ast->protos.begin(), main_ast->protos.end());
 
+
+	while (!linear_on.empty()) {
+
+		auto on = linear_on.back();
+
+		/* Doesnt exists create new entry. */
+		if (linear.find(on) == linear.end()) {
+			linear.insert(std::make_pair(on, on->protos));
+			linear_on.insert(linear_on.end(), on->protos.begin(), on->protos.end());
+		}
+
+		/* Remove dupes */
+		std::sort(linear_on.begin(), linear_on.end());
+		linear_on.erase(std::unique(linear_on.begin(), linear_on.end()), linear_on.end());
+
+		/* Remove current */
+		linear_on.erase(std::remove(linear_on.begin(), linear_on.end(), on), linear_on.end());
+
+	}
+
+
+	/* Transpile by each. */
+	std::vector <std::shared_ptr<ast_dec::ast>> comleted;
+
+	/* First do ones with no protos. */
+	for (const auto& i : linear)
+		if (i.second.empty() && std::find(comleted.begin(), comleted.end(), i.first) == comleted.end()) {
+			
+			/* Transpile */
+			transpile_ast(i.first, config, retn);
+			i.first->tanspiled = true;
+			i.first->closure_decompilation = retn;
+
+			/* Add to complete. */
+			comleted.emplace_back(i.first);
+			retn.clear();
+			linear.erase(i.first);
+
+		}
+
+	/* Do ones that have been completed. */
+	while (!linear.empty()) {
+		
+		for (const auto& i : linear)
+			if (std::find(comleted.begin(), comleted.end(), i.first) == comleted.end()) {
+
+				/* Check if all protos have been analyzed. */
+				auto all = true;
+				for (const auto& p : i.second)
+					if (std::find(comleted.begin(), comleted.end(), p) == comleted.end()) {
+						all = false;
+						break;
+					}
+				if (!all) {
+					break;
+				}
+
+				/* Transpile */
+				transpile_ast(i.first, config, retn);
+				i.first->tanspiled = true;
+				i.first->closure_decompilation = retn;
+
+				/* Add to complete. */
+				comleted.emplace_back(i.first);
+				retn.clear();
+				linear.erase(i.first);
+
+			}
+		
+	}
+
+
+	return main_ast->closure_decompilation;
 }

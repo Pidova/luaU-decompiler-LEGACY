@@ -52,8 +52,6 @@ namespace ast_dec {
 		if_, /* if () [ALL] */
 		elseif_, /* elseif () [ALL] */
 		else_, /* else [ALL] */
-	    condition_and, /* if/elseif/nested(and) appends to if_statements (Can be applied to until or while) [ALL] */
-		condition_or, /* if/elseif/nested(or)  appends to if_statements (Can be applied to until or while) [ALL] */
 		condition_nonmutable, /* Condition that cannot be converted into while/if/elseif etc. [AST] */
 		condition_concat_start, /* Concat a condition(universal) (start). [AST] */
 		condition_concat_end, /* Concat a condition(universal) (end will get written too compare flag). [AST] */
@@ -62,13 +60,20 @@ namespace ast_dec {
 		condition_flag, /* Writes result to flag. */
 		condition_break, /* Conditon leads too break. */
 
+		/* Will get emmited to condition flag post compare. */
+		condition_and, /* if/elseif/nested(and) appends to if_statements (Can be applied to until or while) [ALL] */
+		condition_or, /* if/elseif/nested(or)  appends to if_statements (Can be applied to until or while) [ALL] */
+		condition_close, /* Conditon flag:  %s ) [ALL] */
+		condition_open, /*  Conditon flag: ( %s   [ALL](PRE) */
+		condition_open_post, /*  Conditon flag: ( %s   [ALL](POST) */
+
+
+		/* These only apply to routines outside of other routines like, call, concat, table, etc. (Will account for call parameters) */
 		condition_routine, /* Means instruction is apart of a conditional routine (will only account for valid data not known args or vars, some will get in like if instruction before branch is locvar) **Does not mean it can't be an arguement!!** [AST] */
 		condition_routine_start, 
 		condition_routine_end,
 
 
-		close, /*   %s ) [ALL] */
-		open, /* ( %s   [ALL] */
 
 		table_start, /* Table { [ALL] */
 		table_element, /* Element in table. (Not usable for setlist cause of concatation) [ALL] */
@@ -79,6 +84,7 @@ namespace ast_dec {
 		closure_global, /* function test () [ALL] */
 		closure_newclosure, /* (function()  end) [ALL] */
 
+		bad_instruction, /* Instruction will never get executed no matter watch branch is taken or not. [AST] */
 		dead_instruction, /* Instruction gets ignored. *Will run exprs but not instruction in transpiler. [TRANSPILER] */
 		conditional /* Condition flag will get written too dest. (Used for branching opcodes including loadb +jmp **Will clear compare flag if conditional is not loadb) [ALL] */
 	};
@@ -217,8 +223,9 @@ namespace ast_dec {
 				case expr_type::condition_flag: { retn += "condition_flag"; break; }
 				case expr_type::condition_break: { retn += "condition_break"; break; }
 
-				case expr_type::close: { retn += "close";  break; }
-				case expr_type::open: { retn += "open";  break; }
+				case expr_type::condition_close: { retn += "condition_close";  break; }
+				case expr_type::condition_open: { retn += "condition_open";  break; }
+				case expr_type::condition_open_post: { retn += "condition_open_post"; break;  }
 
 				case expr_type::table_start: { retn += "table_start";  break; }
 				case expr_type::table_element: { retn += "table_element";  break; }
@@ -229,6 +236,7 @@ namespace ast_dec {
 				case expr_type::closure_global: { retn += "closure_global";  break; }
 				case expr_type::closure_newclosure: { retn += "closure_newclosure";  break; }
 
+				case expr_type::bad_instruction: { retn += "bad_instruction";  break; }
 				case expr_type::dead_instruction: { retn += "dead_instruction";  break; }
 				case expr_type::conditional: { retn += "conditional";  break; }
 
@@ -251,7 +259,7 @@ namespace ast_dec {
 		std::uintptr_t node_end = 0u; /* PC final instruction. */
 
 		std::vector<std::shared_ptr<node>> nodes; /* Nodes in block. */
-		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks don't count, jump backs will refer to other nodes(may get fragmented)), 0 no jumps.  */
+		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump/loops (calls\for\jumpbacks don't count, jump backs will refer to other nodes(may get fragmented), may be extras if dead instruction is next), 0 no jumps.  */
 
 
 		/* All visits gets sorted automatically by address. */
@@ -315,7 +323,7 @@ namespace ast_dec {
 
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
-
+					
 					if (i->lex->type == type) {
 
 						if (all) { /* Has all so emblace node. */
@@ -453,7 +461,11 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			throw std::runtime_error("Returning no data for visit_addr.");
+			#if display_warnings 
+				std::printf("[WARNING] Returning no data for visit_addr.\n");
+			#endif
+
+			return nullptr;
 		}
 
 
@@ -634,7 +646,7 @@ namespace ast_dec {
 				/* Iterate through block nodes and find given instruction. */
 				for (const auto& i : current_block->nodes) {
 
-					if (i->address >= start && i->address <= end && i->lex->type == inst) {
+					if (i->address >= begin && i->address <= end && i->lex->type == inst) {
 						retn.emplace_back(i);
 					}
 
@@ -688,7 +700,7 @@ namespace ast_dec {
 			} while (scopes.size());
 
 			#if display_warnings 
-					std::printf("[WARNING] Nothing will be returned for visit_range_type_next.\n");
+				std::printf("[WARNING] Nothing will be returned for visit_range_type_next.\n");
 			#endif
 
 			return nullptr;
@@ -966,11 +978,11 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			if (!retn.size()) {
-				#if display_warnings 
-					std::printf("[WARNING] Returning no data for visit_expr_routine.\n");
-				#endif				
-			}
+			#if display_warnings
+				if (!retn.size()) { 
+					std::printf("[WARNING] Returning no data for visit_expr_routine.\n");				
+				}
+			#endif
 			
 			return retn;
 		}
@@ -1029,6 +1041,8 @@ namespace ast_dec {
 			if (begin != nullptr) {
 				retn.emplace_back(std::make_pair(begin, prev_last));
 			}
+
+			this->sort_addr(retn);
 
 			return retn;
 		}
@@ -1097,12 +1111,11 @@ namespace ast_dec {
 			} while (scopes.size());
 
 			/* Nothing. */
-			if (!retn.size()) {
-				#if display_warnings 
-					std::printf("[WARNING] No will be returned for visit_range.\n");
-				#endif
-			}
-				
+			#if display_warnings 
+				if (!retn.size()) {
+						std::printf("[WARNING] No will be returned for visit_range.\n");
+				}
+			#endif
 
 			return retn;
 		}
@@ -1193,6 +1206,9 @@ namespace ast_dec {
 		closure_type closure_type = closure_type::none;  /* Closure type. */
 		std::string closure_name = ""; /* Closure name. (Suffix) */
 
+		std::string closure_decompilation = ""; /* Handled by transpiler not ast used in transpiler for parent protos. */
+		bool tanspiled = false;
+
 		std::vector<std::int16_t> arg_regs; /* Register for arguments to be placed in. *-1 means: ... */
 		/* No node can refrence the same address all nodes are unique but branches can reference the same jump. */
 		std::shared_ptr <block> main_block; /* Main block. */
@@ -1218,6 +1234,35 @@ namespace ast_dec {
 				for (const auto& i : current_block->branches) 
 					scopes.emplace_back(i);
 				
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				/* Remove duplicates. */
+				std::sort(scopes.begin(), scopes.end());
+				scopes.erase(std::unique(scopes.begin(), scopes.end()), scopes.end());
+
+			} while (scopes.size());
+
+			return nullptr;
+		}
+
+		/* Finds block by containing address. */
+		std::shared_ptr <block> find_block_addr(const std::uintptr_t addr) {
+
+			/* Append all blocks. */
+			std::vector<std::shared_ptr <block>> scopes = { this->main_block };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				if (current_block->node_start <= addr && current_block->node_end >= addr)
+					return current_block;
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i);
+
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
@@ -1260,6 +1305,7 @@ namespace ast_dec {
 
 				const auto block = this->find_block(pc);
 				const auto mult = indent_multiplier[pc];
+				
 
 				/* Compile indent */
 				for (auto i = 0u; i < mult; ++i)
@@ -1333,6 +1379,56 @@ namespace ast_dec {
 
 			return retn;
 		}
+
+		std::string proto_information() {
+
+			std::string retn = "";
+
+			retn += "Proto:\n";
+			retn += "	* name: " + closure_name + "\n";
+			retn += "	* type: ";
+
+
+			switch (this->closure_type) {
+
+				case ast_dec::closure_type::main: {
+					retn += "main";
+					break;
+				}
+
+				case ast_dec::closure_type::local : {
+					retn += "local";
+					break;
+				}
+
+				case ast_dec::closure_type::newclosure: {
+					retn += "newclosure";
+					break;
+				}
+
+				case ast_dec::closure_type::global: {
+					retn += "global";
+					break;
+				}
+
+				default: {
+					retn += "none";
+					break;
+				}
+
+			}
+			retn += "\n";
+
+			retn += "	* arg count: " + std::to_string(this->arg_regs.size()) + "\n";
+			retn += "	* args: ";
+
+			for (const auto i : this->arg_regs)
+				retn += "r" + std::to_string(i) + " ";
+
+
+			return retn;
+		}
+
 	};
 
 	std::shared_ptr<ast> gen_ast(Proto* proto);

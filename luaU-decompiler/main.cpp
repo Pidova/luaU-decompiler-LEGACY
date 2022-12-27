@@ -7,18 +7,15 @@
 
 std::int32_t main() {
 
-	const char* const code = "repeat \
-if(a) then  break; elseif (ai) then break; end;\
-		print (1);\
-		until(((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)) or ((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)));\
-		print (1);\
-		";
+	const char* const code = " local function test(a, b, c, d, e, f, g, h) function fun (a, f, d) a = 10; b = 20; d = e; f = h; g = o; a = s; end fun(a, c, e, g, (function(x, z, y) x = d; z = e; g = h; a = o; end)); end test (test)";
 
 	/*
 	repeat \
+			if(a) then  break; elseif (ai) then break; end;\
 		print (1);\
 		until(((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)) or ((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)));\
-	
+		print (1);\
+
 	repeat \
 				local a = peen(); \
 					while (wowo and iaia and iaai and iao and aoioa) do \

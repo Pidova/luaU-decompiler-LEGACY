@@ -46,4 +46,7 @@ namespace emitter {
 	/* Loop express(while, until) **use compare for final compare and compare flag for concatation** */
 	void loop(std::string& dest, const std::string& type, const std::string& data, const char* const end = " do\n" /* Defualt while loop. */);
 
+	/* Function */
+	void function(std::string& dest, const std::string& type, const std::string& name, const std::string& args, const std::string data, const std::string& close);
+
 }

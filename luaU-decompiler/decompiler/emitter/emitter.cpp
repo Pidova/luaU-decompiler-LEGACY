@@ -13,12 +13,12 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
         }
 
         case LuauOpcode::LOP_JUMPIFEQ: {
-            cmp = (!opposite) ? " == " : " ";
+            cmp = (!opposite) ? " == " : "";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKNIL: {
-            cmp = (!opposite) ? " == " : " ";
+            cmp = (!opposite) ? " == " : "";
             break;
         }
 
@@ -28,12 +28,12 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
         }
 
         case LuauOpcode::LOP_JUMPXEQKS: {
-            cmp = (!opposite) ? " == " : " ";
+            cmp = (!opposite) ? " == " : "";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKN: {
-            cmp = (!opposite) ? " == " : " ";
+            cmp = (!opposite) ? " == " : "";
             break;
         }
 
@@ -58,12 +58,12 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
         }
 
         case LuauOpcode::LOP_JUMPIF: {
-            cmp = (!opposite) ? " " : " not ";
+            cmp = (!opposite) ? "" : " not ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPIFNOT: {
-            cmp = (!opposite) ? " not " : " ";
+            cmp = (!opposite) ? " not " : "";
             break;
         }
 
@@ -269,5 +269,10 @@ void emitter::unary(const LuauOpcode op, std::string& dest, const std::string& s
 
     }
 
+    return;
+}
+
+void emitter::function(std::string& dest, const std::string& type, const std::string& name, const std::string& args, const std::string data, const std::string& close) {
+    dest += type + " " + name + " ( " + args + " )\n" + data + close;
     return;
 }

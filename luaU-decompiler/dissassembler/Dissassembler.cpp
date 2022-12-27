@@ -594,9 +594,9 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 
 						/* Upvalue. */
 						if (tt == 2u)
-							buffer->data += std::to_string(tt);
+							buffer->data += std::to_string(tt) + split;
 						else
-							buffer->data += std::to_string(tt);
+							buffer->data += std::to_string(tt) + split;
 										
 						break;
 					}
@@ -612,9 +612,9 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 
 						/* Upvalue. */
 						if (tt == 2u)
-							buffer->data += "upvalue_" + std::to_string(v);
+							buffer->data += "upvalue_" + std::to_string(v) + split;
 						else				
-							buffer->data += "r" + std::to_string(v);
+							buffer->data += "r" + std::to_string(v) + split;
 
 						break;
 					}
