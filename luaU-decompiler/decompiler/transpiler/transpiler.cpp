@@ -325,7 +325,7 @@ namespace lv {
 	}
 
 }
-std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<transpiler::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
+std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<transpiler_data::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
 
 	std::string decompilation = "";
 
@@ -334,7 +334,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 	for (const auto& node : all) {
 
 		/* Fix lv name. */
-		if (node->dest_loc.is_dest_loc && (config->smart_variable || !node->dest_loc.set_prefix)) {
+		if (node->dest_loc.is_dest_loc && (config->smart_variable || !node->dest_loc.set_prefix) && !node->dest_loc.is_upvalue) {
 			node->dest_loc.name = ((config->smart_variable) ? lv::smart_name(regs, node, config->variable_prefix) : config->variable_prefix) + node->dest_loc.name;
 			node->dest_loc.set_prefix = true;
 		} 
@@ -1581,7 +1581,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 					}
 
-					emitter::str(decompilation, "return" + compiled + ";\n");
+					emitter::str(decompilation, "return " + compiled + ";\n");
 
 				}
 
@@ -1636,32 +1636,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 		    /* Set/Get/Close upvalue */
 			case LuauOpcode::LOP_SETUPVAL: {
 
-				const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-				const auto dest = regs.back()[reg];
-				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg];
+				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::upvalue>().front()->val;
 
-
-				/* Not vararg */
-				if (dest->type != registers::type::var && dest->type != registers::type::arg) {
-
-					/* Create arg. */
-					if (node->dest_loc.is_dest_loc) {
-
-						const auto data = dest->data;
-						dest->set<registers::type::var>(node->dest_loc.name);
-						emitter::new_vararg_equal(decompilation, dest->data, data);
-
-					}
-					else {
-						throw std::runtime_error("Tried to create upvalue on not vararg register.");
-					}
-
-				}
-
-
-				/* Set upvalue for children ast. */
-				for (const auto& i : ast->protos)
-					i->upvalues.insert(std::make_pair(idx, std::make_pair (dest->data, reg)));
+				emitter::vararg_equal(decompilation, ast->upvalues[idx].first, dest->data);
 
 				break;
 			}
@@ -1733,28 +1711,32 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				
 				const auto proto_ast = ast->protos[proto_idx];
 
-				
 				/* Compile args */
 				std::string args = "";
-				for (const auto arg : proto_ast->arg_regs) {
-					args += ((arg == -1) ? "..." : config->argument_prefix + std::to_string(arg)) + ((arg == proto_ast->arg_regs.back()) ? "" : ", ");
+				for (const auto& arg : proto_ast->arg_regs) {
+					args += (arg.second + ((arg == proto_ast->arg_regs.back()) ? "" : ", "));
 				}
+
+				std::string func = "";
 
 				/* Compile function */
 				switch (proto_ast->closure_type) {
 
 					case ast_dec::closure_type::global: {
-						emitter::function(decompilation, "function", proto_ast->closure_name, args, proto_ast->closure_decompilation, "end");
+						emitter::function(decompilation, "function", proto_ast->closure_name, args, proto_ast->closure_decompilation, "end\n");
+						regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg]->set<registers::type::expr>(proto_ast->closure_name);
 						break;
 					}
 					
 					case ast_dec::closure_type::newclosure: {
-						emitter::function(decompilation, "(function", "", args, proto_ast->closure_decompilation, "end)");
+						emitter::function(func, "\n(function", "", args, proto_ast->closure_decompilation, "end)");
+						regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg]->set<registers::type::expr>(func);
 						break;
 					}
 
 					case ast_dec::closure_type::local: {
-						emitter::function(decompilation, "local function", proto_ast->closure_name, args, proto_ast->closure_decompilation, "end");
+						emitter::function(decompilation, "local function", proto_ast->closure_name, args, proto_ast->closure_decompilation, "end\n");
+						regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg]->set<registers::type::var>(proto_ast->closure_name);
 						break;
 					}
 
@@ -1763,7 +1745,6 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					}
 
 				}
-
 
 				break;
 			}
@@ -2117,19 +2098,25 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 	return decompilation;
 }
 
-void transpile_ast(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler::transpiler_config>& config, std::string& str) {
+void transpile_ast(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_data::transpiler_config>& config, std::string& str) {
 
 	registers::reg_scope main_scope;
 	std::vector<registers::reg_scope> scopes = { main_scope };
+
+	/* Set args for registers. */
+	auto reg = 0u;
+	for (const auto& arg : main_ast->arg_regs) {
+		if (arg.first != -1 /* ... */) {
+			scopes.front()[reg++]->set<registers::type::arg>(arg.second);
+		}
+	}
 
 	/* Transpile main block. */
 	str += transpile_blocks(main_ast, config, scopes);
 	return;
 }
 
-std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_config>& config) {
-	
-	std::string retn = "";
+std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_data::transpiler_config>& config) {
 
 	/* Form protos linearly. */
 	std::vector <std::shared_ptr<ast_dec::ast>> linear_on;
@@ -2167,23 +2154,21 @@ std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast,
 		if (i.second.empty() && std::find(comleted.begin(), comleted.end(), i.first) == comleted.end()) {
 			
 			/* Transpile */
-			transpile_ast(i.first, config, retn);
+			transpile_ast(i.first, config, i.first->closure_decompilation);
 			i.first->tanspiled = true;
-			i.first->closure_decompilation = retn;
 
 			/* Add to complete. */
 			comleted.emplace_back(i.first);
-			retn.clear();
 			linear.erase(i.first);
 
 		}
 
 	/* Do ones that have been completed. */
 	while (!linear.empty()) {
-		
+	
 		for (const auto& i : linear)
 			if (std::find(comleted.begin(), comleted.end(), i.first) == comleted.end()) {
-
+			
 				/* Check if all protos have been analyzed. */
 				auto all = true;
 				for (const auto& p : i.second)
@@ -2192,19 +2177,20 @@ std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast,
 						break;
 					}
 				if (!all) {
-					break;
+					continue;
 				}
 
 				/* Transpile */
-				transpile_ast(i.first, config, retn);
+				transpile_ast(i.first, config, i.first->closure_decompilation);
 				i.first->tanspiled = true;
-				i.first->closure_decompilation = retn;
 
 				/* Add to complete. */
 				comleted.emplace_back(i.first);
-				retn.clear();
 				linear.erase(i.first);
-
+			
+			}
+			else {
+				linear.erase(i.first);
 			}
 		
 	}

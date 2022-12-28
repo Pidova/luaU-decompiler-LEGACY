@@ -276,3 +276,73 @@ void emitter::function(std::string& dest, const std::string& type, const std::st
     dest += type + " " + name + " ( " + args + " )\n" + data + close;
     return;
 }
+
+void emitter::locvars::locvar_name(std::string& dest, const std::string& prefix, const std::size_t suffix, const bool suffix_chars) {
+
+    const auto suffix_str = std::to_string(suffix);
+
+    dest += prefix; 
+
+    if (suffix_chars) {
+
+        for (const auto c : suffix_str) 
+            switch (c) {
+
+                case '0': {
+                    dest += 'a';
+                    break;
+                }
+
+                case '1': {
+                    dest += 'b';
+                    break;
+                }
+
+                case '2': {
+                    dest += 'c';
+                    break;
+                }
+
+                case '3': {
+                    dest += 'd';
+                    break;
+                }
+
+                case '4': {
+                    dest += 'e';
+                    break;
+                }
+
+                case '5': {
+                    dest += 'f';
+                    break;
+                }
+
+                case '7': {
+                    dest += 'g';
+                    break;
+                }
+
+                case '8': {
+                    dest += 'h';
+                    break;
+                }
+
+                case '9': {
+                    dest += 'i';
+                    break;
+                }
+
+                default: {
+                    throw std::runtime_error("Something went wrong with locvar name emitter suffix.");
+                }
+
+            }
+        
+    }
+    else {
+        dest += suffix_str;
+    }
+
+    return;
+}

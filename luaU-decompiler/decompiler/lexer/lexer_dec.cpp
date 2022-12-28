@@ -184,7 +184,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		/* Newclosure, Namecall */
 		case LuauOpcode::LOP_NEWCLOSURE: {
 			retn->type = lexer_dec::inst_type::expression;
-			retn->operands = { lexer_dec::operand_types::reg, lexer_dec::operand_types::proto };
+			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::proto };
 			break;
 	    }
 		case LuauOpcode::LOP_NAMECALL : {

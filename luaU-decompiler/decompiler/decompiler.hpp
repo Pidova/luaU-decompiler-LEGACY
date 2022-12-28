@@ -7,6 +7,6 @@
 
 namespace luaU_decompiler {
 
-	std::string decompile(Proto* proto, const std::shared_ptr<transpiler::transpiler_config>& config);
+	std::string decompile(Proto* proto, const std::shared_ptr<transpiler_data::transpiler_config>& config);
 
 }

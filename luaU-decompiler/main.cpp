@@ -7,7 +7,7 @@
 
 std::int32_t main() {
 
-	const char* const code = " local function test(a, b, c, d, e, f, g, h) function fun (a, f, d) a = 10; b = 20; d = e; f = h; g = o; a = s; end fun(a, c, e, g, (function(x, z, y) x = d; z = e; g = h; a = o; end)); end test (test)";
+	const char* const code = "local b = aa(); print ((function(x, y) return (x + y + b) end)(1,2)(1,2));";
 
 	/*
 	repeat \
@@ -48,7 +48,7 @@ std::int32_t main() {
 
 	/* Get main proto. */
 	const auto proto = gco2cl((state->top - 1)->value.gc)->l.p;
-	std::cout << luaU_decompiler::decompile(proto, std::make_shared<transpiler::transpiler_config>()) << std::endl;
+	std::cout << luaU_decompiler::decompile(proto, std::make_shared<transpiler_data::transpiler_config>()) << std::endl;
 	std::cin.get();
 	return 0;
 }

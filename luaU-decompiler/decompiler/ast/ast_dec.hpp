@@ -8,6 +8,8 @@
 #include "ast_dec.hpp"
 #include "../../dissassembler/Dissassembler.hpp"
 #include "../lexer/lexer_dec.hpp"
+#include "../transpiler/transpiler_data.hpp"
+
 
 /*
 
@@ -80,7 +82,7 @@ namespace ast_dec {
 		table_end, /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) [ALL] */
 		table_index, /* Extra expr used for certain things (Will be appended when everything is done). [ALL] */
 
-		closure_local, /* local function test () [ALL] */
+		closure_local, /* local function test () **Can be mutated by lv set if it is a lv will be local else newclosure* [ALL] */
 		closure_global, /* function test () [ALL] */
 		closure_newclosure, /* (function()  end) [ALL] */
 
@@ -104,6 +106,7 @@ namespace ast_dec {
 		struct dest_loc {
 			bool set_prefix = false; /* Used in transpiler to set suffix to local variable name. */
 			bool is_dest_loc = false; /* Turns dest to local. */
+			bool is_upvalue = false; /* locvar is upvalue? */
 			std::string name = ""; /* Locvar name (Suffix) */
 		} dest_loc;
 
@@ -121,6 +124,11 @@ namespace ast_dec {
 		struct loop_extra {
 			std::shared_ptr<ast_dec::node> end_node = nullptr; /* Used for prologue and epilogue of loop. */
 		} loop_extra;
+
+		/* Extra information for closure. */
+		struct closure_extra {
+			std::size_t closure_idx = 0u;
+		} closure_extra;
 
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */
 		
@@ -157,6 +165,20 @@ namespace ast_dec {
 
 			if (!this->has_expr(type))
 				this->add_expr<type>(count, ele);
+
+			return;
+		}
+
+		/* Replaces next target from 0 with type and count. */
+		template <expr_type target, expr_type type>
+		void replace_next(const std::size_t count = 1u) {
+
+			for (auto& expr : this->expr)
+				if (expr.first == target) {
+					expr.first = type;
+					expr.second = count;
+					break;
+				}
 
 			return;
 		}
@@ -1199,23 +1221,35 @@ namespace ast_dec {
 
 	struct ast {
 
+		std::size_t ast_id = 0u; /* ID */
+
+
 		Proto* p; /* Proto for ast. */
 		std::unordered_map<std::uintptr_t, std::shared_ptr<LuaU_dissassembler::dissassembly>> dissassembly; /* Dissassembly of proto (Useful for some stuff). { PC, dissassembly } ex. dissassembly of pc=15 dissassembly[15]. */
 		std::uintptr_t pc_end = 0u; /* Pc end */
 
+
 		closure_type closure_type = closure_type::none;  /* Closure type. */
 		std::string closure_name = ""; /* Closure name. (Suffix) */
+
 
 		std::string closure_decompilation = ""; /* Handled by transpiler not ast used in transpiler for parent protos. */
 		bool tanspiled = false;
 
-		std::vector<std::int16_t> arg_regs; /* Register for arguments to be placed in. *-1 means: ... */
+
+		std::vector<std::pair <std::int16_t /* Reg */, std::string /* Name */>> arg_regs; /* Register for arguments to be placed in. *-1 means: ... */
 		/* No node can refrence the same address all nodes are unique but branches can reference the same jump. */
 		std::shared_ptr <block> main_block; /* Main block. */
 		
-		std::unordered_map<std::uintptr_t /* Idx */, std::pair <std::string /* Value */, std::uint16_t /* Reg*/>> upvalues;
+
+
+		std::unordered_map<std::uintptr_t /* Idx */, std::pair <std::string /* Value */, std::int16_t /* Reg (-1 for upv) */>> upvalues;
 
 		std::vector<std::shared_ptr <ast>> protos; /* Any children protos. Relates to proto->p */
+
+		std::shared_ptr<transpiler_data::transpiler_config> transpiler_config; /* Linked transpiler config. */
+
+
 
 		/* Finds block by start address. */
 		std::shared_ptr <block> find_block(const std::uintptr_t addr) {
@@ -1422,15 +1456,21 @@ namespace ast_dec {
 			retn += "	* arg count: " + std::to_string(this->arg_regs.size()) + "\n";
 			retn += "	* args: ";
 
-			for (const auto i : this->arg_regs)
-				retn += "r" + std::to_string(i) + " ";
+			for (const auto& i : this->arg_regs)
+				retn += "r" + std::to_string(i.first) + "(" + i.second + ") ";
 
+			retn += "\n";
+			retn += "	* upvalue count: " + std::to_string(this->upvalues.size()) + "\n";
+			retn += "	* upvalues: ";
+
+			for (const auto& i : this->upvalues)
+				retn += "r" + std::to_string(i.second.second) + "(" + i.second.first + ") ";
 
 			return retn;
 		}
 
 	};
 
-	std::shared_ptr<ast> gen_ast(Proto* proto);
+	std::shared_ptr<ast> gen_ast(Proto* proto, const std::shared_ptr<transpiler_data::transpiler_config>& config);
 
 }

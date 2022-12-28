@@ -341,5 +341,8 @@
     <ClInclude Include="decompiler\ast\post_ast.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="decompiler\transpiler\transpiler_data.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

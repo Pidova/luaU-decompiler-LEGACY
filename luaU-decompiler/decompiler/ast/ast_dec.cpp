@@ -2,10 +2,76 @@
 #include "ast_config.hpp"
 #include "ast_dec.hpp"
 #include "post_ast.hpp"
+#include "../emitter/emitter.hpp"
 
 #define node_nonmutable(node) node->has_expr(ast_dec::expr_type::condition_nonmutable)
 
 namespace ast_funcs {
+
+	namespace upvalues {
+
+		void set(const std::shared_ptr<ast_dec::ast>& ast) {
+
+			const auto all = ast->main_block->visit_all();
+			for (const auto& node : all) {
+
+				/* Captures follow newclosure. */
+				if (node->lex->dissassembly->op == LuauOpcode::LOP_NEWCLOSURE || node->lex->dissassembly->op == LuauOpcode::LOP_DUPCLOSURE) {
+
+					/* Incase it bugs out. */
+					node->closure_extra.closure_idx = node->lex->dissassembly->operands.back()->k_idx /* Will work for proto. */;
+
+					auto idx = 0u;
+					auto next = ast->main_block->visit_addr(node->address + node->lex->dissassembly->len);
+
+					while (next != nullptr && next->lex->dissassembly->op == LuauOpcode::LOP_CAPTURE) {
+						
+						if (next->lex->has_operand_expr<lexer_dec::operand_types::upvalue>()) {
+							/* Pass upvalue */
+							ast->protos[node->closure_extra.closure_idx]->upvalues.insert(std::make_pair(idx++, std::make_pair(ast->upvalues[next->lex->operand_expr<lexer_dec::operand_types::upvalue>().front()->upvalue].first, -1)));
+						}
+						else {
+							/* Pass variable */
+
+							const auto reg = next->lex->dissassembly->operands.back()->reg;
+
+							std::string name = "";
+							emitter::locvars::locvar_name(name, ast->transpiler_config->upvalue_prefix, std::stoi(std::to_string(ast->ast_id) + std::to_string(reg)) /* Str -> int for formatting */, ast->transpiler_config->upvalue_suffix_char);
+
+							ast->protos[node->closure_extra.closure_idx]->upvalues.insert(std::make_pair(idx++, std::make_pair(name, reg)));
+
+							/* Change arg name if reg. */
+							for (auto& arg : ast->arg_regs)
+								if (arg.first == reg) {
+									arg.second = name;
+								}
+
+							/* See if function */
+							if (node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg == reg) {
+								ast->protos[node->closure_extra.closure_idx]->closure_name = name;
+							}
+
+							/* See if var */
+							for (const auto& node : all)
+								if (node->dest_loc.is_dest_loc && node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg == reg) {
+									node->dest_loc.name = name;
+									node->dest_loc.is_upvalue = true;
+									break;
+								}
+
+						}
+
+						next = ast->main_block->visit_addr(next->address + next->lex->dissassembly->len);
+					}
+
+				}
+
+			}
+
+			return;
+		}
+
+	}
 
 	namespace proto {
 
@@ -39,28 +105,28 @@ namespace ast_funcs {
 							/* Skip captures if any. */
 							auto next = current_proto->main_block->visit_addr(i->address + i->lex->dissassembly->len);
 							while (next != nullptr && next->lex->dissassembly->op == LuauOpcode::LOP_CAPTURE) {
-
 								next = current_proto->main_block->visit_addr(next->address + next->lex->dissassembly->len);
-
 							}
 
 							/* Next is null */
 							if (next == nullptr) {
-								closure_node->add_expr<ast_dec::expr_type::closure_local>(1u, ast_dec::element::front); /* local function ?? (??) */
+								closure_node->add_expr<ast_dec::expr_type::closure_local>(1u, ast_dec::element::front); /* local function ?? (??) [MUTABLE] */
 							}
 							else {
 
 								/* Next is setglobal and uses reg as source. */
-								if (next->lex->dissassembly->op == LuauOpcode::LOP_SETGLOBAL && next->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg == i->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg) {
+								if (next->lex->dissassembly->op == LuauOpcode::LOP_SETGLOBAL && next->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg == i->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg) {
 									closure_node->add_expr<ast_dec::expr_type::closure_global>(1u, ast_dec::element::front);
 									closure_node = next;
 									closure_node->add_expr<ast_dec::expr_type::closure_global>(1u, ast_dec::element::front); /*  function ?? (??) */
 								}
 								else {
-									closure_node->add_expr<ast_dec::expr_type::closure_local>(1u, ast_dec::element::front); /* local function ?? (??) */
+									closure_node->add_expr<ast_dec::expr_type::closure_local>(1u, ast_dec::element::front); /* local function ?? (??) [MUTABLE] */
 								}
 
 							}
+
+							closure_node->closure_extra.closure_idx = child_proto_id;
 
 						}
 
@@ -70,10 +136,9 @@ namespace ast_funcs {
 					case LuauOpcode::LOP_DUPCLOSURE: {
 
 						/* Get proto from dupclosure kvalue. */
-						if (current_proto->p->p[child_proto_id] == gco2cl(current_proto->p->k[i->lex->dissassembly->operands[1]->k_idx].value.gc)->l.p) {
-							closure_node = i; /* Set node. */
-							closure_node->add_expr<ast_dec::expr_type::closure_newclosure>(1u, ast_dec::element::front); /* (function(??) ?? end) */
-						}
+						closure_node = i; /* Set node. */
+						closure_node->add_expr<ast_dec::expr_type::closure_local>(1u, ast_dec::element::front); /* local function ?? (??) [MUTABLE] */
+						closure_node->closure_extra.closure_idx = child_proto_id;
 
 						break;
 					}
@@ -97,6 +162,7 @@ namespace ast_funcs {
 					case ast_dec::expr_type::closure_global: {
 						proto->closure_type = ast_dec::closure_type::global;
 						proto->closure_name = closure_node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+						closure_node->add_expr<ast_dec::expr_type::dead_instruction>(); /* Handled by before hand. */
 						break;
 					}
 
@@ -384,165 +450,221 @@ namespace ast_funcs {
 				   arg stack become random args that don't even get used.
 		*/
 		void set(std::shared_ptr<ast_dec::ast>& ast) {
+			
+			/* Nothing too analyzed. */
+			if (ast->protos.empty()) {
+				return;
+			}
 
-			std::vector <std::uint32_t> dests; /* Registers used in dest. **getting written too** */
+			std::vector <std::vector <std::uint32_t>> dests; /* (Scoped) Registers used in dest. **getting written too** */
 			std::vector <std::uint32_t> source_no_dest; /* Registers used in source, value but not dest. **Not written too yet but been used** */
 
+			/* Emblace first */
+			std::vector<std::uintptr_t> addr_scopes;
+			dests.emplace_back(std::vector <std::uint32_t>({ }));
 
 			/* Everything needs to go through based on control flow. */
-			const auto all = ast->main_block->visit_all();
-			for (const auto& node : all) {
+			for (const auto& proto : ast->protos) {
 
-				/* Loops usally overwrite some regs per part of there routine append them to dest. */
-				if (node->lex->type == lexer_dec::inst_type::for_) {
+				/* First get regs used without being set first. */
 
-					auto start_reg = 0u; /* for start */
-					auto iteration = 0u; /* for regs being consumed for its operation */
+				/* Already been analyzed. */
+				if (!proto->arg_regs.empty()) {
+					continue;
+				}
 
-					switch (node->lex->dissassembly->op) {
+				const auto all = proto->main_block->visit_all();
+				for (const auto& node : all) {
 
-						case LuauOpcode::LOP_FORGLOOP: {
-							start_reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
-							iteration = 4u;
-							break;
-						}
-						case LuauOpcode::LOP_FORNLOOP: {
-							start_reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
-							iteration = 2u;
-							break;
-						}
+					/* Fix scope */
+					if (std::find(addr_scopes.begin(), addr_scopes.end(), node->address) != addr_scopes.end()) {
 
-						/* Could be loop prep??? maybe */
-						default: {
-							continue;
-						}
+						for (auto i = 0u; i < std::count(addr_scopes.begin(), addr_scopes.end(), node->address); ++i)
+							addr_scopes.pop_back();
 
 					}
 
-					/* Add vars from those loops. */
-					for (auto i = start_reg; i < (start_reg + iteration + 1u); ++i)
-						if (std::find(dests.begin(), dests.end(), i) == dests.end()) /* Found dest */
-							dests.emplace_back(i);
+					/* Loops usally overwrite some regs per part of there routine append them to dest. */
+					if (node->lex->type == lexer_dec::inst_type::for_) {
 
-				}
+						auto start_reg = 0u; /* for start */
+						auto iteration = 0u; /* for regs being consumed for its operation */
 
-				
-				switch (node->lex->dissassembly->op) {
-					
-					case LuauOpcode::LOP_RETURN: {
+						switch (node->lex->dissassembly->op) {
 
-						const auto dest = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
-						auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+							case LuauOpcode::LOP_FORGLOOP: {
+								start_reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+								iteration = 4u;
+								break;
+							}
+							case LuauOpcode::LOP_FORNLOOP: {
+								start_reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+								iteration = 2u;
+								break;
+							}
 
-						if (amt) {
+							/* Could be loop prep??? maybe */
+							default: {
+								continue;
+							}
+
+						}
+
+						/* Add vars from those loops. */
+						for (auto i = start_reg; i < (start_reg + iteration + 1u); ++i)
+							if (std::find(dests.back().begin(), dests.back().end(), i) == dests.back().end()) /* Found dest */
+								dests.back().emplace_back(i);
+
+					}
+
+
+					switch (node->lex->dissassembly->op) {
+
+						case LuauOpcode::LOP_RETURN: {
+
+							const auto dest = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+							auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+							if (amt) {
+
+								if (amt == -1)
+									amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
+
+								for (auto a = dest; a < (dest + amt); ++a)
+									if (std::find(dests.back().begin(), dests.back().end(), a) == dests.back().end())
+										dests.back().emplace_back(a);
+
+							}
+
+							break;
+						}
+
+						case LuauOpcode::LOP_GETVARARGS: {
+
+							const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+							auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
 
 							if (amt == -1)
 								amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
 
 							for (auto a = dest; a < (dest + amt); ++a)
-								if (std::find(dests.begin(), dests.end(), a) == dests.end())
-									dests.emplace_back(a);
+								if (std::find(dests.back().begin(), dests.back().end(), a) == dests.back().end())
+									dests.back().emplace_back(a);
 
+							break;
 						}
 
-						break;
-					}
+						case LuauOpcode::LOP_CALL: {
 
-					case LuauOpcode::LOP_GETVARARGS: {
+							auto args = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+							const auto start = node->lex->dissassembly->operands.front()->reg;
 
-						const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-						auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+							if (args == -1)
+								args = ((*(&node - 1u))->lex->dissassembly->operands.front()->reg - start);
 
-						if (amt == -1)
-							amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
+							/* Iterate through args and see if arg is not getting used in dest. */
+							for (auto i = 0; i < args; ++i) {
 
-						for (auto a = dest; a < (dest + amt); ++a)
-							if (std::find(dests.begin(), dests.end(), a) == dests.end())
-								dests.emplace_back(a);
+								const auto arg = (i + start + 1u);
 
-						break;
-					}
-
-					case LuauOpcode::LOP_CALL: {
-
-						auto args = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
-						const auto start = node->lex->dissassembly->operands.front()->reg;
-
-						if (args == -1)
-							args = ((*(&node - 1u))->lex->dissassembly->operands.front()->reg - start);
-
-						/* Iterate through args and see if arg is not getting used in dest. */
-						for (auto i = 0; i < args; ++i) {
-
-							const auto arg = (i + start + 1u);
-
-							if (std::find(dests.begin(), dests.end(), arg) == dests.end() &&
-								std::find(source_no_dest.begin(), source_no_dest.end(), arg) == source_no_dest.end())
+								if (std::find(dests.back().begin(), dests.back().end(), arg) == dests.back().end() &&
+									std::find(source_no_dest.begin(), source_no_dest.end(), arg) == source_no_dest.end())
 									source_no_dest.emplace_back(arg);
 
-						}
+							}
 
-						/* Add placement for call. */
-						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.begin(), dests.end(), start) == dests.end() &&
-							std::find(source_no_dest.begin(), source_no_dest.end(), start) == source_no_dest.end())
+							/* Add placement for call. */
+							if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.back().begin(), dests.back().end(), start) == dests.back().end() &&
+								std::find(source_no_dest.begin(), source_no_dest.end(), start) == source_no_dest.end())
 								source_no_dest.emplace_back(start);
 
-						break;
+							break;
+						}
+
+						default: {
+
+							/* Append source. */
+							if (node->lex->has_operand_expr<lexer_dec::operand_types::source>()) {
+
+								const auto regz = node->lex->operand_expr<lexer_dec::operand_types::source>();
+
+								for (const auto& operand : regz) {
+
+									/* Append unused reg. */
+									if (std::find(dests.back().begin(), dests.back().end(), operand->reg) == dests.back().end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end())
+										source_no_dest.emplace_back(operand->reg);
+
+								}
+
+							}
+
+
+							/* Append reg. */
+							if (node->lex->has_operand_expr<lexer_dec::operand_types::reg>()) {
+
+								const auto regz = node->lex->operand_expr<lexer_dec::operand_types::reg>();
+
+								for (const auto& operand : regz) {
+
+									/* Append unused reg. */
+									if (std::find(dests.back().begin(), dests.back().end(), operand->reg) == dests.back().end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end())
+										source_no_dest.emplace_back(operand->reg);
+
+								
+								}
+
+							}
+
+
+							/* Append dest. */
+							if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.back().begin(), dests.back().end(), node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg) == dests.back().end()) {
+
+								const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+								dests.back().emplace_back(reg);
+
+								/* Append this. */
+								if (node->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL)
+									dests.back().emplace_back(reg + 1u);
+							}
+
+							break;
+						}
+
 					}
 
-					default: {
+					/* Append scope */
+					if (node->lex->type == lexer_dec::inst_type::branch_condition) {
 
-						/* Append source. */
-						if (node->lex->has_operand_expr<lexer_dec::operand_types::source>()) {
+						const auto jmp_addr = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr; 
 
-							const auto regz = node->lex->operand_expr<lexer_dec::operand_types::source>();
-
-							for (const auto& operand : regz) {
-
-								/* Append unused reg. */
-								if (std::find(dests.begin(), dests.end(), operand->reg) == dests.end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end())
-									source_no_dest.emplace_back(operand->reg);
-
-							}
-
+						if (jmp_addr > node->address) {
+							addr_scopes.emplace_back(jmp_addr);
+							dests.emplace_back(dests.back ());
 						}
 
-
-						/* Append reg. */
-						if (node->lex->has_operand_expr<lexer_dec::operand_types::reg>()) {
-
-							const auto regz = node->lex->operand_expr<lexer_dec::operand_types::reg>();
-
-							for (const auto& operand : regz) {
-
-								/* Append unused reg. */
-								if (std::find(dests.begin(), dests.end(), operand->reg) == dests.end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end())
-									source_no_dest.emplace_back(operand->reg);
-
-							}
-
-						}
-
-
-						/* Append dest. */
-						if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.begin(), dests.end(), node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg) == dests.end()) {
-
-							const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-
-							dests.emplace_back(reg);
-
-							/* Append this. */
-							if (node->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL)
-								dests.emplace_back(reg + 1u);
-						}
-
-						break;
 					}
 
 				}
 
+				/* Remove dupes */
+				std::sort(source_no_dest.begin(), source_no_dest.end());
+				source_no_dest.erase(std::unique(source_no_dest.begin(), source_no_dest.end()), source_no_dest.end());
+
+
+				/* Set args */
+				for (const auto i : source_no_dest) {
+					std::string name = "";
+					emitter::locvars::locvar_name(name, ast->transpiler_config->arg_prefix, i, ast->transpiler_config->arg_suffix_char);
+					proto->arg_regs.emplace_back(std::make_pair(i, name));
+				}
+				
+				if (ast->main_block->has_next_inst<LuauOpcode::LOP_GETVARARGS>(0u)) {
+					proto->arg_regs.emplace_back(std::make_pair(-1, "..."));
+				}
+
 			}
-			
+
 			return;
 		}
 
@@ -1171,13 +1293,24 @@ namespace ast_funcs {
 				routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() + node->count_expr <ast_dec::expr_type::condition_concat_start>();
 				routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() + node->count_expr <ast_dec::expr_type::concat_routine_end>();
 
-
+				/* Mutate local closure to newclosure. */
+				if (node->has_expr(ast_dec::expr_type::closure_local) && routine) {
+					node->replace_next<ast_dec::expr_type::closure_local, ast_dec::expr_type::closure_newclosure>();
+					ast->protos[node->closure_extra.closure_idx]->closure_type = ast_dec::closure_type::newclosure;
+				}
+			
 				/* Not inside routine and dest. */
 				if (!routine && node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
 					
 					auto bad = false; /* Failed any checks. (Can also be used if node is already set. */
 					const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front ();
 
+					/* Fix name */
+					if (node->has_expr(ast_dec::expr_type::closure_local)) {
+						std::string name = "";
+						emitter::locvars::locvar_name(name, ast->transpiler_config->function_prefix, target, ast->transpiler_config->function_suffix_char);
+						ast->protos[node->closure_extra.closure_idx]->closure_name = name;
+					}
 
 					/* Capture with source garunteeds locvar so check there. */
 					const auto captures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CAPTURE>(true));
@@ -1234,11 +1367,29 @@ namespace ast_funcs {
 						node_var(node->lex->dissassembly->operands.front());
 						continue;
 					}
+				
+					/* Mutate local closure to newclosure. */
+					if (node->has_expr(ast_dec::expr_type::closure_local)) {
+						
+						if (dest->reg != target) {
+							node->replace_next<ast_dec::expr_type::closure_local, ast_dec::expr_type::closure_newclosure>();
+							ast->protos[node->closure_extra.closure_idx]->closure_type = ast_dec::closure_type::newclosure;
+						}
+						else {
+							std::string name = "";
+							emitter::locvars::locvar_name(name, ast->transpiler_config->function_prefix, target++, ast->transpiler_config->function_suffix_char);
+							ast->protos[node->closure_extra.closure_idx]->closure_name = name;
+						}
 
-					/* TEST */
-					if (dest->reg == target) {
-						node_var(node->lex->dissassembly->operands.front());
-						continue;
+
+					}
+					else {
+
+						if (dest->reg == target) {
+							node_var(node->lex->dissassembly->operands.front());
+							continue;
+						}
+
 					}
 
 				}
@@ -1256,7 +1407,7 @@ namespace ast_funcs {
 	void init_ast(std::shared_ptr<ast_dec::ast>& ast) {
 
 		#if display_analysis
-				std::printf("[AST] Setting arguments.\n");
+				std::printf("[AST] Setting arguments for children proto.\n");
 		#endif
 		ast_funcs::arguments::set(ast);
 
@@ -1294,6 +1445,11 @@ namespace ast_funcs {
 				std::printf("[AST] Setting locvars.\n");
 		#endif
 		ast_funcs::locvars::set_lv(ast, ast->arg_regs.size());
+
+		#if display_analysis
+				std::printf("[AST] Setting upvalues.\n");
+		#endif
+		ast_funcs::upvalues::set(ast);
 
 		return;
 	}
@@ -1560,7 +1716,9 @@ namespace blocks {
 
 }
 
-std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
+std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto, const std::shared_ptr<transpiler_data::transpiler_config>& config) {
+
+	std::uintptr_t pc = 0u;
 
 	/* Current ast. */
 	auto retn = std::make_shared<ast>();
@@ -1569,46 +1727,93 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto) {
 	/* Set closure and proto. */
 	retn->closure_type = closure_type::main;
 	retn->p = proto;
-	
+	retn->transpiler_config = config;
+
+	#if display_analysis
+		std::printf("[AST] Initing main dissassembly.\n");
+	#endif
+	/* Set current proto dissasembly. */
+	for (auto i = 0u; i < unsigned(proto->sizecode);) {
+		auto dism = std::make_shared<LuaU_dissassembler::dissassembly>();
+		LuaU_dissassembler::dissassemble(pc, proto, dism);
+		retn->dissassembly.insert(std::make_pair(pc, dism));
+		pc += dism->len;
+		i += dism->len;
+	}
+
+	/* Set current proto blocks. */
+	#if display_analysis
+		std::printf("[AST] Initing main blocks.\n");
+	#endif
+	blocks::set_blocks(retn);
+
+
 	do {
 
-
-		std::uintptr_t pc = 0u;
 		auto current_proto = protos_ast.front();
+		auto ast_id = current_proto->ast_id;
 
 		#if display_analysis
-			std::printf("[AST] Initing proto [%llu].\n", reinterpret_cast<std::uintptr_t>(current_proto.get()));
+				std::printf("[AST] Initing proto [%llu].\n", reinterpret_cast<std::uintptr_t>(current_proto.get()));
 		#endif
 
-		/* Set current proto dissasembly. */
-		for (auto i = 0u; i < unsigned (current_proto->p->sizecode);) {
-			auto dism = std::make_shared<LuaU_dissassembler::dissassembly>();
-			LuaU_dissassembler::dissassemble(pc, current_proto->p, dism);
-			current_proto->dissassembly.insert(std::make_pair(pc, dism));
-			pc += dism->len;
-			i += dism->len;
-		}
-
-		/* Set current proto blocks. */
-		#if display_analysis
-				std::printf("[AST] Initing blocks.\n");
-		#endif
-		blocks::set_blocks(current_proto);
 
 		/* Gen children proto to analyze. */
 		#if display_analysis
-				std::printf("[AST] Setting proto information.\n");
+				std::printf("[AST] Setting child proto information.\n");
 		#endif
 		for (auto i = 0u; i < unsigned (current_proto->p->sizep); ++i) {
 			
 			/* Make child ast and add proto and get type. */
 			auto child_ast = std::make_shared<ast>();
 			child_ast->p = current_proto->p->p[i];
+			child_ast->transpiler_config = config;
+
 			current_proto->protos.emplace_back(child_ast);
 			ast_funcs::proto::set_closure_info(current_proto, i);
 
 			/* Add child to get analyzed. */
 			protos_ast.emplace_back(child_ast);
+
+			child_ast->ast_id = ++ast_id;
+		}
+
+		/* Set dism of child proto. */
+		#if display_analysis
+				std::printf("[AST] Initing child protos.\n");
+		#endif
+		for (auto& child : current_proto->protos) {
+
+			#if display_analysis
+					std::printf("[AST] Initing child proto [%llu].\n", reinterpret_cast<std::uintptr_t>(child.get()));
+			#endif
+
+			if (child->dissassembly.empty()) {
+
+				#if display_analysis
+						std::printf("[AST] Setting child dissasembly.\n");
+				#endif
+
+				pc = 0u;
+
+				/* Set current proto dissasembly. */
+				for (auto i = 0u; i < unsigned(child->p->sizecode);) {
+					auto dism = std::make_shared<LuaU_dissassembler::dissassembly>();
+					LuaU_dissassembler::dissassemble(pc, child->p, dism);
+					child->dissassembly.insert(std::make_pair(pc, dism));
+					pc += dism->len;
+					i += dism->len;
+				}
+
+			}
+
+			/* Set child proto blocks. */
+			if (child->main_block == nullptr || child->main_block->nodes.empty()) {
+				#if display_analysis
+						std::printf("[AST] Initing child proto main blocks.\n");
+				#endif
+				blocks::set_blocks(child);
+			}
 
 		}
 

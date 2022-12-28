@@ -1,3 +1,6 @@
+#include "../luau-master/VM/include/lua.h"
+#include "../luau-master/Compiler/include/luacode.h"
+#include "../luau-master/VM/include/lualib.h"
 #include "../luau-master/VM/src/lstate.h"
 #include "Dissassembler.hpp"
 #include <iostream>
@@ -7,7 +10,7 @@ enum set_action : std::uint8_t {
 };
 
 template <set_action n>
-void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const TValue* k, const op_table::optable op_table) {
+void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const Proto* p, const op_table::optable op_table) {
 	
 	switch (n) {
 
@@ -700,11 +703,11 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 						const auto id3 = (brco > 2) ? std::int32_t(source) & 1023 : -1;
 
 						if (id1 >= 0) 
-							current_operand->k_value += gco2ts(k[id1].value.gc)->data;
+							current_operand->k_value += gco2ts(p->k[id1].value.gc)->data;
 						if (id2 >= 0)
-							current_operand->k_value += std::string (".") + std::string(gco2ts(k[id2].value.gc)->data);
+							current_operand->k_value += std::string (".") + std::string(gco2ts(p->k[id2].value.gc)->data);
 						if (id3 >= 0)
-							current_operand->k_value += std::string(".") + std::string(gco2ts(k[id3].value.gc)->data);
+							current_operand->k_value += std::string(".") + std::string(gco2ts(p->k[id3].value.gc)->data);
 
 						buffer->data += current_operand->k_value + split;
 						current_operand->import_idx = id3;
@@ -714,7 +717,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 
 					case op_table::type::k_value_nstr: {
 
-						const auto kv = k[operand_value];
+						const auto kv = p->k[operand_value];
 						current_operand->k_value =  std::string(kv.value.gc->ts.data);
 
 						buffer->data += current_operand->k_value + split;
@@ -726,7 +729,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 
 					case op_table::type::k_idx: {
 						
-						const auto kv = k[operand_value];
+						const auto kv = p->k[operand_value];
 						
 						switch (kv.tt) {
 
@@ -759,7 +762,21 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const T
 							}
 
 							case LUA_TFUNCTION: {
-								current_operand->k_value = "closure_" + std::to_string(operand_value);
+
+								/* Fix for dupclosure. */
+								if (buffer->op == LuauOpcode::LOP_DUPCLOSURE) {
+									
+									for (auto i = 0u; i < p->sizep ; i++)
+										if (p->p[i] == gco2cl(kv.value.gc)->l.p) {
+											operand_value = i;
+											std::cout << "NEW " << i << std::endl;
+											break;
+										}
+
+								}
+								
+								current_operand->k_value = "closure_" + std::to_string(operand_value);		
+
 								break;
 							}
 
@@ -803,7 +820,7 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 
 	/* Get intruction and set instruction. */
 	const auto code = op_table::op_table[decode_opcode(p->code[pc])];
-	set_data<set_action::instruction>(buffer, p->k, code);
+	set_data<set_action::instruction>(buffer, p, code);
 
 	/* Set code. */
 	const auto start_pc = p->code + pc;
@@ -815,7 +832,7 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 
 	/* Init data. */
 	buffer->data = std::string (buffer->mnenomic) + ' ';
-	set_data<set_action::operands>(buffer, p->k, code);
+	set_data<set_action::operands>(buffer, p, code);
 
 	/* Calulate lenght. */
 	buffer->len = (std::uint8_t(reinterpret_cast<const std::uintptr_t>(buffer->code) - reinterpret_cast<const std::uintptr_t>(start_pc)) / sizeof(Instruction)) + 1u;

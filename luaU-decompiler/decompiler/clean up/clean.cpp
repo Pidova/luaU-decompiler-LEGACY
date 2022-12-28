@@ -85,8 +85,10 @@ void clean_up::buetify(std::string& decom) {
 				multiplier = 0;
 
 			/* Newclosures look weird so reverse it. */
-			if (!decom.compare(pos + 1u, (sizeof("(function") - 1u), "(function"))
+			if (!decom.compare(pos + 1u, (sizeof("(function") - 1u), "(function")) {
 				decom.erase(pos, 1u);
+				continue;
+			}
 
 
 			/* Format */
