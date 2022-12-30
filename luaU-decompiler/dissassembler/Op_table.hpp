@@ -123,6 +123,7 @@ namespace op_table {
 		capture_idx,
 		import_idx,
 		k_value_nstr,
+		k_idx_pp, /* K idx p->p relative (Valid for function K). */
 		val_dec /* Value dec by 1. */
 	};
 
@@ -215,14 +216,14 @@ namespace op_table {
 		{ LuauOpcode::LOP_FORNLOOP, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::jmp } }, // 39
 		{ LuauOpcode::LOP_FORGLOOP, { op_table::operands::A,  op_table::operands::D, op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp, op_table::type::val } }, // 3A
 	    
-		{ LuauOpcode::LOP_FORGPREP_INEXT, { op_table::operands::A }, { op_table::type::jmp } }, // 3B
+		{ LuauOpcode::LOP_FORGPREP_INEXT, { op_table::operands::A }, { op_table::type::reg } }, // 3B
 		{ LuauOpcode::LOP_DEP_FORGLOOP_INEXT, { }, { } }, // 3C : Depricated
 
-		{ LuauOpcode::LOP_FORGPREP_NEXT, { op_table::operands::A }, { op_table::type::jmp } }, // 3D
+		{ LuauOpcode::LOP_FORGPREP_NEXT, { op_table::operands::A }, { op_table::type::reg } }, // 3D
 		{ LuauOpcode::LOP_DEP_FORGLOOP_NEXT, { }, { } }, // 3E : Depricated
 
 		{ LuauOpcode::LOP_GETVARARGS, { op_table::operands::A,  op_table::operands::B }, { op_table::type::reg, op_table::type::val } }, // 3F
-		{ LuauOpcode::LOP_DUPCLOSURE, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::k_idx } }, // 40
+		{ LuauOpcode::LOP_DUPCLOSURE, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::k_idx_pp } }, // 40
 		{ LuauOpcode::LOP_PREPVARARGS, { op_table::operands::A }, { op_table::type::val } }, // 41
 
 		{ LuauOpcode::LOP_LOADKX, { op_table::operands::A,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::k_idx } }, // 42

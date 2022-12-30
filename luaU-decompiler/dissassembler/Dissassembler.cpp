@@ -88,13 +88,13 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 
 				case LuauOpcode::LOP_FORGPREP_INEXT: {
 					buffer->mnenomic = "forgloop_inext";
-					buffer->hint = "For loop with (i)next (Depricated).";
+					buffer->hint = "For loop with (i)next.";
 					break;
 				}
 
 				case LuauOpcode::LOP_FORGPREP_NEXT: {
-					buffer->mnenomic = "forgloop_next";
-					buffer->hint = "For loop with next (Depricated).";
+					buffer->mnenomic = "forgprep_next";
+					buffer->hint = "For loop prep with next.";
 					break;
 				}
 
@@ -727,6 +727,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 						break;
 					}
 
+					case op_table::type::k_idx_pp:
 					case op_table::type::k_idx: {
 						
 						const auto kv = p->k[operand_value];
@@ -763,20 +764,17 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 
 							case LUA_TFUNCTION: {
 
-								/* Fix for dupclosure. */
-								if (buffer->op == LuauOpcode::LOP_DUPCLOSURE) {
+								if (type == op_table::type::k_idx_pp) {
 									
 									for (auto i = 0u; i < p->sizep ; i++)
 										if (p->p[i] == gco2cl(kv.value.gc)->l.p) {
 											operand_value = i;
-											std::cout << "NEW " << i << std::endl;
 											break;
 										}
 
 								}
 								
-								current_operand->k_value = "closure_" + std::to_string(operand_value);		
-
+								current_operand->k_value = "closure_" + std::to_string(operand_value);
 								break;
 							}
 

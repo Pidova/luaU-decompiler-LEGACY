@@ -1,6 +1,6 @@
 
 /* Transpiler */
-#define TANSPILER_DEBUG true
+#define TANSPILER_DEBUG false
 
 #if TANSPILER_DEBUG
 	#define TANSPILER_DEBUG_OPERANDS true /* Needs to be enabled to allow comment metrics. */
@@ -13,3 +13,7 @@
 	#define TANSPILER_DEBUG_PREDECOMPILATION false 
 	#define TANSPILER_DEBUG_POSTDECOMPILATION false
 #endif
+
+
+/* Universal */
+#define debug_functions true /* Enable debug functions */

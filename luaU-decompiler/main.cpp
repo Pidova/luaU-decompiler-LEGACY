@@ -7,7 +7,7 @@
 
 std::int32_t main() {
 
-	const char* const code = "local b = aa(); print ((function(x, y) return (x + y + b) end)(1,2)(1,2));";
+	const char* const code = "for i, v in pairs(1,2) do local function d () i = 100; v = 100; end d() end";
 
 	/*
 	repeat \

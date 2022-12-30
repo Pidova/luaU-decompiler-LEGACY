@@ -663,7 +663,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						const auto start = (end + 2u);
 
 						/* Write start end etc and finalize. */
-						const auto iterate = config->iterator_prefix + std::to_string(suffixes::iterator_prefix_suffix++);
+						const auto iterate = (node->loop_extra.iteration_names.find(start) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[start] : config->iterator_prefix + std::to_string(suffixes::iterator_prefix_suffix++);
 						auto iteration = regs.back()[start]->data + ", " + regs.back()[end]->data;
 
 						/* Set reg as var. */

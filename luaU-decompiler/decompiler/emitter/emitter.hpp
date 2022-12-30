@@ -5,9 +5,8 @@
 /*
 
 	Anything that needs to be emitted will be passed through here.
-
+	Append
 */
-
 namespace emitter {
 
 	/* Compare emitting. */
@@ -49,10 +48,22 @@ namespace emitter {
 	/* Function */
 	void function(std::string& dest, const std::string& type, const std::string& name, const std::string& args, const std::string data, const std::string& close);
 
-	namespace locvars {
+	/* Emits locvar name too dest with prefix and suffix and suffix chars to turn suffix digits into english characters. */
+	void locvar_name(std::string& dest, const std::string& prefix, const std::size_t suffix, const bool suffix_chars);
+
+	/* Overides dest. */
+	namespace override {
 
 		/* Emits locvar name too dest with prefix and suffix and suffix chars to turn suffix digits into english characters. */
 		void locvar_name(std::string& dest, const std::string& prefix, const std::size_t suffix, const bool suffix_chars);
+
+	}
+
+	/* Create new string instance and emit too it. */
+	namespace create {
+
+		/* Emits locvar name too dest with prefix and suffix and suffix chars to turn suffix digits into english characters. */
+		std::string locvar_name(const std::string& prefix, const std::size_t suffix, const bool suffix_chars);
 
 	}
 

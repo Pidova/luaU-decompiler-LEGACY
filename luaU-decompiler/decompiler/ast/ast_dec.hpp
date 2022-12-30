@@ -9,7 +9,7 @@
 #include "../../dissassembler/Dissassembler.hpp"
 #include "../lexer/lexer_dec.hpp"
 #include "../transpiler/transpiler_data.hpp"
-
+#include "../debug.hpp"
 
 /*
 
@@ -38,6 +38,7 @@ namespace ast_dec {
 		for_iv_start, /* for i,v in pairs ({ 1 }) do [ALL] */
 		for_start, /* for ?? in ?? do [ALL] */
 		for_n_start, /* for ?? in ?? do (numeral) [ALL] */
+		for_prep, /* For preperation instruction [AST] */
 
 		repeat_, /* repeat [ALL] */
 		while_, /* while () follows condition(not jumpback). [ALL] */
@@ -106,8 +107,8 @@ namespace ast_dec {
 		struct dest_loc {
 			bool set_prefix = false; /* Used in transpiler to set suffix to local variable name. */
 			bool is_dest_loc = false; /* Turns dest to local. */
-			bool is_upvalue = false; /* locvar is upvalue? */
-			std::string name = ""; /* Locvar name (Suffix) */
+			bool is_upvalue = false; /* locvar is upvalue? (Will use name as the variable automatically overrides all conditions) */
+			std::string name = ""; /* Locvar name (Suffix, actuall variable name if is_upvalue is true, closure names wont get set here)  */
 		} dest_loc;
 
 		/* Extra information for branch. */
@@ -123,15 +124,21 @@ namespace ast_dec {
 		/* Extra information for loops. */
 		struct loop_extra {
 			std::shared_ptr<ast_dec::node> end_node = nullptr; /* Used for prologue and epilogue of loop. */
+			std::uint16_t start_reg = 0u; /* Start register (Format) */
+			std::uint16_t end_reg = 0u; /* End register (Format) */
+			std::unordered_map<std::uint16_t /* Reg */, std::string /* Name */> iteration_names; /* Override iteration variable names. */
 		} loop_extra;
 
 		/* Extra information for closure. */
 		struct closure_extra {
-			std::size_t closure_idx = 0u;
+			std::size_t closure_idx = 0u; /* Index of relating closure too ast->proto. */
 		} closure_extra;
 
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */
-		
+		std::shared_ptr<node> sub_node = nullptr; /* When a move instruction is hit this will be the source node(mutable by for loop scopes(preps or jumptoo if no prep)). */
+		std::vector<std::shared_ptr<node>> dest_nodes; /* Where dests where intialy initialized(mutable by for loop scopes).  */
+
+
 		/* Node functions */
 
 		/* Appends expr */
@@ -201,6 +208,22 @@ namespace ast_dec {
 			return count;
 		}
 
+		/* Gets final sub node. */
+		std::shared_ptr<node> get_sub_node() {
+
+			auto sub = this->sub_node;
+
+			while (sub != nullptr) 
+				if (sub->sub_node != nullptr && sub->sub_node != sub) {
+					sub = sub->sub_node;
+				}
+				else {
+					break;
+				}
+			
+			return sub;
+		}
+
 		/* Turns expr pair into a string. */
 		std::string expr_str(const std::pair <expr_type, std::size_t>& p) {
 
@@ -216,6 +239,7 @@ namespace ast_dec {
 				case expr_type::for_iv_start: { retn += "for_iv_start";  break; }
 				case expr_type::for_n_start: { retn += "for_n_start";  break; }
 				case expr_type::for_start: { retn += "for_start";  break; }
+				case expr_type::for_prep: { retn += "for_prep"; break; }
 
 				case expr_type::repeat_: { retn += "repeat";  break; }
 				case expr_type::while_: { retn += "while";  break; }
@@ -272,6 +296,30 @@ namespace ast_dec {
 
 			return retn;
 		}
+	
+		/* Debug */
+
+		#if debug_functions
+		
+			/* Prints dissassembly */
+			void debug_print_dissassembly(const char* const state = " ") {
+				std::printf("[Node-Debug(%s)] %llu %s\n", state, this->lex->dissassembly->addr, this->lex->dissassembly->data.c_str());
+				return;
+			}
+
+			void debug_print_all(const char* const state = " ") {
+				std::printf("[Node-Debug(%s)] %llu %s ", state, this->lex->dissassembly->addr, this->lex->dissassembly->data.c_str());
+				for (const auto& i : this->expr)
+					std::printf("%s", this->expr_str(i).c_str());
+				std::printf("\n");
+				return;
+			}
+
+			std::string debug_get_dissassembly() {
+				return std::to_string (this->lex->dissassembly->addr) + " " + this->lex->dissassembly->data;
+			}
+
+		#endif
 
 	};
 	
@@ -1177,6 +1225,27 @@ namespace ast_dec {
 			/* Nothing. */
 			if (!retn.size())
 				throw std::runtime_error("Returning no data for visit_range.");
+
+			return retn;
+		}
+
+		/* Visits nodes that jump too address given with type (Must have memaddr operand) */
+		template<lexer_dec::inst_type type>
+		std::vector<std::shared_ptr<node>> visit_type_goto(const std::uintptr_t addr) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			const auto all = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(this->visit_type<type>(true));
+
+			for (const std::shared_ptr<ast_dec::node>& i : all) {
+
+				const auto mems = i->lex->operand_expr<lexer_dec::operand_types::memaddr>();
+				for (const auto& m : mems) 
+					if (m->jmp_addr == addr) {
+						retn.emplace_back(i);
+						break;
+					}
+				
+			}
 
 			return retn;
 		}
