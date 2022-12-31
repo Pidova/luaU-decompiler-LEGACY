@@ -345,4 +345,7 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="compile_me.lua" />
+  </ItemGroup>
 </Project>

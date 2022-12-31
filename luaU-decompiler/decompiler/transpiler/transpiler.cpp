@@ -569,11 +569,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						const auto begin = node->loop_extra.end_node->lex->dissassembly->operands.front()->reg;
 
 						/* K */
-						const auto K = config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
+						const auto K = (node->loop_extra.iteration_names.find(begin + reserved) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[begin + reserved] : config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
 						regs.back()[begin + reserved]->set<registers::type::var>(K);
 
 						/* V */
-						const auto V = config->loop_variable_prefix_2 + std::to_string(suffixes::loop_variable_prefix_2_suffix++);
+						const auto V = (node->loop_extra.iteration_names.find(begin + reserved + 1u) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[begin + reserved + 1u] : config->loop_variable_prefix_2 + std::to_string(suffixes::loop_variable_prefix_2_suffix++);
 						regs.back()[begin + reserved + 1u]->set<registers::type::var>(V);
 						
 						/* Compile iter */
@@ -615,7 +615,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						for (auto i = 0u; i < count; ++i) {
 
 							/* Make iterating variable name and compile it. */
-							const auto name = config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
+							const auto name = (node->loop_extra.iteration_names.find(i + begin + reserved) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[i + begin + reserved] : config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
 							compiled_vars += (name + (((i + 1u) == count) ? "" : ", "));
 
 							regs.back()[i + begin + reserved]->set<registers::type::var>(name);
@@ -1581,7 +1581,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 					}
 
-					emitter::str(decompilation, "return " + compiled + ";\n");
+					/* Add space */
+					if (!compiled.empty())
+						compiled = " " + compiled;
+
+					emitter::str(decompilation, "return" + compiled + ";\n");
 
 				}
 
@@ -1592,10 +1596,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 			/* Set/Get global */
 			case LuauOpcode::LOP_SETGLOBAL: {
 
-				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg];
+				const auto dest = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
 
-				emitter::vararg_equal(decompilation, dest->data, source);
+				emitter::vararg_equal(decompilation, dest, source->data);
 
 				break;
 			}
@@ -2102,6 +2106,7 @@ void transpile_ast(const std::shared_ptr<ast_dec::ast>& main_ast, const std::sha
 
 	registers::reg_scope main_scope;
 	std::vector<registers::reg_scope> scopes = { main_scope };
+
 
 	/* Set args for registers. */
 	auto reg = 0u;

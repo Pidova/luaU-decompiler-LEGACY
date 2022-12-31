@@ -4,42 +4,14 @@
 #include "decompiler/decompiler.hpp"
 #include "decompiler/transpiler/transpiler.hpp"
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
-std::int32_t main() {
+/* Throw any string as argument to compile */
+std::string compile(const char* const code) {
 
-	const char* const code = "for i, v in pairs(1,2) do local function d () i = 100; v = 100; end d() end";
-
-	/*
-	repeat \
-			if(a) then  break; elseif (ai) then break; end;\
-		print (1);\
-		until(((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)) or ((ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa) and (ame or ai or ia or ame or ai or ia or aa or ame or ai or ia or aa or ame or ai or ia or aa)));\
-		print (1);\
-
-	repeat \
-				local a = peen(); \
-					while (wowo and iaia and iaai and iao and aoioa) do \
-						a = 1000;\
-						if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end\
-						printf (AA)\
-					end\
-					if (cmp1 == cmp2) then \
-						 print (119); \
-						 break; \
-					end; \
-				if (a or a == 100) then break; end;\
-				if ((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak)) then break; end \
-				a = 1000; \
-		    until((oaao and aoaoap == ajajk and ioaoa == aoak) and (oaao and aoaoap == ajajk and ioaoa == aoak) or (oaao and aoaoap == ajajk and ioaoa == aoak));\
-		print(111);\
-		oopp[\"g\"] = all; \
-		print ({a[10]}); oopp[aaa] = all;
-	*/
-	/* Compile. */
 	std::size_t size = 0u;
 	const auto compilation = luau_compile(code, std::strlen(code), NULL, &size);
-
-
 	const auto state = luaL_newstate();
 
 	/* Load see if theres something wrong. */
@@ -48,7 +20,26 @@ std::int32_t main() {
 
 	/* Get main proto. */
 	const auto proto = gco2cl((state->top - 1)->value.gc)->l.p;
-	std::cout << luaU_decompiler::decompile(proto, std::make_shared<transpiler_data::transpiler_config>()) << std::endl;
+	return luaU_decompiler::decompile(proto, std::make_shared<transpiler_data::transpiler_config>());
+}
+
+std::int32_t main() {
+
+
+	/* Read from compile_me.lua */
+	std::stringstream code;
+	std::ifstream file("compile_me.lua");
+
+	if (file.is_open()) {
+		std::string line = "";
+		while (std::getline(file, line)) {
+			code << line << std::endl;
+		}
+		file.close();
+	}
+
+	/* Compile. */
+	std::cout << compile(code.str().c_str()) << std::endl;
 	std::cin.get();
 	return 0;
 }

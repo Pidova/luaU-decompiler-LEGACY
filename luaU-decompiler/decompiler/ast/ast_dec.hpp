@@ -135,8 +135,11 @@ namespace ast_dec {
 		} closure_extra;
 
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */
+		
+		/* Special */
 		std::shared_ptr<node> sub_node = nullptr; /* When a move instruction is hit this will be the source node(mutable by for loop scopes(preps or jumptoo if no prep)). */
 		std::vector<std::shared_ptr<node>> dest_nodes; /* Where dests where intialy initialized(mutable by for loop scopes).  */
+		std::vector<std::shared_ptr<node>> source_nodes; /* Where sources where intialy initialized(mutable by for loop scopes).  */
 
 
 		/* Node functions */
@@ -654,7 +657,11 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			throw std::runtime_error("Returning no data for visit_addr.");
+			#if display_warnings
+					std::printf("[WARNING] Nullptr returning for previous addr.");
+			#endif
+
+			return nullptr;
 		}
 
 
@@ -857,6 +864,56 @@ namespace ast_dec {
 			return retn;
 		}
 
+		/* Visits rest of nodes for all blocks. (Includes current) */
+		std::vector<std::shared_ptr<node>> visit_rest_curr(const std::uintptr_t on_address) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			std::vector<block*> scopes = { this };
+
+			do {
+
+				auto current_block = scopes.front();
+
+				/* Iterate through block nodes and find given instruction. */
+				for (const auto& i : current_block->nodes) {
+
+					if (i->address >= on_address)
+						retn.emplace_back(i);
+
+				}
+
+				/* Add nested blocks. */
+				for (const auto& i : current_block->branches)
+					scopes.emplace_back(i.get());
+
+				/* Remove current. */
+				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+
+				this->remove_dupes(scopes); /* Remove duplicates. */
+				this->remove_dupes(retn);
+				this->sort_addr(retn); /* Sort retn by address. */
+
+			} while (scopes.size());
+
+			if (!retn.size())
+				throw std::runtime_error("Returning no data for visit_addr.");
+
+			return retn;
+		}
+
+		/* Visits rest of nodes for all blocks backwards with start being start passed. (Includes current) */
+		std::vector<std::shared_ptr<node>> visit_rest_curr_flip(const std::uintptr_t start) {
+
+			std::vector<std::shared_ptr<node>> vect = { this->visit_addr(start) };
+
+			auto prev = this->visit_previous_addr(start);	
+			while (prev != nullptr) {
+				vect.emplace_back(prev);
+				prev = this->visit_previous_addr(prev->address);
+			}
+
+			return vect;
+		}
 
 		/* Visits relative node to op being target and args being addatives till op hits = dec and args = inc(singular) and its 0.  */
 		template<LuauOpcode op>
@@ -1226,6 +1283,22 @@ namespace ast_dec {
 			if (!retn.size())
 				throw std::runtime_error("Returning no data for visit_range.");
 
+			return retn;
+		}
+
+		/* Visits rest of nodes that have either element in expr vector passed from start address (includes current). */
+		std::vector<std::shared_ptr<node>> visit_either_expr_vector_addr(const std::uintptr_t start, std::vector<ast_dec::expr_type> exprs) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			
+			const auto all = this->visit_rest_curr(start);
+			for (const auto& i : all) 
+				for (const auto expr : exprs) 
+					if (i->has_expr(expr)) {
+						retn.emplace_back(i);
+						break;
+					}
+				
 			return retn;
 		}
 

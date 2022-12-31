@@ -246,6 +246,13 @@
     <ClInclude Include="luau-master\VM\src\ludata.h" />
     <ClInclude Include="luau-master\VM\src\lvm.h" />
   </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="compile_me.lua">
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
