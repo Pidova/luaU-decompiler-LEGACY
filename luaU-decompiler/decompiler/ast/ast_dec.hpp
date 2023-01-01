@@ -35,13 +35,20 @@ namespace ast_dec {
 		arith, /* r1 += r1 + r1 [AST] */
 		arithK, /* r1 += r1 + 1 [AST] */
 
+		statement_begin, /* Begin statement line. [AST] */
+		statement_end, /* End statement line. [AST] */
+
 		for_iv_start, /* for i,v in pairs ({ 1 }) do [ALL] */
+		for_iv_end, /* For(i,v) end [AST] */
 		for_start, /* for ?? in ?? do [ALL] */
+		for_end, /* For end [AST] */
 		for_n_start, /* for ?? in ?? do (numeral) [ALL] */
+		for_n_end, /* For(n) end [AST] */
 		for_prep, /* For preperation instruction [AST] */
 
 		repeat_, /* repeat [ALL] */
 		while_, /* while () follows condition(not jumpback). [ALL] */
+		while_end, /* while () end [AST] */
 		until_, /* until () follows condition(typically jumpback). [ALL] */
 		break_, /* break [ALL] */
 		scope_end, /* scope end (generic) [ALL] */
@@ -144,9 +151,45 @@ namespace ast_dec {
 
 		/* Node functions */
 
+		/* Vinellifys node */
+		void reset_node() {
+
+			/* Expr */
+			this->expr.clear();
+			this->add_expr<ast_dec::expr_type::lex>(1u);
+
+			/* Dest */
+			this->dest_loc.set_prefix = false;
+			this->dest_loc.is_dest_loc = false;
+			this->dest_loc.is_upvalue = false;
+			this->dest_loc.name.clear();
+
+			/* Branch */
+			this->branch_extra.opposite = false;
+
+			/* Table */
+			this->table_extra.end_table = 0u;
+
+			/* Loop */
+			this->loop_extra.end_node = nullptr;
+			this->loop_extra.start_reg = 0u;
+			this->loop_extra.end_reg = 0u;
+			this->loop_extra.iteration_names.clear();
+
+			/* Closure */
+			this->closure_extra.closure_idx = 0u;
+
+			/* Special */
+			this->sub_node = nullptr;
+			this->dest_nodes.clear();
+			this->source_nodes.clear();
+
+			return;
+		}
+
 		/* Appends expr */
 		template <expr_type type>
-		void add_expr(const std::size_t count = 1u, const element ele = element::back) {
+		void add_expr(const std::size_t count = 1u, const element ele = element::back, const std::size_t pos = 0u /* Optional positon overrides ele. */) {
 
 			/* Replace only lex with type. */
 			if (this->expr.size() && this->expr.front().first == ast_dec::expr_type::lex /* Used as place holder. */) {
@@ -157,16 +200,97 @@ namespace ast_dec {
 				
 				const auto pair = std::make_pair(type, count);
 
-				if (ele == element::back) {
-					this->expr.emplace_back(pair);
+				if (pos) {
+					this->expr.insert(this->expr.begin() + pos, pair);
 				}
 				else {
-					this->expr.insert(this->expr.begin(), pair);
+
+					if (ele == element::back) {
+						this->expr.emplace_back(pair);
+					}
+					else {
+						this->expr.insert(this->expr.begin(), pair);
+					}
+
 				}
 
 			}
 				
 			return;
+		}
+
+		/* Appends with nonconsant type. */
+		void add_expr_tt(const expr_type type, const std::size_t count = 1u, const element ele = element::back, const std::size_t pos = 0u /* Optional positon overrides ele. */) {
+
+			/* Replace only lex with type. */
+			if (this->expr.size() && this->expr.front().first == ast_dec::expr_type::lex /* Used as place holder. */) {
+				this->expr.front().first = type;
+				this->expr.front().second = count;
+			}
+			else {
+
+				const auto pair = std::make_pair(type, count);
+
+				if (pos) {
+					this->expr.insert(this->expr.begin() + pos, pair);
+				}
+				else {
+
+					if (ele == element::back) {
+						this->expr.emplace_back(pair);
+					}
+					else {
+						this->expr.insert(this->expr.begin(), pair);
+					}
+
+				}
+
+			}
+
+			return;
+		}
+
+		/* Remove expr */
+		template <expr_type type>
+		void remove_expr() {
+
+			/* Replace only lex with type. */
+			if (this->expr.size() == 1u) {
+				this->expr.front().first = ast_dec::expr_type::lex;
+				this->expr.front().second = 1u;
+			}
+			else {
+
+				for (auto i = 0u; i < this->expr.size(); i++) {
+
+					const auto expr = this->expr[i];
+
+					if (expr.first == type) {
+						this->expr.erase(this->expr.begin() + i);
+						break;
+					}
+
+				}
+
+			}
+
+			return;
+		}
+
+		/* Remove expr */
+		template <expr_type type>
+		std::pair <expr_type, std::size_t> get_expr() {
+
+			for (const auto& expr : this->expr)
+				if (expr.first == type) {
+					return expr;
+				}	
+
+			#if display_warnings
+					std::printf("[WARNING] Returning dead expr for get_expr.\n");
+			#endif
+
+			return std::make_pair(expr_type::lex, 1u);
 		}
 
 		/* Adds expression if type isn't a expr. */
@@ -211,6 +335,39 @@ namespace ast_dec {
 			return count;
 		}
 
+		/* Counts expr member total. */
+		template <expr_type type>
+		std::uintptr_t count_expr_member() {
+			std::uintptr_t count = 0u;
+			for (const auto& i : this->expr)
+				if (i.first == type)
+					count++;
+			return count;
+		}
+
+		/* Collapses expr by count. */
+		void collapse_expr() {
+
+			for (auto i = 0u; i < this->expr.size(); i++) {
+
+				auto expr = this->expr[i];
+				if (expr.second > 1u) {
+					
+					while (expr.second > 1u) {
+
+						this->add_expr_tt(expr.first, 1u, ast_dec::element::back, i);
+						expr.second--;
+
+					}
+
+				}
+
+			}
+
+			return;
+		}
+
+		
 		/* Gets final sub node. */
 		std::shared_ptr<node> get_sub_node() {
 
@@ -239,13 +396,20 @@ namespace ast_dec {
 				case expr_type::arith: { retn += "arith";  break; }
 				case expr_type::arithK: { retn += "arithK";  break; }
 
+				case expr_type::statement_begin: { retn += "statement_begin"; break; }
+				case expr_type::statement_end: { retn += "statement_end"; break; }
+
 				case expr_type::for_iv_start: { retn += "for_iv_start";  break; }
-				case expr_type::for_n_start: { retn += "for_n_start";  break; }
+				case expr_type::for_iv_end: { retn += "for_iv_end";  break; }
 				case expr_type::for_start: { retn += "for_start";  break; }
+				case expr_type::for_end: { retn += "for_end";  break; }
+				case expr_type::for_n_start: { retn += "for_n_start";  break; }
+				case expr_type::for_n_end: { retn += "for_n_end";  break; }
 				case expr_type::for_prep: { retn += "for_prep"; break; }
 
 				case expr_type::repeat_: { retn += "repeat";  break; }
 				case expr_type::while_: { retn += "while";  break; }
+				case expr_type::while_end: { retn += "while_end"; break; }
 				case expr_type::until_: { retn += "until";  break; }
 				case expr_type::break_: { retn += "break";  break; }
 				case expr_type::scope_end: { retn += "scope_end";  break; }
@@ -1056,6 +1220,7 @@ namespace ast_dec {
 			throw std::runtime_error("Returning no data for visit_relative_next_expr.");
 		}
 
+
 		/* Visits expr routines (doesn't count for target). */
 		template<expr_type target, expr_type close>
 		std::variant<std::vector<std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>, std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>  visit_expr_routine(const bool all /* All nodes with instruction. */) {
@@ -1113,6 +1278,7 @@ namespace ast_dec {
 			
 			return retn;
 		}
+
 
 
 		/* Visits expr routines in range (includes start and end). */
@@ -1323,6 +1489,27 @@ namespace ast_dec {
 			return retn;
 		}
 
+		/* Visits nodes that jump too address given (Must have memaddr operand) */
+		std::vector<std::shared_ptr<node>> visit_goto(const std::uintptr_t addr) {
+
+			std::vector<std::shared_ptr<node>> retn;
+			
+			const auto all = this->visit_all();
+			for (const std::shared_ptr<ast_dec::node>& i : all) {
+
+				const auto mems = i->lex->operand_expr<lexer_dec::operand_types::memaddr>();
+				for (const auto& m : mems)
+					if (m->jmp_addr == addr) {
+						retn.emplace_back(i);
+						break;
+					}
+
+			}
+
+			return retn;
+		}
+
+
 		private:
 
 			/* Removes scope dupes. */
@@ -1400,7 +1587,7 @@ namespace ast_dec {
 			std::vector<std::shared_ptr <block>> scopes = { this->main_block };
 
 			do {
-
+				
 				auto current_block = scopes.front();
 
 				if (current_block->node_start == addr)
