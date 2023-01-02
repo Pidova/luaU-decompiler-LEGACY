@@ -1506,7 +1506,7 @@ namespace ast_dec {
 			std::vector<std::pair <std::uintptr_t /* Labels address. */, std::vector<std::shared_ptr<node>>> /* Goto addresses */> retn;
 
 			const auto all = this->visit_all();
-			for (const std::shared_ptr<node>& i : all) {
+			for (const auto& i : all) {
 
 				const auto mems = i->lex->operand_expr<lexer_dec::operand_types::memaddr>();
 				for (const auto& m : mems) {
