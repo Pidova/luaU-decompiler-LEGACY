@@ -1161,8 +1161,25 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 				}
 
+				/* Get next conditional loadb. */
+				std::shared_ptr<registers::reg> next_condition = nullptr;
+				if (node->has_expr(ast_dec::expr_type::condition_emit_next)) {
+
+					next_condition = regs.back()[(*(&node + 1u))->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+					next_condition->clear();
+					next_condition->type = registers::type::expr;
+
+				}
+
+
 				/* Emit compare to compare flag. */
-				emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, regs.back()[flag_compare]->data, NULL, cmp1, cmp2);
+				emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, (next_condition != nullptr) ? next_condition->data : regs.back()[flag_compare]->data, NULL, cmp1, cmp2);
+
+
+				/* Automatically emit parenthesis for condition emitter. */
+				if ((node->has_expr(ast_dec::expr_type::condition_emit_next))) {
+					next_condition->data = "( " + next_condition->data + " )";
+				}
 
 				/* See post-condition expr. */
 				for (const auto& expr : node->expr) {

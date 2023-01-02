@@ -248,7 +248,7 @@ namespace ast_funcs {
 	namespace branches {
 
 		/* Set branches conditons in routine with given range. */
-		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector <std::uintptr_t> dead /* Always opposite and when hit. */) {
+		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector <std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */) {
 
 			const auto conditions = ast->main_block->visit_range_type<lexer_dec::inst_type::branch_condition>(begin, end);
 			const auto over_target = *std::max_element(dead.begin(), dead.end());
@@ -293,8 +293,18 @@ namespace ast_funcs {
 							scopes.push_back(std::make_pair(jmp, 0u));
 						}
 
-						if (!scopes.empty())
-							std::cout << "bruh " << scopes.back().first << " : " << node->address << " : " << node->lex->dissassembly->data << std::endl;
+
+						if (node->has_expr(ast_dec::expr_type::condition_emit_next)) {
+
+							/* Condition emits compare to loadb. If there is no logical condition for variable exit thought if there is check writing register with dest register of loadb. */
+							if (logical_operation_target == -1) {
+								continue;
+							}
+							else if (logical_operation_target != -1 && ast->main_block->visit_addr(node->address + node->lex->dissassembly->len)->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg != logical_operation_target) {
+								continue;
+							}
+
+						}
 
 						/* Jmp exceeds dead values. */
 						if (jmp > over_target) {
@@ -369,7 +379,6 @@ namespace ast_funcs {
 
 			std::size_t idx = 0u;
 			std::size_t routine = 0u;
-			const auto all = ast->main_block->visit_all();
 
 			const auto conditions = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_type<lexer_dec::inst_type::branch_condition>(true));
 
@@ -402,8 +411,8 @@ namespace ast_funcs {
 			};
 
 
-
-			for (const auto& node : all) {
+			auto all = ast->main_block->visit_all();
+			for (auto& node : all) {
 
 				node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
 				node->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
@@ -467,7 +476,26 @@ namespace ast_funcs {
 
 					/* Append condition routine expr. */
 					start_node->add_expr<ast_dec::expr_type::condition_routine_start>();
+
+					/* Check loadb */
+					const auto next = ast->main_block->visit_addr(node->address + node->lex->dissassembly->len);
+					if (next != nullptr && next->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
+
+						const auto mem = next->lex->operand_expr<lexer_dec::operand_types::memaddr>().front();
+						if (mem->jmp) {
+
+							node->add_expr<ast_dec::expr_type::condition_emit_next>();
+							node = ast->main_block->visit_addr(next->address + next->lex->dissassembly->len);	
+
+							next->add_expr<ast_dec::expr_type::dead_instruction>(); /* Ignore instruction. */
+							node->add_expr<ast_dec::expr_type::dead_instruction>(); /* Ignore instruction. */
+						}
+
+					}
+					
 					node->add_expr<ast_dec::expr_type::condition_routine_end>();
+					
+				
 
 					const auto range_br = ast->main_block->visit_range(start_node->address, node->address);
 					for (const auto& i : range_br) {
@@ -935,14 +963,17 @@ namespace ast_funcs {
 		/* Sorts loops based on ends. */
 		void sort_loops(std::shared_ptr<ast_dec::ast>& ast) {
 
+			auto labels = ast->main_block->visit_all_goto();
+			std::sort(labels.begin(), labels.end(), [](std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& a, std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& b) { return a.first < b.first; });
+
+
 			const auto all = ast->main_block->visit_all();
 			for (const auto& node : all) {
 
 				/* Has goto */
-				auto labels = ast->main_block->visit_goto(node->address);
-				if (labels.size()) {
+				if (labels.size() && std::find_if(labels.begin(), labels.end(), [&](const std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& pair) { return pair.first == node->address; }) != labels.end()) {
 
-					std::reverse(labels.begin(), labels.end());
+					
 					std::vector <std::pair <ast_dec::expr_type, std::size_t>> exprs;
 
 					if (labels.size() == 1u)
@@ -951,7 +982,7 @@ namespace ast_funcs {
 					/* Collaprse exprs */
 					node->collapse_expr();
 
-					for (const auto& label : labels) {
+					for (const auto& label : std::find_if(labels.begin(), labels.end(), [&](const std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& pair) { return pair.first == node->address; })->second) {
 
 						if (label->has_expr(ast_dec::expr_type::while_end)) {
 
@@ -1146,8 +1177,7 @@ namespace ast_funcs {
 				const auto jmp_addr = jumpback->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 				const auto jmp_node = ast->main_block->visit_addr(jmp_addr);
 				const auto nodes_routine = ast->main_block->visit_range_current(jmp_addr, jumpback->address);
-				const auto condition = ast->main_block->visit_expr_routine_range_touching<ast_dec::expr_type::condition_routine_start, ast_dec::expr_type::condition_routine_end>(jmp_addr, jumpback->address);
-
+			    auto condition = ast->main_block->visit_expr_routine_range_touching<ast_dec::expr_type::condition_routine_start, ast_dec::expr_type::condition_routine_end>(jmp_addr, jumpback->address);
 
 				if (jumpback->has_expr(ast_dec::expr_type::until_)) {
 					
@@ -1936,10 +1966,10 @@ namespace blocks {
 			node->address = pc;
 			node->lex = lexer_dec::lexer(current_dissassembly);
 			
-			#if display_analysis
-				std::printf("[AST-dissassembly] %llu %s ", pc, current_dissassembly->data.c_str());
+			#if display_dissassembly
+				std::printf("[AST-dissassembly] %" PRIuPTR " %s ", pc, current_dissassembly->data.c_str());
 				if (node->lex->type == lexer_dec::inst_type::branch || node->lex->type == lexer_dec::inst_type::branch_condition) {
-					std::printf(" - %llu\n", node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
+					std::printf(" - %"  PRIuPTR "\n", node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
 				}
 				else {
 					std::printf("\n");
@@ -2030,6 +2060,7 @@ namespace blocks {
 		ast->main_block->node_end = std::get<0>(linear_blocks[pc]);
 		ast->main_block->nodes = std::get<2>(linear_blocks[pc]);
 		
+		std::vector<std::uintptr_t> analyzed_scopes; /* Used to prevent infinite loops when doing visits. */
 
 		/* Assemble blocks */
 		while (pc < ast->p->sizecode /* Pc didn't exceed sizecode. */) {
@@ -2041,25 +2072,26 @@ namespace blocks {
 			if (!nodes.size()) {
 				break;
 			}
-			std::cout << "PC " << pc  << " : " << ast->p->sizecode << std::endl;
+			
+			analyzed_scopes.emplace_back(pc);
+			
 			/* End */
 			const auto jump_node = nodes.back();
 			if (jump_node->lex->type == lexer_dec::inst_type::branch || jump_node->lex->type == lexer_dec::inst_type::branch_condition) {
 			
-				const auto jmp = jump_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp + jump_node->address + 1u;
+				const auto jmp = jump_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 				const auto next_node_block = linear_blocks[jmp];
 			
 				auto current = ast->find_block(pc); /* Block too place all info in. */
 				auto jump_block = ast->find_block(jmp); /* Jump taken block */
-				printf("AZO\n");
 				auto nojump_block = ast->find_block(jump_node->address + jump_node->lex->dissassembly->len); /* Branch not taken jump. */
-				printf("AZO\n");
+			
 				/* Current is always available something bad happened. */
 				if (current == nullptr) {
 					
 					/* Either something bad has happen or dead instruction. (Will never get executed no matter what branch is taken or not) */
 					#if display_warnings
-						std::printf("[WARNING] Dead instruction: %llu %s\n", ast->dissassembly[pc]->addr, ast->dissassembly[pc]->data.c_str());
+						std::printf("[WARNING] Dead instruction: %" PRIuPTR " %s\n", ast->dissassembly[pc]->addr, ast->dissassembly[pc]->data.c_str());
 					#endif
 
 					/* Get previous from pc */
@@ -2071,7 +2103,7 @@ namespace blocks {
 					}
 
 					#if display_warnings
-						std::printf("[WARNING] Appending dead instruction to block with: pc = %llu at instruction: %s\n", key, ast->dissassembly[key]->data.c_str());
+						std::printf("[WARNING] Appending dead instruction to block with: pc = %" PRIuPTR " at instruction : % s\n", key, ast->dissassembly[key]->data.c_str());
 					#endif
 
 					current = std::make_shared<ast_dec::block>();
@@ -2102,7 +2134,10 @@ namespace blocks {
 						}
 
 						/* Add jump taken. */
-						current->branches.emplace_back(jump_block);
+						if (jump_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp > 0 || std::find(analyzed_scopes.begin(), analyzed_scopes.end(), jmp) == analyzed_scopes.end()) {
+							current->branches.emplace_back(jump_block);
+						}
+
 						break;
 					}
 
@@ -2126,7 +2161,9 @@ namespace blocks {
 
 
 						/* Add jump taken. */
-						current->branches.emplace_back(jump_block);
+						if (jump_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp > 0 || std::find(analyzed_scopes.begin(), analyzed_scopes.end(), jmp) == analyzed_scopes.end()) {
+							current->branches.emplace_back(jump_block);
+						}
 						current->branches.emplace_back(nojump_block);
 
 						break;
@@ -2144,8 +2181,6 @@ namespace blocks {
 			pc = std::get<1>(node_block);
 
 		};
-
-		
 
 		return;
 	}
@@ -2190,7 +2225,7 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto, const std::shared_p
 		auto ast_id = current_proto->ast_id;
 
 		#if display_analysis
-				std::printf("[AST] Initing proto [%llu].\n", reinterpret_cast<std::uintptr_t>(current_proto.get()));
+				std::printf("[AST] Initing proto [%" PRIuPTR "].\n", reinterpret_cast<std::uintptr_t>(current_proto.get()));
 		#endif
 
 
@@ -2221,7 +2256,7 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto, const std::shared_p
 		for (auto& child : current_proto->protos) {
 
 			#if display_analysis
-					std::printf("[AST] Initing child proto [%llu].\n", reinterpret_cast<std::uintptr_t>(child.get()));
+					std::printf("[AST] Initing child proto [%" PRIuPTR "].\n", reinterpret_cast<std::uintptr_t>(child.get()));
 			#endif
 
 			if (child->dissassembly.empty()) {
