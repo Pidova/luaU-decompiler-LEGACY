@@ -7,7 +7,10 @@
 void replace_string(std::string& dest, const char* const srch, const char* const repl) {
 	std::size_t pos = 0u;
 	while ((pos = dest.find(srch, pos)) != std::string::npos) {
-		dest.replace(pos, std::strlen(srch), repl);
+		/* New line */
+		if (dest[pos - 1u] == '\n') {
+			dest.replace(pos, std::strlen(srch), repl);
+		}
 		pos += std::strlen(repl);
 	}
 	return;

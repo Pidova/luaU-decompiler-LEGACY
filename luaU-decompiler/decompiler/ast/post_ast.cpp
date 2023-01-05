@@ -15,6 +15,13 @@ void ast_post::table::set_node_end(const std::shared_ptr<ast_dec::ast>& ast) {
 		if (!valid)
 			continue;
 
+		/* No elements */
+		if (i->has_expr(ast_dec::expr_type::table_end)) {
+			i->table_extra.end_table = i->address;
+			nodes_end.emplace_back(i->address);
+			continue;
+		}
+
 		const auto start_node = i->address;
 		const auto end_node = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::table_end>(i->address, { ast_dec::expr_type::table_start })->address;
 

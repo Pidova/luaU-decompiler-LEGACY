@@ -7,11 +7,157 @@
 #define node_nonmutable(node) node->has_expr(ast_dec::expr_type::condition_nonmutable)
 
 #define routine_inc(node, routine) routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() + node->count_expr <ast_dec::expr_type::condition_concat_start>()
-#define routine_dec(node, routine) routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() + node->count_expr <ast_dec::expr_type::concat_routine_end>()
+#define routine_dec(node, routine) routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() + node->count_expr <ast_dec::expr_type::condition_concat_end>()
 
 namespace ast_funcs {
 
 	namespace regs {
+
+		/* Sees if destination is logical in scope. */
+		bool logical_dest_register(std::shared_ptr<ast_dec::ast>& ast, std::shared_ptr<ast_dec::node> start, const std::int16_t target) {
+
+			/* Check for loop too see if they override any of the regs. */
+			const auto next = ast->main_block->visit_rest_scope_addr(start->address);
+			for (const auto& i : next) {
+
+				/* See if register falls within loop vars. */
+				if (i->has_expr(ast_dec::expr_type::for_start) || i->has_expr(ast_dec::expr_type::for_iv_start) || i->has_expr(ast_dec::expr_type::for_n_start)) {
+					const auto for_target = i->loop_extra.end_node;
+					if (for_target->loop_extra.start_reg <= target && for_target->loop_extra.end_reg >= target) {
+						return false;
+					}
+				}
+
+			}
+
+
+			/* See if register gets used twice by dest or source with repecting scopes and either or reseting it. */
+			std::uint32_t routine = 0u;
+			std::int32_t scope = 0u;
+			const auto target_1 = target;
+			bool used_target_1_dest = true;
+			bool used_target_1_source = false;
+			bool no_locvar = true;
+			std::shared_ptr<ast_dec::node> dest_node = start;
+			std::shared_ptr<ast_dec::node> dest_node_nm = start; /* Dest node non mutable by sources. */
+
+			/* Really just visiting future instructions too see if table source, dest, or idx gets set twice indicating end. */
+			const auto rest_nodes = ast->main_block->visit_rest(start->address);
+			for (const auto& s_node : rest_nodes) {
+
+				/* Checks operands if targets get used or not but if it does get used just resets target. */
+				bool used_source_twice = false; /* Used by source twice. */
+				bool used_source_routine = false; /* Used by source in routine. */
+				std::function<void(const std::shared_ptr<LuaU_dissassembler::operand>&, const lexer_dec::operand_types)> check_usage = [&](const std::shared_ptr<LuaU_dissassembler::operand>& operand, const lexer_dec::operand_types tt) mutable {
+
+					const auto val = operand->reg;
+
+					if (val == target_1) {
+
+						/* Used twice and last dest node is current. */
+						if (used_target_1_source && dest_node == start) {
+							used_source_twice = true;
+							return;
+						}
+
+						/* Used in routine and last dest node is start. */
+						if (routine && dest_node_nm == start) {
+							used_source_routine = true;
+							return;
+						}
+
+						used_target_1_source = true;
+						used_target_1_dest = false;
+						dest_node = nullptr;
+					}
+
+					return;
+				};
+
+
+				/* Scope */
+				scope += (s_node->count_expr <ast_dec::expr_type::repeat_>() +
+					s_node->count_expr <ast_dec::expr_type::while_>() +
+					s_node->count_expr <ast_dec::expr_type::for_start>() +
+					s_node->count_expr <ast_dec::expr_type::for_iv_start>() +
+					s_node->count_expr <ast_dec::expr_type::for_n_start>() +
+					s_node->count_expr <ast_dec::expr_type::if_>());
+				scope -= s_node->count_expr <ast_dec::expr_type::scope_end>();
+
+				/* Out of scope */
+				if (scope < 0) {
+					break;
+				}
+
+				/* End of scope */
+				if (!scope && s_node->lex->dissassembly->op == LuauOpcode::LOP_RETURN) {
+
+					/* Just ended with it just using it as dest. */
+					if (used_target_1_dest && !used_target_1_source) {
+						no_locvar = false;
+						break;
+					}
+
+				}
+				
+
+				/* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
+				routine_inc(s_node, routine);
+				routine_dec(s_node, routine);
+
+				/* Check reg operands for usage. */
+				s_node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
+				s_node->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
+				s_node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
+
+				/* Used by source twice. */
+				if (used_source_twice) {
+					no_locvar = false;
+					break;
+				}
+
+				/* Used in source in routine. */
+				if (used_source_routine) {
+					no_locvar = false;
+					break;
+				}
+
+				if (s_node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+					const auto dest = s_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+					/* Check target usage. Abrubt end. */
+					if (dest == target_1) {
+		
+						if (routine) { /* Used in routine not locvar. */
+							break;
+						}
+
+						/* Set twice without used. Locvar */
+						if (used_target_1_dest) {
+							no_locvar = (dest_node != start);
+							break;
+						}
+
+
+						used_target_1_dest = true;
+						used_target_1_source = false;
+						dest_node = s_node;
+						dest_node_nm = s_node;
+					}
+
+				}
+
+			}
+
+
+			/* Not locvar by routine. */
+			if (no_locvar) {
+				return false;
+			}
+		
+			return true;
+		}
 
 		/* Sets statements based on register stack. */
 		void set_statements(std::shared_ptr<ast_dec::ast>& ast) {
@@ -132,13 +278,13 @@ namespace ast_funcs {
 
 			std::shared_ptr<ast_dec::node> closure_node = nullptr;
 
-			/* Newclosure, Dupclosures node. */
+			/* Newcloure, Dupclosures node. */
 			auto closures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(current_proto->main_block->visit_inst<LuauOpcode::LOP_NEWCLOSURE>(true));
 			const auto dupclosures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(current_proto->main_block->visit_inst<LuauOpcode::LOP_DUPCLOSURE>(true));
-
+	
 			/* All closures. */
 			closures.insert(closures.end(), dupclosures.begin(), dupclosures.end());
-
+		
 			/* Iterate through closures and get expression for it relative to proto given. */
 			for (const auto& i : closures) {
 
@@ -170,6 +316,7 @@ namespace ast_funcs {
 								/* Next is setglobal and uses reg as source. */
 								if (next->lex->dissassembly->op == LuauOpcode::LOP_SETGLOBAL && next->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg == i->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg) {
 									closure_node->add_expr<ast_dec::expr_type::closure_global>(1u, ast_dec::element::front);
+									closure_node->closure_extra.setglobal_node = next;
 									closure_node = next;
 									closure_node->add_expr<ast_dec::expr_type::closure_global>(1u, ast_dec::element::front); /*  function ?? (??) */
 								}
@@ -190,7 +337,18 @@ namespace ast_funcs {
 
 						/* Get proto from dupclosure kvalue. */
 						closure_node = i; /* Set node. */
-						closure_node->add_expr<ast_dec::expr_type::closure_local>(1u, ast_dec::element::front); /* local function ?? (??) [MUTABLE] */
+
+						const auto next = current_proto->main_block->visit_addr(i->address + i->lex->dissassembly->len);
+						if (next->lex->dissassembly->op == LuauOpcode::LOP_SETGLOBAL && next->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg == i->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg) {
+							closure_node->add_expr<ast_dec::expr_type::closure_global>(1u, ast_dec::element::front);
+							closure_node->closure_extra.setglobal_node = next;
+							closure_node = next;
+							closure_node->add_expr<ast_dec::expr_type::closure_global>(1u, ast_dec::element::front); /*  function ?? (??) */
+						}
+						else {
+							closure_node->add_expr<ast_dec::expr_type::closure_local>(1u, ast_dec::element::front); /* local function ?? (??) [MUTABLE] */
+						}
+
 						closure_node->closure_extra.closure_idx = child_proto_id;
 
 						break;
@@ -203,42 +361,34 @@ namespace ast_funcs {
 				}
 
 			}
-
-			/* Turn expression to closure type. */
-			for (const auto& e : closure_node->expr) {
 			
-				auto proto = current_proto->protos[child_proto_id];
+			/* Turn expression to closure type. */
 
-				switch (e.first) {
+			auto proto = current_proto->protos[child_proto_id];
 
-					/* Comes with closure name. */
-					case ast_dec::expr_type::closure_global: {
-						proto->closure_type = ast_dec::closure_type::global;
-						proto->closure_name = closure_node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
-						closure_node->add_expr<ast_dec::expr_type::dead_instruction>(); /* Handled by before hand. */
-						break;
-					}
 
-					/* Closure name doesn't get compiled unless specified. */
-					case ast_dec::expr_type::closure_local: {
-						proto->closure_type = ast_dec::closure_type::local;
-						break;
-					}
+			/* Comes with closure name. */
+			if (closure_node->has_expr(ast_dec::expr_type::closure_global)) {
 
-					/* No closure name. */
-					case ast_dec::expr_type::closure_newclosure: {
-						proto->closure_type = ast_dec::closure_type::newclosure;
-						break;
-					}
-
-					/* Shouldn't happen but incase it does. */
-					default: {
-						throw std::runtime_error("Unkown expression for closure_type.");
-					}
-
-				}
+				proto->closure_type = ast_dec::closure_type::global;
+				proto->closure_name = closure_node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+				closure_node->add_expr<ast_dec::expr_type::dead_instruction>(); /* Handled by before hand. */
 
 			}
+			else if (closure_node->has_expr(ast_dec::expr_type::closure_local)) { /* Closure name doesn't get compiled unless specified. */
+				
+				proto->closure_type = ast_dec::closure_type::local;
+
+			}
+			else if (closure_node->has_expr(ast_dec::expr_type::closure_newclosure)) {/* No closure name. */
+
+				proto->closure_type = ast_dec::closure_type::newclosure;
+			
+			}
+			else {/* Shouldn't happen but incase it does. */
+				throw std::runtime_error("Unkown expression for closure_type.");
+			}
+
 
 			return;
 		}
@@ -252,7 +402,7 @@ namespace ast_funcs {
 
 			const auto conditions = ast->main_block->visit_range_type<lexer_dec::inst_type::branch_condition>(begin, end);
 			const auto over_target = *std::max_element(dead.begin(), dead.end());
-			const auto range = ast->main_block->visit_range(begin, end);
+			const auto range = ast->main_block->visit_range_current(begin, end);
 			const auto loadbs = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_LOADB>(true));
 
 			std::vector <std::pair <std::uintptr_t /* Jump */, std::size_t /* Scopes */>> scopes;
@@ -266,12 +416,12 @@ namespace ast_funcs {
 
 
 				if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
-
+					
 					const auto jmp = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 
 					/* Hit dead? */
 					if (std::find(dead.begin(), dead.end(), jmp) != dead.end()) {
-
+						
 						/* Close any open scopes. */
 						if (scopes.size() && scopes.back().second) {
 							node->add_expr<ast_dec::expr_type::condition_close>(scopes.back().second);
@@ -284,7 +434,7 @@ namespace ast_funcs {
 
 						/* Always opposite */
 						node->branch_extra.opposite = true;
-
+					
 					}
 					else {
 
@@ -563,7 +713,7 @@ namespace ast_funcs {
 						}
 
 					}
-
+				
 					/* Loops usally overwrite some regs per part of there routine append them to dest. */
 					const auto for_node = node->loop_extra.end_node;
 					if (for_node != nullptr) {
@@ -572,7 +722,7 @@ namespace ast_funcs {
 						addr_scopes.emplace_back(for_node->address);
 						dests.emplace_back(dests.back());
 						dests_nodes.emplace_back(dests_nodes.back());
-					
+						
 
 						auto start_reg = 0u; /* for start */
 						auto iteration = 0u; /* for regs being consumed for its operation */
@@ -606,7 +756,7 @@ namespace ast_funcs {
 								for_dest = prev;
 
 						}
-
+						
 						/* Add vars from those loops. */
 						for (auto i = start_reg; i < (start_reg + iteration + 1u); ++i)
 							if (std::find(dests.back().begin(), dests.back().end(), i) == dests.back().end()) { /* Didnt find dest */
@@ -616,7 +766,7 @@ namespace ast_funcs {
 							else { /* Found dest, mutate dest node. */
 								dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), i) - dests.back().begin()] = for_dest;
 							}
-
+						
 					}
 
 					switch (node->lex->dissassembly->op) {
@@ -778,7 +928,7 @@ namespace ast_funcs {
 						}
 
 					}
-
+				
 					/* Append scope */
 					if (node->lex->type == lexer_dec::inst_type::branch_condition) {
 
@@ -791,9 +941,9 @@ namespace ast_funcs {
 						}
 
 					}
-
+				
 				}
-
+			
 				/* Check source_no_dest based off of call/table/concat routines least dest. */
 			    std::int16_t reg = -1;
 				for (const auto& node : all) {
@@ -829,17 +979,17 @@ namespace ast_funcs {
 					}
 				
 				}
-
+		
 				/* Append reg if found. */
-				if (reg != -1 && std::find(source_no_dest.begin(), source_no_dest.end(), reg - 1) == source_no_dest.end()) {
+				if (reg > 0 && std::find(source_no_dest.begin(), source_no_dest.end(), reg - 1) == source_no_dest.end()) {	
 					source_no_dest.emplace_back(reg - 1);
 				}
-
+			
 				/* No dests */
 				if (source_no_dest.empty()) {
 					return;
 				}
-
+			
 				/* Remove dupes */
 				std::sort(source_no_dest.begin(), source_no_dest.end());
 				source_no_dest.erase(std::unique(source_no_dest.begin(), source_no_dest.end()), source_no_dest.end());
@@ -848,7 +998,7 @@ namespace ast_funcs {
 				if (dont_set) {
 					return;
 				}
-
+		
 
 				const auto max = *std::max_element(source_no_dest.begin(), source_no_dest.end());
 				const auto min = 0;
@@ -870,12 +1020,12 @@ namespace ast_funcs {
 			if (ast->closure_type == ast_dec::closure_type::main) {
 				set_args(ast, true);
 			}
-
+			
 			/* Everything needs to go through based on control flow. */
 			for (const auto& proto : ast->protos) {
 				set_args(proto);
 			}
-
+			
 			return;
 		}
 
@@ -966,12 +1116,13 @@ namespace ast_funcs {
 			auto labels = ast->main_block->visit_all_goto();
 			std::sort(labels.begin(), labels.end(), [](std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& a, std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& b) { return a.first < b.first; });
 
-
 			const auto all = ast->main_block->visit_all();
 			for (const auto& node : all) {
 
+				auto node_found = std::find_if(labels.begin(), labels.end(), [&](const std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& pair) { return pair.first == node->address; });
+
 				/* Has goto */
-				if (labels.size() && std::find_if(labels.begin(), labels.end(), [&](const std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& pair) { return pair.first == node->address; }) != labels.end()) {
+				if (labels.size() && node_found != labels.end()) {
 
 					
 					std::vector <std::pair <ast_dec::expr_type, std::size_t>> exprs;
@@ -982,7 +1133,10 @@ namespace ast_funcs {
 					/* Collaprse exprs */
 					node->collapse_expr();
 
-					for (const auto& label : std::find_if(labels.begin(), labels.end(), [&](const std::pair<std::uintptr_t, std::vector<std::shared_ptr<ast_dec::node>>>& pair) { return pair.first == node->address; })->second) {
+					/* Reverse */
+					std::reverse(node_found->second.begin(), node_found->second.end());
+
+					for (const auto& label : node_found->second) {
 
 						if (label->has_expr(ast_dec::expr_type::while_end)) {
 
@@ -1219,11 +1373,62 @@ namespace ast_funcs {
 						jumpback->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
 					}
 					else {
+
 						const auto cond = condition.front();
 
 						if (cond.second->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
-							cond.first->add_expr<ast_dec::expr_type::condition_concat_start>();
-							cond.second->add_expr<ast_dec::expr_type::condition_concat_end>();
+							
+							bool dont_set = false;
+							std::shared_ptr<ast_dec::node> begin_node = cond.first;
+
+							/* Go through second and first range and see regs logicals. */
+							const auto range = ast->main_block->visit_range_current(cond.first->address, cond.second->address);
+							for (const auto& node : range) {
+								
+								auto nearest_compare = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type_addr<lexer_dec::inst_type::branch_condition>(node->address, false));
+								
+								/* Check dest for compare value. */
+								if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+									const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+									const auto compare = nearest_compare->lex->operand_expr<lexer_dec::operand_types::compare>();
+										
+									/* Hit reg set of compare. */
+									if ((compare.size() == 1u && compare.front()->reg == dest) || (compare.size() == 2u && (compare.front()->reg == dest || compare.back()->reg == dest))) {
+										
+										const auto logical = ast_funcs::regs::logical_dest_register(ast, node, dest);
+										
+										if (!logical && begin_node == nullptr) {
+											begin_node = node;
+										}
+										else if (logical) {
+											
+											/* Last codition and last is nearest with it being logical so while (true) */
+											if (cond.second == nearest_compare) {
+												jmp_node->add_expr<ast_dec::expr_type::while_>();
+												jmp_node->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
+												dont_set = true;
+												break;
+											}
+											
+											begin_node = nullptr;
+										}
+										
+
+									}
+
+								}
+
+							}
+
+							/* Write condition routine. */
+							if (!dont_set) {
+								begin_node->add_expr<ast_dec::expr_type::condition_concat_start>();
+								cond.second->add_expr<ast_dec::expr_type::condition_concat_end>();
+								cond.second->add_expr<ast_dec::expr_type::while_>();
+								branches::set(ast, begin_node->address, cond.second->address, { jumpback->address, (jumpback->address + jumpback->lex->dissassembly->len)});
+							}
+							
 						}
 						else {
 							/* Last conditon doesn't jump out possible repeat until(true)*/
@@ -1263,7 +1468,7 @@ namespace ast_funcs {
 			
 			return;
 		}
-		
+
 	}
 
 	namespace tables {
@@ -1341,6 +1546,13 @@ namespace ast_funcs {
 							const auto operands = node->lex->operand_expr<lexer_dec::operand_types::integer>();
 							auto x = operands.front()->table_size;
 
+							if (!x && !operands.back()->val) {
+								node->add_expr<ast_dec::expr_type::table_start>();
+								node->add_expr<ast_dec::expr_type::table_end>();
+								return;
+							}
+
+
 							node_size = x;
 							array_size = operands.back()->val;
 				
@@ -1393,7 +1605,7 @@ namespace ast_funcs {
 							
 							array_size -= std::uintptr_t (amt);
 							
-							if (predicted_sizes.size () > 1u && !node_size && !array_size) {
+							if (predicted_sizes.size () > 1u && !node_size && !array_size) {		
 								node->add_expr<ast_dec::expr_type::table_end>();
 								ends.emplace_back(node->address);
 							}
@@ -1427,7 +1639,7 @@ namespace ast_funcs {
 					
 						
 							set_size(node);
-		
+								
 							/* Set previous dest register. */
 							if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>())
 								reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
@@ -1560,8 +1772,6 @@ namespace ast_funcs {
 					}
 					else {
 						/* No table members. */
-						table->add_expr<ast_dec::expr_type::table_start>();
-						table->add_expr<ast_dec::expr_type::table_end>();
 						ends.emplace_back(table->address);
 					}
 
@@ -1616,10 +1826,16 @@ namespace ast_funcs {
 				}
 
 				/* Log reg scope start. */
-				if (node->has_expr(ast_dec::expr_type::for_start)) {
+				if (node->has_expr(ast_dec::expr_type::for_start) || node->has_expr(ast_dec::expr_type::for_n_start) || node->has_expr(ast_dec::expr_type::for_iv_start)) {
 					registers.emplace_back(node->loop_extra.end_node->loop_extra.end_reg + 1u);
 				}
-
+				else if (node->has_expr(ast_dec::expr_type::if_) || node->has_expr(ast_dec::expr_type::repeat_) || node->has_expr(ast_dec::expr_type::while_)) {
+					registers.emplace_back(registers.back());
+				}
+				else if (node->has_expr(ast_dec::expr_type::elseif_) || node->has_expr(ast_dec::expr_type::else_)) {
+					registers.back() = (*(registers.end() - 1));
+				}
+					 
 
 				/* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
 				routine_inc(node, routine);
@@ -1631,10 +1847,11 @@ namespace ast_funcs {
 					node->replace_next<ast_dec::expr_type::closure_local, ast_dec::expr_type::closure_newclosure>();
 					ast->protos[node->closure_extra.closure_idx]->closure_type = ast_dec::closure_type::newclosure;
 				}
-			
+				
+
 				/* Not inside routine and dest. */
 				if (!routine && node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
-					
+				
 					auto bad = false; /* Failed any checks. (Can also be used if node is already set. */
 					const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front ();
 
@@ -1642,9 +1859,9 @@ namespace ast_funcs {
 					if (node->has_expr(ast_dec::expr_type::closure_local)) {
 						emitter::override::locvar_name(ast->protos[node->closure_extra.closure_idx]->closure_name, ast->transpiler_config->function_prefix, registers.back(), ast->transpiler_config->function_suffix_char);
 					}
-
+				
 					/* Capture with source garunteeds locvar so check there. */
-					const auto captures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CAPTURE>(true));
+					const auto captures = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst_scope<LuauOpcode::LOP_CAPTURE>(node->address, true));
 					for (const auto& capture : captures)
 						if (capture->lex->has_operand_expr<lexer_dec::operand_types::source>() && capture->lex->operand_expr<lexer_dec::operand_types::source>().front ()->capture_reg == registers.back()) {
 							node_var(dest);
@@ -1656,10 +1873,10 @@ namespace ast_funcs {
 					 
 					
 					/* Check concat and call routines if the dest is used as a dest in them no locvar. */
-					const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr<ast_dec::expr_type::call_routine_start>(node->address, true));
+					const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr_scope<ast_dec::expr_type::call_routine_start>(node->address, true));
 					for (const auto& call : calls) {
 						
-						const auto node_end = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::call_routine_end>(call->address, { ast_dec::expr_type::call_routine_start });
+						const auto node_end = ast->main_block->visit_relative_next_expr_scope<ast_dec::expr_type::call_routine_end>(call->address, { ast_dec::expr_type::call_routine_start });
 			
 						/* Target dest reg used in call routine dest. */
 						for (const auto& call_node : ast->main_block->visit_range(call->address, node_end->address))
@@ -1669,12 +1886,12 @@ namespace ast_funcs {
 					}
 					if (bad)
 						continue;
-			
+				
 					/* Concat */
-					const auto concats = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr<ast_dec::expr_type::concat_routine_start>(node->address, true));
+					const auto concats = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr_scope<ast_dec::expr_type::concat_routine_start>(node->address, true));
 					for (const auto& concat : concats) {
 
-						const auto node_end = ast->main_block->visit_relative_next_expr<ast_dec::expr_type::concat_routine_end>(concat->address, { ast_dec::expr_type::concat_routine_start });
+						const auto node_end = ast->main_block->visit_relative_next_expr_scope<ast_dec::expr_type::concat_routine_end>(concat->address, { ast_dec::expr_type::concat_routine_start });
 
 						/* Target dest reg used in call routine dest. */
 						for (const auto& concat_node : ast->main_block->visit_range(concat->address, node_end->address))
@@ -1713,135 +1930,30 @@ namespace ast_funcs {
 
 					}
 					else {
-
-						if (dest->reg == registers.back()) {
-							
-							/* Check for loop too see if they override any of the regs. */
-							const auto next_loop = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr<ast_dec::expr_type::for_start>(node->address, true));
-							if (!next_loop.empty()) {
-
-								/* See if register falls within loop vars. */
-								const auto for_target = next_loop.front()->loop_extra.end_node;
-								if (for_target->loop_extra.start_reg <= registers.back() && for_target->loop_extra.end_reg >= registers.back()) {
-									continue;
-								}
-
-							}
 					
-							
-
-							/* See if register gets used twice by dest or source with repecting scopes and either or reseting it. */
-							std::uint32_t routine = 0u;
-							std::int32_t scope = 0u;
-							const auto target_1 = registers.back();
-							bool used_target_1_dest = true;
-							bool used_target_1_source = false;
-							bool no_locvar = true;
-							std::shared_ptr<ast_dec::node> dest_node = node;
-							
-							/* Really just visiting future instructions too see if table source, dest, or idx gets set twice indicating end. */
-							const auto rest_nodes = ast->main_block->visit_rest(node->address);
-							for (const auto& s_node : rest_nodes) {
-
+						if (dest->reg == registers.back()) {
 						
-								/* Checks operands if targets get used or not but if it does get used just resets target. */
-								bool used_source_twice = false; /* Used by source twice. */
-								std::function<void(const std::shared_ptr<LuaU_dissassembler::operand>&, const lexer_dec::operand_types)> check_usage = [&](const std::shared_ptr<LuaU_dissassembler::operand>& operand, const lexer_dec::operand_types tt) mutable {
+							/* See if dest register is logical. */
+							if (ast_funcs::regs::logical_dest_register(ast, node, registers.back())) {
 
-									const auto val = operand->reg;
+								/* Mutate global */
+								if (node->has_expr(ast_dec::expr_type::closure_global)) {
 
-									if (val == target_1) {
+									node->replace_next<ast_dec::expr_type::closure_global, ast_dec::expr_type::closure_local>();
+									node->remove_all_expr <ast_dec::expr_type::closure_global>();
 
-										if (used_target_1_source && dest_node == node) {
-											used_source_twice = true;
-											return;
-										}
-
-										used_target_1_source = true;
-										used_target_1_dest = false;
-										dest_node = nullptr;
-									}
-
-									return;
-								};
-
-
-								/* Scope */
-								scope += (s_node->count_expr <ast_dec::expr_type::repeat_>() +
-									s_node->count_expr <ast_dec::expr_type::while_>() +
-									s_node->count_expr <ast_dec::expr_type::for_start>() +
-									s_node->count_expr <ast_dec::expr_type::for_iv_start>() +
-									s_node->count_expr <ast_dec::expr_type::for_n_start>() +
-									s_node->count_expr <ast_dec::expr_type::if_>());
-								scope -= s_node->count_expr <ast_dec::expr_type::scope_end>();
-
-								/* Out of scope */
-								if (scope < 0) {
-									break;
+									ast->protos[node->closure_extra.closure_idx]->closure_type = ast_dec::closure_type::local;
+									
+									node->closure_extra.setglobal_node->remove_all_expr <ast_dec::expr_type::dead_instruction>();
+									emitter::override::locvar_name(ast->protos[node->closure_extra.closure_idx]->closure_name, ast->transpiler_config->function_prefix, registers.back()++, ast->transpiler_config->function_suffix_char);
+								
+								}
+								else {
+									node_var(node->lex->dissassembly->operands.front());
 								}
 
-								/* End of scope */
-								if (!scope && s_node->lex->dissassembly->op == LuauOpcode::LOP_RETURN) {
-
-									/* Just ended with it just using it as dest. */
-									if (used_target_1_dest && !used_target_1_source) {
-										no_locvar = false;
-										break;
-									}
-
-								}
-
-
-								/* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
-								routine_inc(s_node, routine);
-								routine_dec(s_node, routine);
-
-								/* Check reg operands for usage. */
-								s_node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
-								s_node->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
-								s_node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
-
-								/* Used by source twice. */
-								if (used_source_twice) {
-									no_locvar = false;
-									break;
-								}
-
-
-								if (s_node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
-
-									const auto dest = s_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-
-									/* Check target usage. Abrubt end. */
-									if (dest == target_1) {
-
-										if (routine) { /* Used in routine not locvar. */
-											break;
-										}
-
-										/* Set twice without used. Locvar */
-										if (used_target_1_dest) {
-											no_locvar = (dest_node != node);
-											break;
-										}
-
-
-										used_target_1_dest = true;
-										used_target_1_source = false;
-										dest_node = s_node;
-									}
-
-								}
-
-							}	
-
-
-							/* Not locvar by routine. */
-							if (no_locvar) {
-								continue;
 							}
 
-							node_var(node->lex->dissassembly->operands.front());
 							continue;
 						}
 
@@ -1853,6 +1965,16 @@ namespace ast_funcs {
 				}
 
 			}
+
+			return;
+		}
+
+
+		/* Sets logical operations. */
+		void set_logical_operations(std::shared_ptr<ast_dec::ast>& ast) {
+
+
+
 
 			return;
 		}
@@ -1897,6 +2019,11 @@ namespace ast_funcs {
 		ast_funcs::loops::set_for_routines(ast);
 
 		#if display_analysis
+				std::printf("[AST] Setting logical routines.\n");
+		#endif
+		ast_funcs::locvars::set_logical_operations(ast);
+
+		#if display_analysis
 				std::printf("[AST] Setting locvars.\n");
 		#endif
 		ast_funcs::locvars::set_lv(ast, ast->arg_regs.size());
@@ -1922,22 +2049,23 @@ namespace ast_funcs {
 	void post_ast(std::shared_ptr<ast_dec::ast>& ast) {
 
 		#if display_analysis
-				std::printf("[AST] Setting table node ends.\n");
+				std::printf("[POST-AST] Setting table node ends.\n");
 		#endif
 		ast_post::table::set_node_end(ast);
 
 		#if display_analysis
-				std::printf("[AST] Setting table indexes exprs.\n");
+				std::printf("[POST-AST] Setting table indexes exprs.\n");
 		#endif
 		ast_post::table::set_indexs(ast);
 
 		#if display_analysis
-				std::printf("[AST] Setting arith exprs.\n");
+				std::printf("[POST-AST] Setting arith exprs.\n");
 		#endif
 		ast_post::arith::set_arith_exprs(ast);
 
 		return;
 	}
+
 }
 
 namespace blocks {
@@ -2103,7 +2231,7 @@ namespace blocks {
 					}
 
 					#if display_warnings
-						std::printf("[WARNING] Appending dead instruction to block with: pc = %" PRIuPTR " at instruction : % s\n", key, ast->dissassembly[key]->data.c_str());
+						std::printf("[WARNING] Appending dead instruction to block with: pc = %" PRIuPTR " at instruction : %s\n", key, ast->dissassembly[key]->data.c_str());
 					#endif
 
 					current = std::make_shared<ast_dec::block>();

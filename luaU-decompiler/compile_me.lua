@@ -1,40 +1,10 @@
 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-repeat 
-
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((alp == app) == (alp == app) or  aa or  (alp == app) == (alp == app) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((alp == app) == (alp == app) or  aa or  (alp == app) == (alp == app) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((alp == app) == (alp == app) or  aa or  (alp == app) == (alp == app) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((alp == app) == (alp == app) or  aa or  (alp == app) == (alp == app) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((alp == app) == (alp == app) or  aa or  (alp == app) == (alp == app) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((aa == appp) == (aa == appp) or  aa or  (aa == appp) == (aa == appp) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
-until ((alp == app) == (alp == app) or  aa or  (alp == app) == (alp == app) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)) or ((aaa == aa) == (bruh == pp)) ==  ((aaa ~= aa) ~= (bruh ~= pp)));
+--local g = ((aoo == aoao or aajja == aoao) == (aoo == aoao or aajja == aoao)) ==  ((aoo == aoao or aajja == aoao) == (aoo == aoao or aajja == aoao)) == ((aoo == aoao or aajja == aoao) == (aoo == aoao or aajja == aoao)) == ((aoo == aoao or aajja == aoao) == (aoo == aoao or aajja == aoao));
+--print ();
 
 
+function bruh (a1, a2)
+    print(a2);
+end
+aa = bruh;
+bruh (1, 2)

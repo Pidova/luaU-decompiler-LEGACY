@@ -478,7 +478,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						if (node->lex->has_operand_expr<lexer_dec::operand_types::compare>()) {
 
 							if (node->lex->count_operand_expr<lexer_dec::operand_types::compare>() == 2u) {
-
+							
 								/* while (?? ?? ??) */
 
 								const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
@@ -517,14 +517,13 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					case ast_dec::expr_type::until_: {
 
 						std::string compiled = "";
-
+						
 						/* Has compare **Compile compare too get emitted** */
 						if (node->lex->has_operand_expr<lexer_dec::operand_types::compare>()) {
 
 							if (node->lex->count_operand_expr<lexer_dec::operand_types::compare>() == 2u) {
 
 								/* while (?? ?? ??) */
-
 								const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
 								const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
 
@@ -2037,6 +2036,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				
 				/* Table is already created before hand just decide like locvar or something. */
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+
+				/* Fix table ends */
+				const auto table_ends = node->count_expr<ast_dec::expr_type::table_end>();
+				for (auto i = 0u; i < table_ends; ++i)
+					dest->sub_data += " }";
 
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {

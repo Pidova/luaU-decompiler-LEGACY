@@ -91,8 +91,8 @@ namespace ast_dec {
 		table_end, /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) [ALL] */
 		table_index, /* Extra expr used for certain things (Will be appended when everything is done). [ALL] */
 
-		closure_local, /* local function test () **Can be mutated by lv set if it is a lv will be local else newclosure* [ALL] */
-		closure_global, /* function test () [ALL] */
+		closure_local, /* local function test () **Can be mutated by lv set if it is a lv will be local else newclosure** [ALL] */
+		closure_global, /* function test () **Can be mutated by lv set if it is a lv instead of a global will turn into local** [ALL] */
 		closure_newclosure, /* (function()  end) [ALL] */
 
 		bad_instruction, /* Instruction will never get executed no matter watch branch is taken or not. [AST] */
@@ -140,6 +140,7 @@ namespace ast_dec {
 		/* Extra information for closure. */
 		struct closure_extra {
 			std::size_t closure_idx = 0u; /* Index of relating closure too ast->proto. */
+			std::shared_ptr<node> setglobal_node = nullptr;
 		} closure_extra;
 
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */
@@ -314,6 +315,17 @@ namespace ast_dec {
 					expr.second = count;
 					break;
 				}
+
+			return;
+		}
+
+		/* Removal all target. */
+		template <expr_type target>
+		void remove_all_expr() {
+
+			while (this->has_expr(target)) {
+				this->remove_expr <target>();
+			}
 
 			return;
 		}
@@ -496,52 +508,99 @@ namespace ast_dec {
 		std::uintptr_t node_start = 0u; /* PC start. */
 		std::uintptr_t node_end = 0u; /* PC final instruction. */
 
-		std::vector<std::shared_ptr<node>> nodes; /* Nodes in block. */
+		std::vector<std::shared_ptr<node>> nodes; /* Nodes in block. (Body) */
 		std::vector<std::shared_ptr<block>> branches; /* 2 elements; first is branch taken second is not, 1 there is only a jump (calls\for don't count, jumpbacks will refer to other nodes that have been skipped else wont have anything(may get fragmented), may be extras if dead instruction is next), 0 no jumps.  */
 
 
 		/* All visits gets sorted automatically by address. */
 
-		/* Visits first/all opcode value block. */
-		template<LuauOpcode op>
-		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_inst(const bool all /* All nodes with instruction. */) {
+		/* Visits all blocks in ast.  */
+		std::vector <std::shared_ptr<node>> visit_all() {
 
-			std::vector<std::shared_ptr<node>> retn;
+			/* Return cached */
+			if (!cached.all_nodes.empty()) {
+				return cached.all_nodes;
+			}
+
+			std::vector <std::shared_ptr<node>> retn;
 			std::vector<block*> scopes = { this };
-			std::vector<block*> analyzed_scopes = { this };
 
 			do {
-				
-				auto current_block = scopes.front ();
 
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-					
-					if (i->lex->dissassembly->op == op) {
+				auto current_block = scopes.front();
 
-						if (all) { /* Has all so emblace node. */
-							retn.emplace_back(i);
-						}
-						else {/* Not all so return node. */
-							return i;
-						}
+				retn.insert(retn.end(), current_block->nodes.begin(), current_block->nodes.end());
 
-					}
-
-				}
-		
 				/* Add nested blocks. */
 				for (const auto& i : current_block->branches)
 					scopes.emplace_back(i.get());
 
 				/* Remove current. */
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-				
+
 				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn); 
+				this->remove_dupes(retn);
 				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
+
+			if (!retn.size())
+				throw std::runtime_error("Returning no data for visit_all.");
+
+			/* Set cache */
+			cached.all_nodes = retn;
+
+			return retn;
+		}
+
+		/* Visits first/all opcode value block. */
+		template<LuauOpcode op>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_inst(const bool all /* All nodes with instruction. */) {
+
+			std::vector<std::shared_ptr<node>> retn;
+
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
+				
+				if (i->lex->dissassembly->op == op) {
+
+					if (all) { /* Has all so emblace node. */
+						retn.emplace_back(i);
+					}
+					else {/* Not all so return node. */
+						return i;
+					}
+
+				}
+
+			}
+		
+			return retn;
+		}
+
+		/* Visits first/all opcode value in scope. */
+		template<LuauOpcode op>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_inst_scope(const std::uintptr_t addr, const bool all /* All nodes with instruction. */) {
+
+			std::vector<std::shared_ptr<node>> retn;
+
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_rest_scope_addr(addr);
+			for (const auto& i : all_nodes) {
+
+				if (i->lex->dissassembly->op == op) {
+
+					if (all) { /* Has all so emblace node. */
+						retn.emplace_back(i);
+					}
+					else {/* Not all so return node. */
+						return i;
+					}
+
+				}
+
+			}
 
 			return retn;
 		}
@@ -552,41 +611,29 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_type(const bool all /* All nodes with instruction. */) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
-			std::vector<block*> analyzed_scopes = { this };
+	
+			/* Iterate through all nodes and find given type. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
+				
+				if (i->lex->type == type) {
 
-			do {
-
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-					
-					if (i->lex->type == type) {
-
-						if (all) { /* Has all so emblace node. */
-							retn.emplace_back(i);
-						}
-						else {/* Not all so return node. */
-							return i;
-						}
-
+					if (all) { /* Passed all so emplace node. */
+						retn.emplace_back(i);
+					}
+					else {/* Not all so return node. */
+						return i;
 					}
 
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
+			}
+			
+			#if display_warnings			
+				if (retn.empty()) {
+					std::printf("Visit_type returned empty for all.\n");
+				}
+			#endif 
 
 			return retn;
 		}
@@ -596,40 +643,23 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_inst(const std::uintptr_t addr, const bool all /* All nodes with instruction. */) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through all nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-				auto current_block = scopes.front ();
+				if (i->address > addr && i->lex->dissassembly->op == op) {
 
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address > addr && i->lex->dissassembly->op == op) {
-
-						if (all) { /* Has all so emblace node. */
-							retn.emplace_back(i);
-						}
-						else { /* Not all so return node. */
-							return i;
-						}
-
+					if (all) { /* Has all so emblace node. */
+						retn.emplace_back(i);
+					}
+					else { /* Not all so return node. */
+						return i;
 					}
 
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size ());
+			}
 
 			/* Nothing. */
 			if (!retn.size())
@@ -643,29 +673,15 @@ namespace ast_dec {
 		template<LuauOpcode op>
 		bool has_next_inst(const std::uintptr_t addr) {
 
-			std::vector<block*> scopes = { this };
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
-
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address > addr && i->lex->dissassembly->op == op)
-						return true;
+				if (i->address > addr && i->lex->dissassembly->op == op) {
+					return true;
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-
-			} while (scopes.size());
+			}		
 
 			return false;
 		}
@@ -674,30 +690,14 @@ namespace ast_dec {
 		/* Visit node with address. */
 		std::shared_ptr<node> visit_addr(const std::uintptr_t addr) {
 
-			std::vector<block*> scopes = { this };
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
+				if (i->address == addr)
+						return i;
 
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address == addr)
-							return i;
-
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-
-			} while (scopes.size());
+			}
 
 			#if display_warnings 
 				std::printf("[WARNING] Returning no data for visit_addr.\n");
@@ -712,40 +712,24 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_expr(const bool all) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
+			
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
+				if (i->has_expr(type)) {
 
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->has_expr(type)) {
-
-						if (all) {
-							retn.emplace_back(i);
-						}
-						else {
-							return i;
-						}
-
+					if (all) {
+						retn.emplace_back(i);
+					}
+					else {
+						return i;
 					}
 
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
+			}
 
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
 
 			return retn;
 		}
@@ -755,72 +739,64 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_expr(const std::uintptr_t address, const bool all) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-				auto current_block = scopes.front();
+				if (i->address > address && i->has_expr(type)) {
 
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address > address && i->has_expr(type)) {
-
-						if (all) {
-							retn.emplace_back(i);
-						}
-						else {
-							return i;
-						}
-
+					if (all) {
+						retn.emplace_back(i);
+					}
+					else {
+						return i;
 					}
 
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
+			}
 
 			return retn;
 		}
 
+		/* Visit next node with expression. (Ignores current address) */
+		template<expr_type type>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_expr_scope(const std::uintptr_t address, const bool all) {
+
+			std::vector<std::shared_ptr<node>> retn;
+
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_rest_scope_addr(address);
+			for (const auto& i : all_nodes) {
+
+				if (i->has_expr(type)) {
+
+					if (all) {
+						retn.emplace_back(i);
+					}
+					else {
+						return i;
+					}
+
+				}
+
+			}
+
+			return retn;
+		}
 
 		/* Visit node with previous address. */
 		std::shared_ptr<node> visit_previous_addr(const std::uintptr_t addr) {
 
-			std::vector<block*> scopes = { this };
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
+				if ((i->address + i->lex->dissassembly->len) == addr)
+					return i;
 
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if ((i->address + i->lex->dissassembly->len) == addr)
-						return i;
-
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-
-			} while (scopes.size());
+			}
 
 			#if display_warnings
 					std::printf("[WARNING] Nullptr returning for previous addr.");
@@ -835,43 +811,55 @@ namespace ast_dec {
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_type(const bool all /* All nodes with instruction. */) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-				auto current_block = scopes.front();
+				if (i->lex->type == inst) {
 
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->lex->type == inst) {
-
-						if (all) { /* Has all so emblace node. */
-							retn.emplace_back(i);
-						}
-						else { /* Not all so return node. */
-							return i;
-						}
-
+					if (all) { /* Has all so emblace node. */
+						retn.emplace_back(i);
+					}
+					else { /* Not all so return node. */
+						return i;
 					}
 
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
+			}
 
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
 
 			return retn;
 		}
+
+		/* Visits next/all inst type from address. Doesn't include current. */
+		template<lexer_dec::inst_type inst>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_type_addr(const std::uintptr_t addr, const bool all /* All nodes with instruction. */) {
+
+			std::vector<std::shared_ptr<node>> retn;
+
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
+
+				if (i->address > addr && i->lex->type == inst) {
+
+					if (all) { /* Has all so emblace node. */
+						retn.emplace_back(i);
+					}
+					else { /* Not all so return node. */
+						return i;
+					}
+
+				}
+
+			}
+
+
+			return retn;
+		}
+
 		
 
 		/* Visits all inst type in range. (Includes being, end) */
@@ -879,33 +867,16 @@ namespace ast_dec {
 		std::vector<std::shared_ptr<node>> visit_range_type(const std::uintptr_t begin, const std::uintptr_t end) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
+	
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
-
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address >= begin && i->address <= end && i->lex->type == inst) {
-						retn.emplace_back(i);
-					}
-
+				if (i->address >= begin && i->address <= end && i->lex->type == inst) {
+					retn.emplace_back(i);
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
+			}
 
 			return retn;
 		}
@@ -915,31 +886,15 @@ namespace ast_dec {
 		template<lexer_dec::inst_type inst>
 		std::shared_ptr<node> visit_range_type_next(const std::uintptr_t begin, const std::uintptr_t end) {
 
-			std::vector<block*> scopes = { this };
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
-
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address >= begin && i->address <= end && i->lex->type == inst) {
-						return i;
-					}
-
+				if (i->address >= begin && i->address <= end && i->lex->type == inst) {
+					return i;
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-
-			} while (scopes.size());
+			}
 
 			#if display_warnings 
 				std::printf("[WARNING] Nothing will be returned for visit_range_type_next.\n");
@@ -952,37 +907,22 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_previous_dest_register(const std::uintptr_t on_address, const std::uint16_t target_reg) {
 
 			std::shared_ptr<ast_dec::node> retn = nullptr;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through all nodes and find given dest register thats before on_address. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given dest register thats before on_address. */
-				for (const auto& i : current_block->nodes) {
-
-					/* yeah */
-					if (i->address < on_address && i->lex->operands.size() && i->lex->operands.front() == lexer_dec::operand_types::dest && i->lex->dissassembly->operands.front()->reg == target_reg) {
-						
-						if (retn == nullptr) /* First */
-							retn = i;
-						else if (retn->address < i->address /* Nearest */)
-							retn = i;
-
-					}
+				/* yeah */
+				if (i->address < on_address && i->lex->operands.size() && i->lex->operands.front() == lexer_dec::operand_types::dest && i->lex->dissassembly->operands.front()->reg == target_reg) {
+					
+					if (retn == nullptr) /* First */
+						retn = i;
+					else if (retn->address < i->address /* Nearest */)
+						retn = i;
 
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-
-			} while (scopes.size());
+			}
 
 			/* Node is null. */
 			if (retn == nullptr)
@@ -996,32 +936,16 @@ namespace ast_dec {
 	    std::vector<std::shared_ptr<node>> visit_rest(const std::uintptr_t on_address) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
+			
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
+				if (i->address > on_address)
+					retn.emplace_back(i);
 
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address > on_address)
-						retn.emplace_back(i);
-
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
+			}
+		
 
 			if (!retn.size ())
 				throw std::runtime_error("Returning no data for visit_addr.");
@@ -1033,32 +957,15 @@ namespace ast_dec {
 		std::vector<std::shared_ptr<node>> visit_rest_curr(const std::uintptr_t on_address) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-				auto current_block = scopes.front();
+				if (i->address >= on_address)
+					retn.emplace_back(i);
 
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					if (i->address >= on_address)
-						retn.emplace_back(i);
-
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
+			}
 
 			if (!retn.size())
 				throw std::runtime_error("Returning no data for visit_addr.");
@@ -1085,40 +992,82 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_relative_inst(const std::vector<LuauOpcode> rel) {
 
 			auto count = 0u;
-			std::vector<block*> scopes = { this };
+		
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
-
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					/* Inc for relative. */
-					if (std::find(rel.begin(), rel, i->lex->dissassembly->op) != rel.end())
-						++count;
-					
-					/* If found op dec if count isnt 0. If it is 0 then return node. */
-					if (i->lex->dissassembly->op == op)
-						if (!count)
-							return i;
-						else
-							--count;
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				/* Remove duplicates. */
-				this->remove_dupes(scopes);
-
-			} while (scopes.size());
+				/* Inc for relative. */
+				if (std::find(rel.begin(), rel, i->lex->dissassembly->op) != rel.end())
+					++count;
+				
+				/* If found op dec if count isnt 0. If it is 0 then return node. */
+				if (i->lex->dissassembly->op == op)
+					if (!count)
+						return i;
+					else
+						--count;
+			}
 
 			throw std::runtime_error("Returning no data for visit_relative_inst.");
+		}
+
+		/* Visit alls nodes inside scope with passed addr. (Ignores current) */
+		std::vector<std::shared_ptr<node>> visit_rest_scope_addr(const std::uintptr_t on_address) {
+
+			std::vector<std::shared_ptr<node>> nodes;
+
+			std::intptr_t scope_ = 0;
+			const auto next = this->visit_rest(on_address);
+			for (const auto& i : next) {
+
+				/* Scope */
+				scope_ += (i->count_expr <ast_dec::expr_type::repeat_>() +
+					i->count_expr <ast_dec::expr_type::while_>() +
+					i->count_expr <ast_dec::expr_type::for_start>() +
+					i->count_expr <ast_dec::expr_type::for_iv_start>() +
+					i->count_expr <ast_dec::expr_type::for_n_start>() +
+					i->count_expr <ast_dec::expr_type::if_>());
+				scope_ -= i->count_expr <ast_dec::expr_type::scope_end>();
+
+				/* Out of scope */
+				if (scope_ < 0) {
+					break;
+				}
+
+				nodes.emplace_back(i);
+			}
+
+			return nodes;
+		}
+
+		/* Visit alls nodes inside scope with passed addr. (Includes current) */
+		std::vector<std::shared_ptr<node>> visit_rest_scope_addr_current(const std::uintptr_t on_address) {
+
+			std::vector<std::shared_ptr<node>> nodes;
+
+			std::intptr_t scope_ = 0;
+			const auto next = this->visit_rest_curr(on_address);
+			for (const auto& i : next) {
+
+				/* Scope */
+				scope_ += (i->count_expr <ast_dec::expr_type::repeat_>() +
+					i->count_expr <ast_dec::expr_type::while_>() +
+					i->count_expr <ast_dec::expr_type::for_start>() +
+					i->count_expr <ast_dec::expr_type::for_iv_start>() +
+					i->count_expr <ast_dec::expr_type::for_n_start>() +
+					i->count_expr <ast_dec::expr_type::if_>());
+				scope_ -= i->count_expr <ast_dec::expr_type::scope_end>();
+
+				/* Out of scope */
+				if (scope_ < 0) {
+					break;
+				}
+
+				nodes.emplace_back(i);
+			}
+
+			return nodes;
 		}
 
 
@@ -1127,41 +1076,27 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_relative_next_inst(const std::uintptr_t on_address, const std::vector<LuauOpcode> rel) {
 
 			auto count = 0u;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-				auto current_block = scopes.front();
+				/* If current node address isnt bigger repeat till it is.*/
+				if (i->address <= on_address)
+					continue;
 
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
+				/* Inc for relative. */
+				if (std::find(rel.begin(), rel.end (), i->lex->dissassembly->op) != rel.end())
+					++count;
 
-					/* If current node address isnt bigger repeat till it is.*/
-					if (i->address <= on_address)
-						continue;
+				/* If found op dec if count isnt 0. If it is 0 then return node. */
+				if (i->lex->dissassembly->op == op)
+					if (!count)
+						return i;
+					else
+						--count;
+			}
 
-					/* Inc for relative. */
-					if (std::find(rel.begin(), rel.end (), i->lex->dissassembly->op) != rel.end())
-						++count;
-
-					/* If found op dec if count isnt 0. If it is 0 then return node. */
-					if (i->lex->dissassembly->op == op)
-						if (!count)
-							return i;
-						else
-							--count;
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-
-			} while (scopes.size());
 
 			throw std::runtime_error("Returning no data for visit_relative_inst.");
 		}
@@ -1172,51 +1107,71 @@ namespace ast_dec {
 		std::shared_ptr<node> visit_relative_next_expr(const std::uintptr_t on_address, const std::vector<expr_type> rel) {
 
 			auto count = 0u;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
+		
+				/* If current node address isnt bigger repeat till it is.*/
+				if (i->address <= on_address) {
+					continue;
+				}
 
-				auto current_block = scopes.front();
 
-				/* Iterate through block nodes and find given instruction. */
-				for (const auto& i : current_block->nodes) {
-
-					/* If current node address isnt bigger repeat till it is.*/
-					if (i->address <= on_address) {
-						continue;
+				/* Inc for relative. */
+				for (const auto r : rel)
+					if (i->has_expr(r)) {
+						++count; 
+						break;
 					}
 
-					/* Inc for relative. */
-					for (const auto r : rel)
-						if (i->has_expr(r)) {
-							++count; 
-							break;
-						}
+				/* If found op dec if count isnt 0. If it is 0 then return node. */
+				if (i->has_expr(target)) {
 
-					/* If found op dec if count isnt 0. If it is 0 then return node. */
-					if (i->has_expr(target)) {
-
-						if (!count) {
-							return i;
-						}
-						else {
-							--count;
-						}
-
+					if (!count) {
+						return i;
+					}
+					else {
+						--count;
 					}
 
 				}
 
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
+			}
 
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
+			throw std::runtime_error("Returning no data for visit_relative_next_expr.");
+		}
 
-				this->remove_dupes(scopes); /* Remove duplicates. */
+		/* Visits next relative node in scope to expr being target and args being addatives till exprs(rel arg) hits = dec and exper_target(template target) = inc(singular) and its 0.  (Ignores current) */
+		template<expr_type target>
+		std::shared_ptr<node> visit_relative_next_expr_scope(const std::uintptr_t on_address, const std::vector<expr_type> rel) {
 
-			} while (scopes.size());
+			auto count = 0u;
+
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_rest_scope_addr(on_address);
+			for (const auto& i : all_nodes) {
+
+				/* Inc for relative. */
+				for (const auto r : rel)
+					if (i->has_expr(r)) {
+						++count;
+						break;
+					}
+
+				/* If found op dec if count isnt 0. If it is 0 then return node. */
+				if (i->has_expr(target)) {
+
+					if (!count) {
+						return i;
+					}
+					else {
+						--count;
+					}
+
+				}
+
+			}
 
 			throw std::runtime_error("Returning no data for visit_relative_next_expr.");
 		}
@@ -1227,12 +1182,12 @@ namespace ast_dec {
 		std::variant<std::vector<std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>, std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>>  visit_expr_routine(const bool all /* All nodes with instruction. */) {
 
 			bool inside = false;
-			std::vector <std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>> retn;
 			std::shared_ptr<node> begin = nullptr;
-			std::vector<block*> scopes = { this };
+			std::vector <std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */>> retn;
+			
 
-			const auto all_inst = this->visit_all();
-			for (const auto& i : all_inst) {
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
 				if (i->has_expr(target)) {
 					inside = true;
@@ -1331,69 +1286,21 @@ namespace ast_dec {
 			return retn;
 		}
 
-		/* Visits all blocks in ast.  */
-		std::vector <std::shared_ptr<node>> visit_all() {
-
-			std::vector <std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
-
-			do {
-
-				auto current_block = scopes.front();
-
-				retn.insert(retn.end(), current_block->nodes.begin(), current_block->nodes.end());
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
-
-			if (!retn.size ())
-				throw std::runtime_error("Returning no data for visit_all.");
-
-			return retn;
-		}
-
 		/* Visits all nodes between addresses (Ignores start, end) */
 		std::vector<std::shared_ptr<node>> visit_range(const std::uintptr_t start, const std::uintptr_t end) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
+		
+			/* Iterate through block nodes. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-			do {
+				/* Between addresses. */
+				if (i->address > start && i->address < end)
+					retn.emplace_back(i);
 
-				auto current_block = scopes.front();
-
-				/* Iterate through block nodes. */
-				for (const auto& i : current_block->nodes) {
-
-					/* Between addresses. */
-					if (i->address > start && i->address < end)
-						retn.emplace_back(i);
-
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
-
+			}
+	
 			/* Nothing. */
 			#if display_warnings 
 				if (!retn.size()) {
@@ -1408,33 +1315,16 @@ namespace ast_dec {
 		std::vector<std::shared_ptr<node>> visit_range_current(const std::uintptr_t start, const std::uintptr_t end) {
 
 			std::vector<std::shared_ptr<node>> retn;
-			std::vector<block*> scopes = { this };
 
-			do {
+			/* Iterate through block nodes. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
-				auto current_block = scopes.front();
+				/* Between addresses. */
+				if (i->address >= start && i->address <= end)
+					retn.emplace_back(i);
 
-				/* Iterate through block nodes. */
-				for (const auto& i : current_block->nodes) {
-
-					/* Between addresses. */
-					if (i->address >= start && i->address <= end)
-						retn.emplace_back(i);
-
-				}
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i.get());
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
-
-			} while (scopes.size());
+			}
 
 			/* Nothing. */
 			if (!retn.size())
@@ -1485,8 +1375,8 @@ namespace ast_dec {
 
 			std::vector<std::shared_ptr<node>> retn;
 			
-			const auto all = this->visit_all();
-			for (const std::shared_ptr<ast_dec::node>& i : all) {
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
 				const auto mems = i->lex->operand_expr<lexer_dec::operand_types::memaddr>();
 				for (const auto& m : mems)
@@ -1505,8 +1395,8 @@ namespace ast_dec {
 
 			std::vector<std::pair <std::uintptr_t /* Labels address. */, std::vector<std::shared_ptr<node>>> /* Goto addresses */> retn;
 
-			const auto all = this->visit_all();
-			for (const auto& i : all) {
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
 
 				const auto mems = i->lex->operand_expr<lexer_dec::operand_types::memaddr>();
 				for (const auto& m : mems) {
@@ -1564,6 +1454,12 @@ namespace ast_dec {
 				return;
 			}
 
+			struct cached {
+				 
+				std::vector <std::shared_ptr<node>> all_nodes;
+
+			} cached;
+
 	};
 
 	struct ast {
@@ -1597,6 +1493,7 @@ namespace ast_dec {
 		std::shared_ptr<transpiler_data::transpiler_config> transpiler_config; /* Linked transpiler config. */
 
 
+		/* Block */
 
 		/* Finds block by start address. */
 		std::shared_ptr <block> find_block(const std::uintptr_t addr) {
@@ -1657,6 +1554,7 @@ namespace ast_dec {
 
 			return nullptr;
 		}
+
 
 		/* Turns ast into tree string. */
 		std::string tree_str() {

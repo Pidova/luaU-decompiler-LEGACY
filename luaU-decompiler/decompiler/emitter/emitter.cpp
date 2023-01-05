@@ -13,27 +13,27 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
         }
 
         case LuauOpcode::LOP_JUMPIFEQ: {
-            cmp = (!opposite) ? " == " : "";
+            cmp = (!opposite) ? " == " : " ~= ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKNIL: {
-            cmp = (!opposite) ? " == " : "";
+            cmp = (!opposite) ? " == " : " ~= ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKB: {
-            cmp = (!opposite) ? " == " : " ";
+            cmp = (!opposite) ? " == " : " ~= ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKS: {
-            cmp = (!opposite) ? " == " : "";
+            cmp = (!opposite) ? " == " : " ~= ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKN: {
-            cmp = (!opposite) ? " == " : "";
+            cmp = (!opposite) ? " == " : " ~= ";
             break;
         }
 
