@@ -669,6 +669,14 @@ namespace ast_funcs {
 			return;
 		}
 
+		/* Sets ifs/elseifs/elses (Logical routines loops etc must be set first). */
+		void set_branch_statements(std::shared_ptr<ast_dec::ast>& ast) {
+
+
+
+			return;
+		}
+
 	}
 
 	namespace arguments {
@@ -1812,7 +1820,7 @@ namespace ast_funcs {
 					/* Not set yet. */
 					if (operand->reg == registers.back()) {
 						node->dest_loc.is_dest_loc = true;
-						node->dest_loc.name = std::to_string(registers.back());
+						node->dest_loc.name = emitter::create::locvar_name(ast->transpiler_config->variable_prefix, registers.back(), ast->transpiler_config->var_suffix_char) ;
 						++registers.back();
 					}
 
@@ -1973,8 +1981,10 @@ namespace ast_funcs {
 		/* Sets logical operations. */
 		void set_logical_operations(std::shared_ptr<ast_dec::ast>& ast) {
 
+			const auto all = ast->main_block->visit_all();
+			for (const auto& i : all) {
 
-
+			}
 
 			return;
 		}
@@ -2367,7 +2377,7 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto, const std::shared_p
 			auto child_ast = std::make_shared<ast>();
 			child_ast->p = current_proto->p->p[i];
 			child_ast->transpiler_config = config;
-
+			
 			current_proto->protos.emplace_back(child_ast);
 			ast_funcs::proto::set_closure_info(current_proto, i);
 

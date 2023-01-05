@@ -1487,11 +1487,27 @@ namespace ast_dec {
 
 
 		std::unordered_map<std::uintptr_t /* Idx */, std::pair <std::string /* Value */, std::int16_t /* Reg (-1 for upv) */>> upvalues;
-
-		std::vector<std::shared_ptr <ast>> protos; /* Any children protos. Relates to proto->p */
-
+		std::vector<std::shared_ptr <ast>> protos; /* Any children protos, relates to proto->p. */
 		std::shared_ptr<transpiler_data::transpiler_config> transpiler_config; /* Linked transpiler config. */
 
+
+		/* Ast config */
+		struct ast_config {
+		
+			/* Expands tables members if members exceed a certain amount. (Disabled for nested tables). -1 for disabled */
+			std::int32_t table_members_expand = -1; 
+		
+			/* Will be in use if var/arg/upvalue/etc suffix uses integer instead of char. (Makes incrementor scoped) */
+			bool scoped_global_incrementor = true;
+		
+		} ast_config;
+		
+		/* Copys current ast config to target. */
+		void copy_config(std::shared_ptr <ast>& target) {	
+			target->ast_config.scoped_global_incrementor = this->ast_config.scoped_global_incrementor;
+			target->ast_config.table_members_expand = this->ast_config.table_members_expand;		
+			return;
+		}
 
 		/* Block */
 
@@ -1583,6 +1599,7 @@ namespace ast_dec {
 			indent_multiplier.insert(std::make_pair(pc, 0u));
 
 			do {
+
 
 				const auto block = this->find_block(pc);
 				const auto mult = indent_multiplier[pc];

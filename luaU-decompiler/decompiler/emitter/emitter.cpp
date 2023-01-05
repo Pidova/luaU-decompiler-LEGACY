@@ -434,54 +434,57 @@ std::string emitter::create::locvar_name(const std::string& prefix, const std::s
         for (const auto c : suffix_str)
             switch (c) {
 
-            case '0': {
-                dest += 'a';
-                break;
-            }
+              case '0': {
+                  dest += 'a';
+                  break;
+              }
 
-            case '1': {
-                dest += 'b';
-                break;
-            }
+              case '1': {
+                  dest += 'b';
+                  break;
+              }
 
-            case '2': {
-                dest += 'c';
-                break;
-            }
+              case '2': {
+                  dest += 'c';
+                  break;
+              }
 
-            case '3': {
-                dest += 'd';
-                break;
-            }
+              case '3': {
+                  dest += 'd';
+                  break;
+              }
 
-            case '4': {
-                dest += 'e';
-                break;
-            }
+              case '4': {
+                  dest += 'e';
+                  break;
+              }
 
-            case '5': {
-                dest += 'f';
-                break;
-            }
+              case '5': {
+                  dest += 'f';
+                  break;
+              }
+              case '6': {
+                  dest += 'g';
+                  break;
+              }
+              case '7': {
+                  dest += 'h';
+                  break;
+              }
 
-            case '7': {
-                dest += 'g';
-                break;
-            }
+              case '8': {
+                  dest += 'i';
+                  break;
+              }
 
-            case '8': {
-                dest += 'h';
-                break;
-            }
+              case '9': {
+                  dest += 'n';
+                  break;
+              }
 
-            case '9': {
-                dest += 'i';
-                break;
-            }
-
-            default: {
-                throw std::runtime_error("Something went wrong with locvar name emitter suffix.");
-            }
+              default: {
+                  throw std::runtime_error("Something went wrong with locvar name emitter suffix.");
+              }
 
             }
 
@@ -489,6 +492,6 @@ std::string emitter::create::locvar_name(const std::string& prefix, const std::s
     else {
         dest += suffix_str;
     }
-
+ 
     return dest;
 }

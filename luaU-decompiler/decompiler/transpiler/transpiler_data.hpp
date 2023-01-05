@@ -9,10 +9,10 @@ namespace transpiler_data {
 	struct transpiler_config {
 
 		/* Prefixs. */
-		std::string iterator_prefix = "i";
-		std::string variable_prefix = "v_";
-		std::string loop_variable_prefix = "k";
-		std::string loop_variable_prefix_2 = "v";
+		std::string iterator_prefix = "i_";
+		std::string variable_prefix = "var_";
+		std::string loop_variable_prefix = "k_";
+		std::string loop_variable_prefix_2 = "v_";
 		std::string arg_prefix = "arg";
 		std::string upvalue_prefix = "up_";
 		std::string function_prefix = "func_";
@@ -21,8 +21,10 @@ namespace transpiler_data {
 
 		/* Turns suffix digits into english characters. */
 		bool upvalue_suffix_char = true;
-		bool arg_suffix_char = false;
-		bool function_suffix_char = false;
+		bool arg_suffix_char = true;
+		bool function_suffix_char = true;
+		bool iteration_suffix_char = true;
+		bool var_suffix_char = true; /* Not applicable to smart names. */
 
 		/* Comment */
 		bool include_header = false; /* Includes header per proto and main along with extra stuff like time and full bytecode. */

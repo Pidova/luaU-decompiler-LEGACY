@@ -335,7 +335,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 		/* Fix lv name. */
 		if (node->dest_loc.is_dest_loc && (config->smart_variable || !node->dest_loc.set_prefix) && !node->dest_loc.is_upvalue) {
-			node->dest_loc.name = ((config->smart_variable) ? lv::smart_name(regs, node, config->variable_prefix) : config->variable_prefix) + node->dest_loc.name;
+			node->dest_loc.name = ((config->smart_variable) ? lv::smart_name(regs, node, config->variable_prefix) : node->dest_loc.name);
 			node->dest_loc.set_prefix = true;
 		} 
 
@@ -568,11 +568,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						const auto begin = node->loop_extra.end_node->lex->dissassembly->operands.front()->reg;
 
 						/* K */
-						const auto K = (node->loop_extra.iteration_names.find(begin + reserved) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[begin + reserved] : config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
+						const auto K = (node->loop_extra.iteration_names.find(begin + reserved) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[begin + reserved] : emitter::create::locvar_name(config->loop_variable_prefix, suffixes::loop_variable_suffix++, config->iteration_suffix_char);
 						regs.back()[begin + reserved]->set<registers::type::var>(K);
 
 						/* V */
-						const auto V = (node->loop_extra.iteration_names.find(begin + reserved + 1u) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[begin + reserved + 1u] : config->loop_variable_prefix_2 + std::to_string(suffixes::loop_variable_prefix_2_suffix++);
+						const auto V = (node->loop_extra.iteration_names.find(begin + reserved + 1u) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[begin + reserved + 1u] : emitter::create::locvar_name(config->loop_variable_prefix_2, suffixes::loop_variable_prefix_2_suffix++, config->iteration_suffix_char);
 						regs.back()[begin + reserved + 1u]->set<registers::type::var>(V);
 						
 						/* Compile iter */
@@ -614,7 +614,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						for (auto i = 0u; i < count; ++i) {
 
 							/* Make iterating variable name and compile it. */
-							const auto name = (node->loop_extra.iteration_names.find(i + begin + reserved) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[i + begin + reserved] : config->loop_variable_prefix + std::to_string(suffixes::loop_variable_suffix++);
+							const auto name = (node->loop_extra.iteration_names.find(i + begin + reserved) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[i + begin + reserved] : emitter::create::locvar_name(config->loop_variable_prefix, suffixes::loop_variable_suffix++, config->iteration_suffix_char);
 							compiled_vars += (name + (((i + 1u) == count) ? "" : ", "));
 
 							regs.back()[i + begin + reserved]->set<registers::type::var>(name);
@@ -662,7 +662,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						const auto start = (end + 2u);
 
 						/* Write start end etc and finalize. */
-						const auto iterate = (node->loop_extra.iteration_names.find(start) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[start] : config->iterator_prefix + std::to_string(suffixes::iterator_prefix_suffix++);
+						const auto iterate = (node->loop_extra.iteration_names.find(start) != node->loop_extra.iteration_names.end()) ? node->loop_extra.iteration_names[start] : emitter::create::locvar_name(config->iterator_prefix, suffixes::iterator_prefix_suffix++, config->iteration_suffix_char);
 						auto iteration = regs.back()[start]->data + ", " + regs.back()[end]->data;
 
 						/* Set reg as var. */
