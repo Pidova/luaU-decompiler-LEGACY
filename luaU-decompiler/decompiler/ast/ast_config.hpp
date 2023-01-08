@@ -6,3 +6,5 @@
 #define display_dissassembly true /* Prints dissassembly of blocks. */
 #define display_data true /* Prints tree and proto data after ast. */
 
+#define ast_debug true /* Must be true for display_data too work. */
+#define node_debug true /* Must be true for  TANSPILER_DEBUG_OPERANDS or debug_functions or display_data too work. */

@@ -11,6 +11,7 @@
 #include "../lexer/lexer_dec.hpp"
 #include "../transpiler/transpiler_data.hpp"
 #include "../debug.hpp"
+#include "ast_config.hpp"
 
 /*
 
@@ -67,9 +68,13 @@ namespace ast_dec {
 		condition_concat_start, /* Concat a condition(universal) (start). [AST] */
 		condition_concat_end, /* Concat a condition(universal) (end will get written too compare flag). [AST] */
 		condition_true, /* Sets compare flag too true garunteing that while true expressions get set as true (expr type). [ALL] */
-		condition_flag, /* Writes result to flag. */
-		condition_break, /* Conditon leads too break. */
+		condition_flag, /* Writes result to flag. [TRANSPILER] */
+		condition_break, /* Conditon leads too break. [TRANSPILER] */
 		condition_emit_next, /* Emits compare data too dest register in next instruction. [TRANSPILER] */
+		/* Different from concat condition doesn't garunteed actual concatation just a hint. */
+		condition_logical_start, /* Start of a logical operation. [AST] */
+		condition_logical, /* Apart of a logical operation. [AST] */
+		condition_logical_end, /* End of a logical operation. [AST] */
 
 		/* Will get emmited to condition flag post compare. */
 		condition_and, /* if/elseif/nested(and) appends to if_statements (Can be applied to until or while) [ALL] */
@@ -398,85 +403,93 @@ namespace ast_dec {
 		}
 
 		/* Turns expr pair into a string. */
-		std::string expr_str(const std::pair <expr_type, std::size_t>& p) {
 
-			std::string retn = "";
+		#if node_debug
 
-			switch (p.first) {
-
-				case expr_type::lex: { retn += "lex";  break; }
-
-				case expr_type::arith: { retn += "arith";  break; }
-				case expr_type::arithK: { retn += "arithK";  break; }
-
-				case expr_type::statement_begin: { retn += "statement_begin"; break; }
-				case expr_type::statement_end: { retn += "statement_end"; break; }
-
-				case expr_type::for_iv_start: { retn += "for_iv_start";  break; }
-				case expr_type::for_iv_end: { retn += "for_iv_end";  break; }
-				case expr_type::for_start: { retn += "for_start";  break; }
-				case expr_type::for_end: { retn += "for_end";  break; }
-				case expr_type::for_n_start: { retn += "for_n_start";  break; }
-				case expr_type::for_n_end: { retn += "for_n_end";  break; }
-				case expr_type::for_prep: { retn += "for_prep"; break; }
-
-				case expr_type::repeat_: { retn += "repeat";  break; }
-				case expr_type::while_: { retn += "while";  break; }
-				case expr_type::while_end: { retn += "while_end"; break; }
-				case expr_type::until_: { retn += "until";  break; }
-				case expr_type::break_: { retn += "break";  break; }
-				case expr_type::scope_end: { retn += "scope_end";  break; }
-
-				case expr_type::call_routine_start: { retn += "call_routine_start";  break; }
-				case expr_type::call_routine_end: { retn += "call_routine_end";  break; }
-
-				case expr_type::concat_routine_start: { retn += "concat_routine_start";  break; }
-				case expr_type::concat_routine_end: { retn += "concat_routine_end";  break; }
-
-				case expr_type::if_: { retn += "if";  break; }
-				case expr_type::elseif_: { retn += "elseif";  break; }
-				case expr_type::else_: { retn += "else";  break; }
-				case expr_type::condition_and: { retn += "and";  break; }
-				case expr_type::condition_or: { retn += "or";  break; }
-				case expr_type::condition_nonmutable: { retn += "condition_nonmutable";  break; }
-				case expr_type::condition_concat_start: { retn += "condition_concat_start";  break; }
-				case expr_type::condition_concat_end: { retn += "condition_concat_end";  break; }
-				case expr_type::condition_true: { retn += "condition_true"; break; }
-				case expr_type::condition_routine: { retn += "condition_routine"; break; }
-				case expr_type::condition_routine_start: { retn += "condition_routine_start"; break; }
-				case expr_type::condition_routine_end: { retn += "condition_routine_end"; break; }
-				case expr_type::condition_flag: { retn += "condition_flag"; break; }
-				case expr_type::condition_break: { retn += "condition_break"; break; }
-				case expr_type::condition_emit_next: { retn += "condition_emit_next"; break; }
-
-				case expr_type::condition_close: { retn += "condition_close";  break; }
-				case expr_type::condition_open: { retn += "condition_open";  break; }
-				case expr_type::condition_open_post: { retn += "condition_open_post"; break;  }
-
-				case expr_type::table_start: { retn += "table_start";  break; }
-				case expr_type::table_element: { retn += "table_element";  break; }
-				case expr_type::table_end: { retn += "table_end";  break; }
-				case expr_type::table_index: { retn += "table_index"; break; }
-
-				case expr_type::closure_local: { retn += "closure_local";  break; }
-				case expr_type::closure_global: { retn += "closure_global";  break; }
-				case expr_type::closure_newclosure: { retn += "closure_newclosure";  break; }
-
-				case expr_type::bad_instruction: { retn += "bad_instruction";  break; }
-				case expr_type::dead_instruction: { retn += "dead_instruction";  break; }
-				case expr_type::conditional: { retn += "conditional";  break; }
-
-				default: {
-					throw std::runtime_error("Unkown expr for expr string.");
+				std::string expr_str(const std::pair <expr_type, std::size_t>& p) {
+		
+					std::string retn = "";
+		
+					switch (p.first) {
+		
+						case expr_type::lex: { retn += "lex";  break; }
+		
+						case expr_type::arith: { retn += "arith";  break; }
+						case expr_type::arithK: { retn += "arithK";  break; }
+		
+						case expr_type::statement_begin: { retn += "statement_begin"; break; }
+						case expr_type::statement_end: { retn += "statement_end"; break; }
+		
+						case expr_type::for_iv_start: { retn += "for_iv_start";  break; }
+						case expr_type::for_iv_end: { retn += "for_iv_end";  break; }
+						case expr_type::for_start: { retn += "for_start";  break; }
+						case expr_type::for_end: { retn += "for_end";  break; }
+						case expr_type::for_n_start: { retn += "for_n_start";  break; }
+						case expr_type::for_n_end: { retn += "for_n_end";  break; }
+						case expr_type::for_prep: { retn += "for_prep"; break; }
+		
+						case expr_type::repeat_: { retn += "repeat";  break; }
+						case expr_type::while_: { retn += "while";  break; }
+						case expr_type::while_end: { retn += "while_end"; break; }
+						case expr_type::until_: { retn += "until";  break; }
+						case expr_type::break_: { retn += "break";  break; }
+						case expr_type::scope_end: { retn += "scope_end";  break; }
+		
+						case expr_type::call_routine_start: { retn += "call_routine_start";  break; }
+						case expr_type::call_routine_end: { retn += "call_routine_end";  break; }
+		
+						case expr_type::concat_routine_start: { retn += "concat_routine_start";  break; }
+						case expr_type::concat_routine_end: { retn += "concat_routine_end";  break; }
+		
+						case expr_type::if_: { retn += "if";  break; }
+						case expr_type::elseif_: { retn += "elseif";  break; }
+						case expr_type::else_: { retn += "else";  break; }
+						case expr_type::condition_and: { retn += "and";  break; }
+						case expr_type::condition_or: { retn += "or";  break; }
+						case expr_type::condition_nonmutable: { retn += "condition_nonmutable";  break; }
+						case expr_type::condition_concat_start: { retn += "condition_concat_start";  break; }
+						case expr_type::condition_concat_end: { retn += "condition_concat_end";  break; }
+						case expr_type::condition_true: { retn += "condition_true"; break; }
+						case expr_type::condition_routine: { retn += "condition_routine"; break; }
+						case expr_type::condition_routine_start: { retn += "condition_routine_start"; break; }
+						case expr_type::condition_routine_end: { retn += "condition_routine_end"; break; }
+						case expr_type::condition_flag: { retn += "condition_flag"; break; }
+						case expr_type::condition_break: { retn += "condition_break"; break; }
+						case expr_type::condition_emit_next: { retn += "condition_emit_next"; break; }
+						case expr_type::condition_logical_start: { retn += "condition_logical_start"; break; }
+						case expr_type::condition_logical: { retn += "condition_logical"; break; }
+						case expr_type::condition_logical_end: { retn += "condition_logical_end"; break; }
+		
+						case expr_type::condition_close: { retn += "condition_close";  break; }
+						case expr_type::condition_open: { retn += "condition_open";  break; }
+						case expr_type::condition_open_post: { retn += "condition_open_post"; break;  }
+		
+						case expr_type::table_start: { retn += "table_start";  break; }
+						case expr_type::table_element: { retn += "table_element";  break; }
+						case expr_type::table_end: { retn += "table_end";  break; }
+						case expr_type::table_index: { retn += "table_index"; break; }
+		
+						case expr_type::closure_local: { retn += "closure_local";  break; }
+						case expr_type::closure_global: { retn += "closure_global";  break; }
+						case expr_type::closure_newclosure: { retn += "closure_newclosure";  break; }
+		
+						case expr_type::bad_instruction: { retn += "bad_instruction";  break; }
+						case expr_type::dead_instruction: { retn += "dead_instruction";  break; }
+						case expr_type::conditional: { retn += "conditional";  break; }
+		
+						default: {
+							throw std::runtime_error("Unkown expr for expr string.");
+						}
+		
+					}
+		
+					retn = '[' + retn + "]: " + std::to_string(p.second);
+		
+					return retn;
 				}
 
-			}
+		#endif
 
-			retn = '[' + retn + "]: " + std::to_string(p.second);
-
-			return retn;
-		}
-	
 		/* Debug */
 
 		#if debug_functions
@@ -544,8 +557,9 @@ namespace ast_dec {
 
 			} while (scopes.size());
 
-			if (!retn.size())
+			if (retn.empty()) {
 				throw std::runtime_error("Returning no data for visit_all.");
+			}
 
 			/* Set cache */
 			cached.all_nodes = retn;
@@ -662,8 +676,9 @@ namespace ast_dec {
 			}
 
 			/* Nothing. */
-			if (!retn.size())
+			if (retn.empty()) {
 				throw std::runtime_error("Returning no data for visit_next_inst.");
+			}
 
 			return retn;
 		}
@@ -947,8 +962,9 @@ namespace ast_dec {
 			}
 		
 
-			if (!retn.size ())
+			if (retn.empty()) {
 				throw std::runtime_error("Returning no data for visit_addr.");
+			}
 
 			return retn;
 		}
@@ -967,8 +983,9 @@ namespace ast_dec {
 
 			}
 
-			if (!retn.size())
+			if (retn.empty()) {
 				throw std::runtime_error("Returning no data for visit_addr.");
+			}
 
 			return retn;
 		}
@@ -1213,7 +1230,7 @@ namespace ast_dec {
 				
 
 			#if display_warnings
-				if (!retn.size()) { 
+				if (retn.empty()) { 
 					std::printf("[WARNING] Returning no data for visit_expr_routine.\n");				
 				}
 			#endif
@@ -1303,7 +1320,7 @@ namespace ast_dec {
 	
 			/* Nothing. */
 			#if display_warnings 
-				if (!retn.size()) {
+				if (retn.empty()) {
 						std::printf("[WARNING] No will be returned for visit_range.\n");
 				}
 			#endif
@@ -1327,8 +1344,9 @@ namespace ast_dec {
 			}
 
 			/* Nothing. */
-			if (!retn.size())
+			if (retn.empty()) {
 				throw std::runtime_error("Returning no data for visit_range.");
+			}
 
 			return retn;
 		}
@@ -1573,165 +1591,170 @@ namespace ast_dec {
 
 
 		/* Turns ast into tree string. */
-		std::string tree_str() {
+		#if ast_debug 
 
-			std::unordered_map <std::uintptr_t /* addr */, std::size_t /* amt */> indent_multiplier;
-			std::string retn = "";
-			std::uintptr_t pc = 0u;
-			std::string indenting = "";
-			std::vector<std::uintptr_t> labels;
+			std::string tree_str() {
 
-			const auto branch = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(this->main_block->visit_next_type<lexer_dec::inst_type::branch>(true));
-			const auto contional = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(this->main_block->visit_next_type<lexer_dec::inst_type::branch_condition>(true));
+				std::unordered_map <std::uintptr_t /* addr */, std::size_t /* amt */> indent_multiplier;
+				std::string retn = "";
+				std::uintptr_t pc = 0u;
+				std::string indenting = "";
+				std::vector<std::uintptr_t> labels;
 
-			/* Append jump backs. */
-			for (const auto& node : branch) {
-				labels.emplace_back(node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
-			}
+				const auto branch = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(this->main_block->visit_next_type<lexer_dec::inst_type::branch>(true));
+				const auto contional = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(this->main_block->visit_next_type<lexer_dec::inst_type::branch_condition>(true));
 
-			for (const auto& node : contional) {
-				if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0) {
+				/* Append jump backs. */
+				for (const auto& node : branch) {
 					labels.emplace_back(node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
 				}
-			}
 
-			/* Append first */
-			indent_multiplier.insert(std::make_pair(pc, 0u));
-
-			do {
-
-
-				const auto block = this->find_block(pc);
-				const auto mult = indent_multiplier[pc];
-				
-
-				/* Compile indent */
-				for (auto i = 0u; i < mult; ++i)
-					indenting += "	";
-
-
-				/* Compile nodes str */
-				for (const auto& node : block->nodes) {
-
-					auto dism = indenting + std::to_string (node->address) + " " + node->lex->dissassembly->data;
-
-					/* Add label */
-					if (std::find(labels.begin(), labels.end(), node->address) != labels.end()) {
-						retn += "label_" + std::to_string(node->address) + ":\n";
+				for (const auto& node : contional) {
+					if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0) {
+						labels.emplace_back(node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
 					}
-
-					/* Goto */
-					if (node->lex->type == lexer_dec::inst_type::branch || (node->lex->type == lexer_dec::inst_type::branch_condition && (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0 || std::find(labels.begin (), labels.end(), node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) != labels.end()))) {
-						dism += " goto label_" + std::to_string (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) + ";";
-					}
-					
-					dism += " ( ";
-					for (const auto& p : node->expr)
-						dism += node->expr_str(p) + " ";
-					dism += ")\n";
-
-					retn += dism;
 				}
 
+				/* Append first */
+				indent_multiplier.insert(std::make_pair(pc, 0u));
 
-				/* Set mults */
-				if (block->branches.size() ==  2u) {
+				do {
 
-					const auto branch_taken = block->branches.front()->node_start;
-					const auto branch_not_taken = block->branches.back()->node_start;
+
+					const auto block = this->find_block(pc);
+					const auto mult = indent_multiplier[pc];
 					
-					/* Most greater relative too branch_taken. */
-					auto greater = 0u;
-					for (const auto& i : indent_multiplier)
-						if (i.first > greater && i.first < branch_taken) {
-							greater = i.first;
+
+					/* Compile indent */
+					for (auto i = 0u; i < mult; ++i)
+						indenting += "	";
+
+
+					/* Compile nodes str */
+					for (const auto& node : block->nodes) {
+
+						auto dism = indenting + std::to_string (node->address) + " " + node->lex->dissassembly->data;
+
+						/* Add label */
+						if (std::find(labels.begin(), labels.end(), node->address) != labels.end()) {
+							retn += "label_" + std::to_string(node->address) + ":\n";
 						}
 
-					/* Add indent to greater. */
-					if (greater) {
+						/* Goto */
+						if (node->lex->type == lexer_dec::inst_type::branch || (node->lex->type == lexer_dec::inst_type::branch_condition && (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp < 0 || std::find(labels.begin (), labels.end(), node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) != labels.end()))) {
+							dism += " goto label_" + std::to_string (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) + ";";
+						}
+						
+						dism += " ( ";
+						for (const auto& p : node->expr)
+							dism += node->expr_str(p) + " ";
+						dism += ")\n";
+
+						retn += dism;
+					}
+
+
+					/* Set mults */
+					if (block->branches.size() ==  2u) {
+
+						const auto branch_taken = block->branches.front()->node_start;
+						const auto branch_not_taken = block->branches.back()->node_start;
+						
+						/* Most greater relative too branch_taken. */
+						auto greater = 0u;
+						for (const auto& i : indent_multiplier)
+							if (i.first > greater && i.first < branch_taken) {
+								greater = i.first;
+							}
+
+						/* Add indent to greater. */
+						if (greater) {
+
+							if (indent_multiplier.find(branch_taken) == indent_multiplier.end()) {
+								indent_multiplier.insert(std::make_pair(branch_taken, indent_multiplier[greater]));
+								labels.emplace_back(branch_taken);
+							}
+
+						}
 
 						if (indent_multiplier.find(branch_taken) == indent_multiplier.end()) {
-							indent_multiplier.insert(std::make_pair(branch_taken, indent_multiplier[greater]));
-							labels.emplace_back(branch_taken);
+							indent_multiplier.insert(std::make_pair(branch_taken, mult));
 						}
 
-					}
+						if (indent_multiplier.find(branch_not_taken) == indent_multiplier.end()) {
+							indent_multiplier.insert(std::make_pair(branch_not_taken, mult + 1u));
+						}
 
-					if (indent_multiplier.find(branch_taken) == indent_multiplier.end()) {
-						indent_multiplier.insert(std::make_pair(branch_taken, mult));
-					}
-
-					if (indent_multiplier.find(branch_not_taken) == indent_multiplier.end()) {
-						indent_multiplier.insert(std::make_pair(branch_not_taken, mult + 1u));
-					}
-
-				}	
+					}	
 
 
-				/* Set pc */
-				pc = block->node_end + block->visit_addr(block->node_end)->lex->dissassembly->len;
-				indenting.clear();
+					/* Set pc */
+					pc = block->node_end + block->visit_addr(block->node_end)->lex->dissassembly->len;
+					indenting.clear();
 
-			} while (pc < this->pc_end);
-
-
-			return retn;
-		}
-
-		std::string proto_information() {
-
-			std::string retn = "";
-
-			retn += "Proto:\n";
-			retn += "	* name: " + closure_name + "\n";
-			retn += "	* type: ";
+				} while (pc < this->pc_end);
 
 
-			switch (this->closure_type) {
-
-				case ast_dec::closure_type::main: {
-					retn += "main";
-					break;
-				}
-
-				case ast_dec::closure_type::local : {
-					retn += "local";
-					break;
-				}
-
-				case ast_dec::closure_type::newclosure: {
-					retn += "newclosure";
-					break;
-				}
-
-				case ast_dec::closure_type::global: {
-					retn += "global";
-					break;
-				}
-
-				default: {
-					retn += "none";
-					break;
-				}
-
+				return retn;
 			}
-			retn += "\n";
 
-			retn += "	* arg count: " + std::to_string(this->arg_regs.size()) + "\n";
-			retn += "	* args: ";
 
-			for (const auto& i : this->arg_regs)
-				retn += "r" + std::to_string(i.first) + "(" + i.second + ") ";
+			std::string proto_information() {
 
-			retn += "\n";
-			retn += "	* upvalue count: " + std::to_string(this->upvalues.size()) + "\n";
-			retn += "	* upvalues: ";
+				std::string retn = "";
 
-			for (const auto& i : this->upvalues)
-				retn += "r" + std::to_string(i.second.second) + "(" + i.second.first + ") ";
+				retn += "Proto:\n";
+				retn += "	* name: " + closure_name + "\n";
+				retn += "	* type: ";
+
+
+				switch (this->closure_type) {
+
+					case ast_dec::closure_type::main: {
+						retn += "main";
+						break;
+					}
+
+					case ast_dec::closure_type::local : {
+						retn += "local";
+						break;
+					}
+
+					case ast_dec::closure_type::newclosure: {
+						retn += "newclosure";
+						break;
+					}
+
+					case ast_dec::closure_type::global: {
+						retn += "global";
+						break;
+					}
+
+					default: {
+						retn += "none";
+						break;
+					}
+
+				}
+				retn += "\n";
+
+				retn += "	* arg count: " + std::to_string(this->arg_regs.size()) + "\n";
+				retn += "	* args: ";
+
+				for (const auto& i : this->arg_regs)
+					retn += "r" + std::to_string(i.first) + "(" + i.second + ") ";
+
+				retn += "\n";
+				retn += "	* upvalue count: " + std::to_string(this->upvalues.size()) + "\n";
+				retn += "	* upvalues: ";
+
+				for (const auto& i : this->upvalues)
+					retn += "r" + std::to_string(i.second.second) + "(" + i.second.first + ") ";
 
 			return retn;
 		}
+
+		#endif
 
 	};
 

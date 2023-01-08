@@ -341,7 +341,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 
 		bool table_start_new_node = false; /* For old nodes append and so on. */
-	
+
 
 		/* Pass expr. */
 		for (const auto& expr : node->expr) {
@@ -427,7 +427,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 							const auto cmp_1 = regs.back()[node->lex->dissassembly->operands[0]->reg];
 							const auto cmp_2 = regs.back()[node->lex->dissassembly->operands[2]->reg];
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", cmp_1->data, cmp_2->data);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", regs.back()[flag_compare]->data + cmp_1->data, cmp_2->data);
 						}
 						else {
 
@@ -435,7 +435,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 							const auto cmp = regs.back()[node->lex->dissassembly->operands[0]->reg];
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", cmp->data);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", "", regs.back()[flag_compare]->data + cmp->data);
 						}
 
 						/* Remove last */
@@ -443,11 +443,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 							regs.pop_back();
 						}
 						
-						/* Replicate next. */
-						regs.emplace_back(regs.back().clone());
-
 						/* Clear compare flag. */
 						regs.back()[flag_compare]->clear(true);
+
+						/* Replicate next. */
+						regs.emplace_back(regs.back().clone());
 						
 						break;
 					}
@@ -506,11 +506,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						/* Emit compiled */
 						emitter::loop(decompilation, "while", compiled);
 
-						/* Replicate next. */
-						regs.emplace_back(regs.back().clone());
-
 						/* Clear compare flag. */
 						regs.back()[flag_compare]->clear(true);
+
+						/* Replicate next. */
+						regs.emplace_back(regs.back().clone());
 
 						break;
 					}
@@ -549,11 +549,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						/* Emit compiled */
 						emitter::loop(decompilation, "until", compiled, ";\n");
 
-						/* Remove current register. */
-						regs.pop_back();
-
 						/* Clear compare flag. */
 						regs.back()[flag_compare]->clear(true);
+
+						/* Remove current register. */
+						regs.pop_back();
 
 						break;
 					}

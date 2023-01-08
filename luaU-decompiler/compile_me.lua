@@ -1,71 +1,20 @@
-local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  local names = {'John', 'Joe', 'Steve'}
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
+local op = ao
+local op1 = all
+if (op == op1 or op == op1) then
+
 end
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
+
+if (op == op1 or op == op1) then
+    po();
 end
-  local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
+
+if (op == op1 and op == op1) then
+av();
 end
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
+
+if (((op == op1 and op == op1) == (op == op1 and op == op1)) == ((op == op1 and op == op1) == (op == op1 and op == op1))) then
+av();
 end
-local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
-end
-local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
-end
-local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
-end
-local names = {'John', 'Joe', 'Steve'}
-for nameCount = 1, 3 do
-  print (names[nameCount])
-  
-end
-end
-end
-end
-end
-end
-end
-end
+
+--if (op == op1 or aika and aiia and jaja or ajaj or ajaj or jaja and jaja or jaj and ajaj or ajaj) then
+--end
