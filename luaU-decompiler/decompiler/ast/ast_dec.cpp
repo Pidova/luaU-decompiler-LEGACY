@@ -8,6 +8,11 @@
 #define routine_inc(node, routine) routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() + node->count_expr <ast_dec::expr_type::condition_concat_start>()
 #define routine_dec(node, routine) routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() + node->count_expr <ast_dec::expr_type::condition_concat_end>()
 
+/* Same thing as routines(inc/dec) but conditional concat routines gets ignored because they don't garunteed a locvar. */
+#define routine_inc_lv(node, routine) routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() 
+#define routine_dec_lv(node, routine) routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() 
+
+
 namespace ast_funcs {
 
 	namespace regs {
@@ -101,8 +106,8 @@ namespace ast_funcs {
 				
 
 				/* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
-				routine_inc(s_node, routine);
-				routine_dec(s_node, routine);
+				routine_inc_lv(s_node, routine);
+				routine_dec_lv(s_node, routine);
 
 				/* Check reg operands for usage. */
 				s_node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
@@ -125,9 +130,14 @@ namespace ast_funcs {
 
 					const auto dest = s_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 
+					/* Skip loadb with jump. */
+					if (s_node->lex->dissassembly->op == LuauOpcode::LOP_LOADB && s_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
+						continue;
+					}
+					
 					/* Check target usage. Abrubt end. */
 					if (dest == target_1) {
-		
+						
 						if (routine) { /* Used in routine not locvar. */
 							break;
 						}
@@ -137,7 +147,6 @@ namespace ast_funcs {
 							no_locvar = (dest_node != start);
 							break;
 						}
-
 
 						used_target_1_dest = true;
 						used_target_1_source = false;
@@ -550,11 +559,15 @@ namespace ast_funcs {
 
 				const auto val = operand->reg;
 
-				if (val == target_1)
+				if (val == target_1) {
 					used_target_1 = false;
+					start_node = nullptr;
+				}
 
-				if (target_2 != -1 && signed(val) == target_2)
+				if (target_2 != -1 && signed(val) == target_2) {
 					used_target_2 = false;
+					start_node = nullptr;
+				}
 
 				return;
 			};
@@ -564,7 +577,6 @@ namespace ast_funcs {
 			for (auto& node : all) {
 
 				node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
-				node->lex->operand_expr_callback<lexer_dec::operand_types::compare>(check_usage);
 				node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
 
 
@@ -622,7 +634,7 @@ namespace ast_funcs {
 					if (start_node == nullptr) {
 						start_node = node;
 					}
-
+					
 					/* Append condition routine expr. */
 					start_node->add_expr<ast_dec::expr_type::condition_routine_start>();
 
@@ -651,7 +663,7 @@ namespace ast_funcs {
 						i->add_expr<ast_dec::expr_type::condition_routine>();
 					}
 
-					/* Set next. */
+					/* Set next */
 					if (conditions.size() != idx) {
 						condition = conditions[idx++]->lex->operand_expr<lexer_dec::operand_types::compare>();
 						target_1 = condition.front()->reg;
@@ -1982,9 +1994,10 @@ namespace ast_funcs {
 					
 						if (dest->reg == registers.back()) {
 						
+		
 							/* See if dest register is logical. */
 							if (ast_funcs::regs::logical_dest_register(ast, node, registers.back())) {
-
+								
 								/* Mutate global */
 								if (node->has_expr(ast_dec::expr_type::closure_global)) {
 
@@ -2039,7 +2052,7 @@ namespace ast_funcs {
 		/* Sets logical operations. (Can be used for if/elseif statements). */
 		void set_logical_operations(std::shared_ptr<ast_dec::ast>& ast) {
 
-			/* Max jump out of jump compare with not being break. */
+			/* Max jump out of jump compare with not being break(pre). */
 			auto jump_out = [&](const std::uintptr_t start, const std::uintptr_t end) mutable -> std::shared_ptr<ast_dec::node>  {
 
 				/* See if jump inside jump jumps out. */
@@ -2076,6 +2089,7 @@ namespace ast_funcs {
 
 					const auto cached_init = i;
 					std::vector<std::uint16_t> compares; /* Singular loadb compare(jmp 1+; loadb r1 +1; loadb r1 0; ???) jumps log registers and see if it gets used in compare first. */
+					std::vector<std::uint16_t> compares_double; /* Double compare(jmp 3+ loadb r1,+1; loadb r1 0; loadb r2, 0; ???) */
 
 					/* Make sure it hasnt already been analyzed. */
 					if (!i->has_expr(ast_dec::expr_type::condition_logical_start) && !i->has_expr(ast_dec::expr_type::condition_logical) && !i->has_expr(ast_dec::expr_type::condition_logical_end)) {
@@ -2091,12 +2105,12 @@ namespace ast_funcs {
 							if (!i->has_expr(ast_dec::expr_type::condition_routine_start) && !i->has_expr(ast_dec::expr_type::condition_routine_end) && !i->has_expr(ast_dec::expr_type::condition_routine)) {
 								break;
 							}
-
+						
 							/* Get next compare jump if current isnt one. */
 							if (i->lex->type != lexer_dec::inst_type::branch_condition) {
-								i = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type<lexer_dec::inst_type::branch_condition>(false));
+								i = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type_addr<lexer_dec::inst_type::branch_condition>(i->address, false));
 							}
-
+						
 							/* Not a compare branch something went wrong. */
 							if (i == nullptr || i->lex->type != lexer_dec::inst_type::branch_condition) {
 								break;
@@ -2104,6 +2118,7 @@ namespace ast_funcs {
 
 							auto current_jmp = i->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 
+							/* Get any jumps that jumps out of current jump and isnt a break. */
 							std::shared_ptr<ast_dec::node> jump_out_n = nullptr;
 							std::shared_ptr<ast_dec::node> jump_out_temp = nullptr;
 							do {
@@ -2114,40 +2129,57 @@ namespace ast_funcs {
 								);
 							} while (jump_out_temp != nullptr);
 						
-
+				
 							/* Found hueristic 1 check passthrough again. */
 							if (jump_out_n != nullptr) {
 								i = jump_out_n;
 							}
 							else {
+							
 								/* Found hueristic 2 or just end of normal branch */
 								
 								/* Check for compares with current branch. */
 								const auto compare_count = i->lex->count_operand_expr<lexer_dec::operand_types::compare>();
-								if (!compares.empty()) {
+								if (!compares.empty() || !compares_double.empty()) {
 
 									const auto compare_operands = i->lex->operand_expr<lexer_dec::operand_types::compare>();
 
 									if (compare_count == 1u && compares.size() == 1u) {
 
-										if (compare_operands.front()->reg == compares.front()) {
+										/* Singular */
+										if (!compares.empty() && compare_operands.front()->reg == compares.front()) {
 											compares.clear(); /* Hit */
+										}
+
+										/* Double */
+										if (!compare_operands.empty() && compare_operands.front()->reg == compares_double.front()) {
+											compares_double.clear(); /* Hit */
 										}
 
 									}
 									else if (compares.size() == 2u) { /* Max compare is 2 */
 
-										std::vector<std::uint16_t> t_vect = { compare_operands.back()->reg, compare_operands.back()->reg };
-
-										std::sort(compares.begin(), compares.end());
+										std::vector<std::uint16_t> t_vect = { compare_operands.front()->reg, compare_operands.back()->reg };
+									
 										std::sort(t_vect.begin(), t_vect.end());
+										std::sort(compares.begin(), compares.end());
+										std::sort(compares_double.begin(), compares_double.end());
 
 										/* Check for compares when sorted. */
-										if (compares.front() == t_vect.front() && compares.back() == t_vect.back()) {
+
+										/* Singular */
+										if (!compares.empty() && compares.front() == t_vect.front() && compares.back() == t_vect.back()) {
 											compares.clear(); /* Hit */
 										}
 
+										/* Double */
+										if (!compares_double.empty () && compares_double.front() == t_vect.front() && compares_double.back() == t_vect.back()) {
+											compares_double.clear(); /* Hit */
+										}
+
 									}
+
+
 
 								}
 
@@ -2178,9 +2210,9 @@ namespace ast_funcs {
 								if (next == nullptr) {
 									break;
 								}
-
+								
 								/* Next has loadb with jump. */
-								if (next->lex->dissassembly->op == LuauOpcode::LOP_LOADB && next->lex->operand_expr<lexer_dec::operand_types::compare>().front()->jmp) {
+								if (next->lex->dissassembly->op == LuauOpcode::LOP_LOADB && next->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
 
 									/* Singular */
 									if (current_jmp == (next->address + next->lex->dissassembly->len)) {
@@ -2188,7 +2220,7 @@ namespace ast_funcs {
 										compares.push_back(next->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
 
 										/* Exceeded max of 2 routine is something else. */
-										if (compares.size() > 3u) {
+										if (compares.size() > 2u) {
 											break;
 										}
 
@@ -2200,7 +2232,7 @@ namespace ast_funcs {
 
 								}
 
-
+								
 								/* Previous from jump must be loadb. */
 								const auto prev = ast->main_block->visit_previous_addr(current_jmp);
 								if (prev->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
@@ -2212,12 +2244,18 @@ namespace ast_funcs {
 
 										/* Has previous loadb jump.  */
 										if (p_prev->lex->dissassembly->op == LuauOpcode::LOP_LOADB && p_prev->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
+											
+											compares_double.emplace_back(p_prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
 
+											/* Exceeded max of 2 routine is something else. */
+											if (compares_double.size() > 2u) {
+												break;
+											}
 
-
-											/* Set next */
-											i = ast->main_block->visit_addr(current_jmp + ast->main_block->visit_addr(current_jmp)->lex->dissassembly->len);
-
+											/* Visit jump */
+											i = ast->main_block->visit_addr(current_jmp);
+										
+											continue;
 										}
 										else {
 											break;
@@ -2231,14 +2269,122 @@ namespace ast_funcs {
 
 								}
 								else {
-									break; /* Something else */
-								}
 
+									/* Analyze range of start current and jump. */
+							
+									auto next_inst = ast->main_block->visit_addr(i->address + i->lex->dissassembly->len);
+									const auto next_jmp = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type_addr<lexer_dec::inst_type::branch_condition>(i->address, false));
+									
+									/* No next end. */
+									if (next_jmp == nullptr || next_inst == nullptr) {
+										break;
+									}
+									
+
+									/* Jump data */
+									const auto next_jmp_target = next_jmp->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+									const auto next_jmp_target_node = ast->main_block->visit_addr(next_jmp_target);
+									
+
+									/* Jump too same address possibly or? */
+									if (current_jmp == next_jmp->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) {
+
+										/* No compare routine */
+										if (!next_inst->has_expr(ast_dec::expr_type::condition_routine_start) && !next_inst->has_expr(ast_dec::expr_type::condition_routine_end) && !next_inst->has_expr(ast_dec::expr_type::condition_routine)) {
+											break;
+										}
+
+										/* Has compare routine following next. */
+										i = next_jmp;
+										continue;
+									}
+
+									
+									/* Next is loadb check also next. */
+									if (next_inst->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
+										next_inst = ast->main_block->visit_addr(next_inst->address + next_inst->lex->dissassembly->len);
+									}
+								
+									
+									/* Next leads too routine */
+									if (next_inst->has_expr(ast_dec::expr_type::condition_routine_start) || next_inst->has_expr(ast_dec::expr_type::condition_routine_end) || next_inst->has_expr(ast_dec::expr_type::condition_routine)) {
+										
+										/* Check loadbs */
+
+										const auto next = ast->main_block->visit_addr(i->address + i->lex->dissassembly->len);
+
+										/* Nothing*/
+										if (next == nullptr) {
+											break;
+										}
+
+										/* Next has loadb with jump. */
+										if (next->lex->dissassembly->op == LuauOpcode::LOP_LOADB && next->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
+
+											/* Singular */
+											if (next_jmp_target == (next->address + next->lex->dissassembly->len)) {									
+												/* Set next and contiue */
+												i = next_jmp;
+												continue;
+											}
+
+										}
+
+										/* Take jump and check previouses */
+										const auto prev = ast->main_block->visit_previous_addr(next_jmp_target);
+										if (prev->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
+										
+											/* Doesnt have jump check previous. */
+											if (!prev->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
+
+												const auto p_prev = ast->main_block->visit_previous_addr(prev->address);
+
+												/* Has previous loadb jump.  */
+												if (p_prev->lex->dissassembly->op == LuauOpcode::LOP_LOADB && p_prev->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
+													
+													/* Check logical could be locvar. */
+													if (ast_funcs::regs::logical_dest_register(ast, p_prev, p_prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg)) {
+														break;
+													}
+
+													i = next_jmp;
+													continue;
+												}
+												else {
+													break;
+												}
+
+											}
+											else {
+									
+												/* Target goes to loadb, same regs and jump. */
+												if (next_jmp_target_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg == prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg) {
+													/* Set next and contiue */
+													
+													/* Check logical could be locvar. */
+													if (ast_funcs::regs::logical_dest_register(ast, next_jmp_target_node, next_jmp_target_node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg)) {
+														break;
+													}
+
+													i = next_jmp;
+													continue;
+												}
+
+											}
+
+										}
+
+									}
+
+									break; 
+								}
+								
 							}
 
+			
 						} while (true);
 
-						/* Front */
+
 						cached_init->add_expr<ast_dec::expr_type::condition_logical_start>();
 
 						/* Members */
@@ -2247,7 +2393,7 @@ namespace ast_funcs {
 							i->add_expr<ast_dec::expr_type::condition_logical>();
 
 						/* End */
-						i->add_expr<ast_dec::expr_type::condition_logical_end>();
+						i->add_expr<ast_dec::expr_type::condition_logical_end>();	
 
 					}
 
@@ -2449,7 +2595,7 @@ namespace blocks {
 		/* Append blocks */
 		do {
 
-			#if display_analysis
+			#if display_analysis_blocks
 				std::printf("[AST] Begin block.\n");
 			#endif
 
@@ -2457,7 +2603,7 @@ namespace blocks {
 			linear_blocks.insert(std::make_pair(pc, std::make_tuple(std::get<2>(block), std::get<1>(block), std::get<0>(block))));
 			pc = std::get<1>(block);
 
-			#if display_analysis
+			#if display_analysis_blocks
 				std::printf("[AST] End block.\n");
 				std::printf("[AST] Next pc: %" PRIuPTR " size: %" PRIi32 "\n", pc, ast->p->sizecode);
 			#endif

@@ -871,8 +871,13 @@ namespace ast_dec {
 
 			}
 
+			if (all) {
+				return retn;
+			}
+			else {
+				return nullptr;
+			}
 
-			return retn;
 		}
 
 		
@@ -1627,7 +1632,7 @@ namespace ast_dec {
 
 					/* Compile indent */
 					for (auto i = 0u; i < mult; ++i)
-						indenting += "	";
+						indenting += "";
 
 
 					/* Compile nodes str */

@@ -318,18 +318,22 @@ void emitter::locvar_name(std::string& dest, const std::string& prefix, const st
                     break;
                 }
 
-                case '7': {
+                case '6': {
                     dest += 'g';
                     break;
                 }
-
-                case '8': {
+                case '7': {
                     dest += 'h';
                     break;
                 }
 
-                case '9': {
+                case '8': {
                     dest += 'i';
+                    break;
+                }
+
+                case '9': {
+                    dest += 'n';
                     break;
                 }
 
@@ -391,18 +395,22 @@ void emitter::override::locvar_name(std::string& dest, const std::string& prefix
                     break;
                 }
 
-                case '7': {
+                case '6': {
                     dest += 'g';
                     break;
                 }
-
-                case '8': {
+                case '7': {
                     dest += 'h';
                     break;
                 }
 
-                case '9': {
+                case '8': {
                     dest += 'i';
+                    break;
+                }
+
+                case '9': {
+                    dest += 'n';
                     break;
                 }
 
