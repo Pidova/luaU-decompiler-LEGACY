@@ -575,7 +575,7 @@ namespace ast_funcs {
 
 			auto all = ast->main_block->visit_all();
 			for (auto& node : all) {
-
+		
 				node->lex->operand_expr_callback<lexer_dec::operand_types::source>(check_usage);
 				node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
 
@@ -2618,7 +2618,8 @@ namespace blocks {
 		ast->main_block->node_start = pc;
 		ast->main_block->node_end = std::get<0>(linear_blocks[pc]);
 		ast->main_block->nodes = std::get<2>(linear_blocks[pc]);
-		
+		ast->add_block(ast->main_block);
+
 		std::vector<std::uintptr_t> analyzed_scopes; /* Used to prevent infinite loops when doing visits. */
 
 		/* Assemble blocks */
@@ -2695,6 +2696,7 @@ namespace blocks {
 						/* Add jump taken. */
 						if (jump_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp > 0 || std::find(analyzed_scopes.begin(), analyzed_scopes.end(), jmp) == analyzed_scopes.end()) {
 							current->branches.emplace_back(jump_block);
+							ast->add_block(jump_block);
 						}
 
 						break;
@@ -2722,8 +2724,11 @@ namespace blocks {
 						/* Add jump taken. */
 						if (jump_node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp > 0 || std::find(analyzed_scopes.begin(), analyzed_scopes.end(), jmp) == analyzed_scopes.end()) {
 							current->branches.emplace_back(jump_block);
+							ast->add_block(jump_block);
 						}
+
 						current->branches.emplace_back(nojump_block);
+						ast->add_block(nojump_block);
 
 						break;
 					}

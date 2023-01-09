@@ -341,7 +341,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 
 		bool table_start_new_node = false; /* For old nodes append and so on. */
-
+		
+		#if TANSPILER_DEBUG_PREEXPR
+			node->debug_print_all("[TRANSPILER-PREEXPR]");
+		#endif
 
 		/* Pass expr. */
 		for (const auto& expr : node->expr) {
@@ -2138,7 +2141,8 @@ void transpile_ast(const std::shared_ptr<ast_dec::ast>& main_ast, const std::sha
 	}
 
 	/* Transpile main block. */
-	str += transpile_blocks(main_ast, config, scopes);
+	str.append(transpile_blocks(main_ast, config, scopes));
+
 	return;
 }
 
@@ -2182,7 +2186,7 @@ std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast,
 			/* Transpile */
 			transpile_ast(i.first, config, i.first->closure_decompilation);
 			i.first->tanspiled = true;
-
+			
 			/* Add to complete. */
 			comleted.emplace_back(i.first);
 			linear.erase(i.first);
@@ -2191,7 +2195,7 @@ std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast,
 
 	/* Do ones that have been completed. */
 	while (!linear.empty()) {
-	
+		
 		for (const auto& i : linear)
 			if (std::find(comleted.begin(), comleted.end(), i.first) == comleted.end()) {
 			

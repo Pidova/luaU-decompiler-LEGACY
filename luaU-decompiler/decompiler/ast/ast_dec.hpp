@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <iostream>
 #include <inttypes.h>
+#include <map>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -552,14 +553,17 @@ namespace ast_dec {
 				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
 
 				this->remove_dupes(scopes); /* Remove duplicates. */
-				this->remove_dupes(retn);
-				this->sort_addr(retn); /* Sort retn by address. */
 
 			} while (scopes.size());
 
 			if (retn.empty()) {
 				throw std::runtime_error("Returning no data for visit_all.");
 			}
+
+
+			this->remove_dupes(retn);
+			this->sort_addr(retn); 
+			
 
 			/* Set cache */
 			cached.all_nodes = retn;
@@ -1537,30 +1541,10 @@ namespace ast_dec {
 		/* Finds block by start address. */
 		std::shared_ptr <block> find_block(const std::uintptr_t addr) {
 
-			/* Append all blocks. */
-			std::vector<std::shared_ptr <block>> scopes = { this->main_block };
-
-			do {
-				
-				auto current_block = scopes.front();
-
-				if (current_block->node_start == addr)
-					return current_block;
-				
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches) {
-						scopes.emplace_back(i);
-				}
-		
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				/* Remove duplicates. */
-				std::sort(scopes.begin(), scopes.end());
-				scopes.erase(std::unique(scopes.begin(), scopes.end()), scopes.end());
-
-
-			} while (scopes.size());
+			const auto found = block_map.find(addr);
+			if (found != block_map.end()) {
+				return found->second;
+			}
 
 			return nullptr;
 		}
@@ -1568,32 +1552,26 @@ namespace ast_dec {
 		/* Finds block by containing address. */
 		std::shared_ptr <block> find_block_addr(const std::uintptr_t addr) {
 
-			/* Append all blocks. */
-			std::vector<std::shared_ptr <block>> scopes = { this->main_block };
+			for (const auto& current_block : block_map) {
 
-			do {
+				if (current_block.second->node_start <= addr && current_block.second->node_end >= addr) {
+					return current_block.second;
+				}
 
-				auto current_block = scopes.front();
-
-				if (current_block->node_start <= addr && current_block->node_end >= addr)
-					return current_block;
-
-				/* Add nested blocks. */
-				for (const auto& i : current_block->branches)
-					scopes.emplace_back(i);
-
-				/* Remove current. */
-				scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());
-
-				/* Remove duplicates. */
-				std::sort(scopes.begin(), scopes.end());
-				scopes.erase(std::unique(scopes.begin(), scopes.end()), scopes.end());
-
-			} while (scopes.size());
+			}
 
 			return nullptr;
 		}
 
+		/* Add block to cache by start address. */
+		void add_block(const std::shared_ptr <block>& block) {
+
+			if (block_map.find(block->node_start) == block_map.end()) {
+				block_map.insert(std::make_pair(block->node_start, block));
+			}
+
+			return;
+		}
 
 		/* Turns ast into tree string. */
 		#if ast_debug 
@@ -1760,6 +1738,10 @@ namespace ast_dec {
 		}
 
 		#endif
+
+		private: 
+
+			std::map<std::uintptr_t /* Start */, std::shared_ptr <block>> block_map;
 
 	};
 
