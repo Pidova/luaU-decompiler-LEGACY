@@ -20,7 +20,7 @@ float loss::loss(const std::shared_ptr<ast_dec::ast>& main_ast, const std::strin
 	}
 
 
-	/* Compile decompilation. */
+	/* Compile decompilation */
 	const auto ast = ast_dec::gen_ast(gco2cl((state->top - 1)->value.gc)->l.p /* Main proto */, std::make_shared<transpiler_data::transpiler_config>());
 
 	/* Mod it by 100. */
