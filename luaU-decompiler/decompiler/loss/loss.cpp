@@ -8,6 +8,7 @@
 
 float loss::loss(const std::shared_ptr<ast_dec::ast>& main_ast, const std::string& decompiled, bool& failed) {
 
+	/* Decompiled compilation data. */
 	std::size_t size = 0u;
 	const auto compilation = luau_compile(decompiled.c_str(), decompiled.size(), NULL, &size);
 	const auto state = luaL_newstate();
@@ -18,12 +19,14 @@ float loss::loss(const std::shared_ptr<ast_dec::ast>& main_ast, const std::strin
 		return 0.0f;
 	}
 
-	/* Get main proto. */
-	const auto proto = gco2cl((state->top - 1)->value.gc)->l.p;
-	const auto ast = ast_dec::gen_ast(proto, std::make_shared<transpiler_data::transpiler_config>());
 
+	/* Compile decompilation. */
+	const auto ast = ast_dec::gen_ast(gco2cl((state->top - 1)->value.gc)->l.p /* Main proto */, std::make_shared<transpiler_data::transpiler_config>());
+
+	/* Mod it by 100. */
 	auto retn = ((std::fmod(main_ast->total, 100)) - (std::fmod(ast->total, 100)));
 
+	/* Negate if < 0 */
 	if (retn < 0) {
 		retn = -retn;
 	}
