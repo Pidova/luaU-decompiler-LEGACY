@@ -325,6 +325,7 @@ namespace lv {
 	}
 
 }
+
 std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<transpiler_data::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
 
 	std::string decompilation = "";
@@ -452,6 +453,17 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						/* Replicate next. */
 						regs.emplace_back(regs.back().clone());
 						
+						/* Add break */
+						if (node->has_expr(ast_dec::expr_type::condition_break)) {
+
+							/* Emit break */
+							emitter::str(decompilation, "break;\n");
+
+							/* Emit end */
+							emitter::str(decompilation, "end\n");
+
+						}
+
 						break;
 					}
 					case ast_dec::expr_type::else_: {
@@ -2224,7 +2236,6 @@ std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast,
 			}
 		
 	}
-
 
 	return main_ast->closure_decompilation;
 }

@@ -12,6 +12,22 @@
 #define routine_inc_lv(node, routine) routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() 
 #define routine_dec_lv(node, routine) routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() 
 
+/* Has generic condition break? */
+#define condition_break(node)     (node->has_expr(ast_dec::expr_type::break_) || \
+								  node->has_expr(ast_dec::expr_type::condition_break) || \
+								  node->lex->dissassembly->op == LuauOpcode::LOP_RETURN || \
+								  node->has_expr(ast_dec::expr_type::until_) || \
+								  node->has_expr(ast_dec::expr_type::while_end) || \
+								  node->has_expr(ast_dec::expr_type::for_end) || \
+								  node->has_expr(ast_dec::expr_type::for_n_end) || \
+								  node->has_expr(ast_dec::expr_type::for_iv_end))
+
+/* Has condition break out? */
+#define condition_break_out(node) (node->has_expr(ast_dec::expr_type::until_) || \
+								   node->has_expr(ast_dec::expr_type::while_end) || \
+								   node->has_expr(ast_dec::expr_type::for_end) || \
+								   node->has_expr(ast_dec::expr_type::for_n_end) || \
+								   node->has_expr(ast_dec::expr_type::for_iv_end)) 
 
 namespace ast_funcs {
 
@@ -406,7 +422,7 @@ namespace ast_funcs {
 	namespace branches {
 
 		/* Set branches conditons in routine with given range. */
-		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector <std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */) {
+		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector <std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */, const bool check_loops = false /* Checks jumps too see if they lead too loop by expr and preform opposite. */) {
 
 			const auto conditions = ast->main_block->visit_range_type<lexer_dec::inst_type::branch_condition>(begin, end);
 			const auto over_target = *std::max_element(dead.begin(), dead.end());
@@ -414,6 +430,7 @@ namespace ast_funcs {
 			const auto loadbs = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_LOADB>(true));
 
 			std::vector <std::pair <std::uintptr_t /* Jump */, std::size_t /* Scopes */>> scopes;
+			std::unordered_map<std::uintptr_t /* Jmp loc */, std::size_t /* Count */> jmp_hit;
 
 			const auto has_val = [&scopes](const std::uintptr_t addr) {
 				return std::find_if(scopes.begin(), scopes.end(), [&addr](const std::pair<std::uintptr_t, std::size_t>& ele) { return ele.first == addr; }) != scopes.end();
@@ -422,10 +439,17 @@ namespace ast_funcs {
 
 			for (const auto& node : range) {
 
-
 				if (node->lex->type == lexer_dec::inst_type::branch_condition || node->lex->type == lexer_dec::inst_type::branch) {
-					
+
 					const auto jmp = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+
+					/* Add hit */
+					if (jmp_hit.find(jmp) == jmp_hit.end()) {
+						jmp_hit.insert(std::make_pair(jmp, 0u));
+					}
+					else {
+						++jmp_hit[jmp];
+					}
 
 					/* Hit dead? */
 					if (std::find(dead.begin(), dead.end(), jmp) != dead.end()) {
@@ -439,13 +463,21 @@ namespace ast_funcs {
 						if (conditions.back() != node) {
 							node->add_expr<ast_dec::expr_type::condition_and>();
 						}
-
+						
 						/* Always opposite */
 						node->branch_extra.opposite = true;
 					
+						/* Fix for loop/while/repeat/generic */
+						const auto prev = ast->main_block->visit_previous_addr(jmp);
+						if (check_loops && prev != nullptr && condition_break_out(prev)) {
+
+								node->branch_extra.opposite = false;
+
+						}
+
 					}
 					else {
-
+		
 						/* Add some scope if there is none just too garunteed a scope. */
 						if (!scopes.size()) {
 							scopes.push_back(std::make_pair(jmp, 0u));
@@ -464,26 +496,24 @@ namespace ast_funcs {
 
 						}
 
-						/* Jmp exceeds dead values. */
+						/* Jmp exceeds dead values. */				
 						if (jmp > over_target) {
 
-							if (has_val(node->address + node->lex->dissassembly->len)) {
+								/* Last condition isnt current so or. */
+								if (conditions.back() != node) {
+									node->add_expr<ast_dec::expr_type::condition_or>();
+								}
+								else {
 
-							} 
+									/* Close any open scopes. */
+									if (scopes.back().second) {
 
-							/* Last condition isnt current so or. */
-							if (conditions.back() != node) {
-								node->add_expr<ast_dec::expr_type::condition_or>();
-							}
-							else {
-							
-								/* Close any open scopes. */
-								if (scopes.back().second) {
-									node->add_expr<ast_dec::expr_type::condition_close>(scopes.back().second);
+										node->add_expr<ast_dec::expr_type::condition_close>(scopes.back().second);
+
+									}
+
 								}
 
-							}
-							
 						}
 						else {
 
@@ -491,16 +521,21 @@ namespace ast_funcs {
 							if (scopes.back().first == (node->address + node->lex->dissassembly->len)) {
 
 								if (scopes.back().second) {
+
 									node->add_expr<ast_dec::expr_type::condition_close>(scopes.back().second);
+
 								}
 
 								scopes.pop_back();
 
-								/* Add next and/or */
+								/* and/or */
 								if (!scopes.empty()) {
-									
-									if (scopes.back().first == jmp) {
 
+									if (jmp_hit[jmp]) {
+										node->add_expr<ast_dec::expr_type::condition_or>();
+									}
+									else {
+										node->add_expr<ast_dec::expr_type::condition_and>();
 									}
 
 								}
@@ -508,21 +543,39 @@ namespace ast_funcs {
 							}
 							else {
 
+								
 								/* New and sub scope */
 								if (scopes.back().first != jmp && scopes.back().first > jmp) {
 									node->add_expr<ast_dec::expr_type::condition_and>();
-									node->add_expr<ast_dec::expr_type::condition_open_post>();
+									node->add_expr<ast_dec::expr_type::condition_open>();
 									scopes.push_back(std::make_pair(jmp, 1u /* Starts off with one could inc. */));
 									node->branch_extra.opposite = true;
 								}
 								else {
-									node->add_expr<ast_dec::expr_type::condition_or>();
+							
+									/* Jmps too end. */
+									if (jmp == end || jmp == (end + ast->main_block->visit_addr(end)->lex->dissassembly->len)) {
+										node->add_expr<ast_dec::expr_type::condition_or>();
+									}
+									else {
+
+										/* Jmp doesnt = current and its found in scopes. */
+										if (scopes.back().first != jmp && has_val(jmp)) {
+											node->add_expr<ast_dec::expr_type::condition_or>();
+										}
+										else {
+											node->add_expr<ast_dec::expr_type::condition_and>();
+											node->branch_extra.opposite = true;
+										}
+
+									}
+
 								}
 
 							}
 
 						}
-
+						
 					}
 
 				}
@@ -685,6 +738,8 @@ namespace ast_funcs {
 			* Sets ifs/elseifs/elses (Logical routines loops etc must be set first). 
 			
 			 Logical routines does all of the dirty work already if you want too know if it's if see if end is a compare.
+
+			 * Sets breaks too if not there. 
 		*/
 		void set_branch_statements(std::shared_ptr<ast_dec::ast>& ast) {
 
@@ -712,15 +767,32 @@ namespace ast_funcs {
 					else {
 
 						/* If statement */
-
 						concat_start->add_expr<ast_dec::expr_type::condition_concat_start>();
 						concat_end->add_expr<ast_dec::expr_type::condition_concat_end>();
 						concat_end->add_expr<ast_dec::expr_type::if_>();
 						routine_end->add_expr<ast_dec::expr_type::scope_end>(1u, (concat_end->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > 1u) ? ast_dec::element::front  : ast_dec::element::back /* Empty expression? */);
 
 						/* See if jump is greater then 1. */
-						ast_funcs::branches::set(ast, concat_start->address, concat_end->address, { jmp_addr });
+						ast_funcs::branches::set(ast, concat_start->address, concat_end->address, { jmp_addr }, -1, true);
 						
+						/* Propagate conditional concat members. */
+						const auto range = ast->main_block->visit_range(concat_start->address, concat_end->address);
+						for (const auto& cm_node : range) {
+							cm_node->add_expr<ast_dec::expr_type::condition_concat_member>();
+						}
+
+						/* Loop/while/repeat/generic */
+						const auto prev = ast->main_block->visit_previous_addr(concat_end->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr /* Take jump */);
+						if (condition_break_out(prev)) {
+
+								/* Append break */
+								concat_end->add_expr<ast_dec::expr_type::condition_break>();
+
+								/* Remove scope end */
+								routine_end->remove_expr<ast_dec::expr_type::scope_end>();
+
+						}
+
 					}
 
 				}
@@ -887,9 +959,32 @@ namespace ast_funcs {
 							if (args == -1)
 								args = ((*(&node - 1u))->lex->dissassembly->operands.front()->reg - start);
 
+							/* Fix with namecall. */
+							bool namecall = false;
+							const auto prev = proto->main_block->visit_previous_addr(node->address);
+			
+							if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
+
+								const auto data = prev->lex->operand_expr< lexer_dec::operand_types::dest>().front()->reg;
+								const auto data_1 = prev->lex->operand_expr< lexer_dec::operand_types::source>().front()->reg;
+
+								if (data == data_1 && start == data) {
+									namecall = true;
+								}
+
+							}
+
+
 							/* Iterate through args and see if arg is not getting used in dest. */
 							for (auto i = 0; i < args; ++i) {
-
+							
+								/* Skip this */
+								if (!i && namecall) {
+									dests.back().emplace_back(i + 1u);
+									dests_nodes.back().emplace_back(prev);
+									continue;
+								}
+							
 								const auto arg = (i + start + 1u);
 
 								if (std::find(dests.back().begin(), dests.back().end(), arg) == dests.back().end() &&
@@ -1134,8 +1229,8 @@ namespace ast_funcs {
 				if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
 					// lexer_dec::operand_types::source
 
-					const auto data = prev->lex->operand_expr< lexer_dec::operand_types::source>().front()->reg;
-					const auto data_1 = prev->lex->operand_expr< lexer_dec::operand_types::integer>().front()->reg;
+					const auto data = prev->lex->operand_expr< lexer_dec::operand_types::dest>().front()->reg;
+					const auto data_1 = prev->lex->operand_expr< lexer_dec::operand_types::source>().front()->reg;
 					
 					/* Call first operand will be the same as previous. */
 					if (data == data_1) {
@@ -1415,6 +1510,13 @@ namespace ast_funcs {
 								cond.second->add_expr<ast_dec::expr_type::condition_concat_end>();
 
 								branches::set(ast, cond.first->address, cond.second->address, { jumpback->address });
+
+								/* Propagate conditional concat members. */
+								const auto range = ast->main_block->visit_range(cond.first->address, cond.second->address);
+								for (const auto& cm_node : range) {
+									cm_node->add_expr<ast_dec::expr_type::condition_concat_member>();
+								}
+
 							}
 
 						}
@@ -1484,10 +1586,18 @@ namespace ast_funcs {
 
 							/* Write condition routine. */
 							if (!dont_set) {
+
 								begin_node->add_expr<ast_dec::expr_type::condition_concat_start>();
 								cond.second->add_expr<ast_dec::expr_type::condition_concat_end>();
 								cond.second->add_expr<ast_dec::expr_type::while_>();
 								branches::set(ast, begin_node->address, cond.second->address, { jumpback->address, (jumpback->address + jumpback->lex->dissassembly->len)});
+							
+								/* Propagate conditional concat members. */
+								const auto range = ast->main_block->visit_range(begin_node->address, cond.second->address);
+								for (const auto& cm_node : range) {
+									cm_node->add_expr<ast_dec::expr_type::condition_concat_member>();
+								}
+
 							}
 							
 						}
@@ -1497,16 +1607,6 @@ namespace ast_funcs {
 							jumpback->add_expr<ast_dec::expr_type::condition_true>(1u, ast_dec::element::front);
 						}
 
-					}
-
-				}
-
-				/* Add breaks by getting second condition that doesn't have concat and marking. */
-				for (const auto& c : condition) {
-
-					if (!c.second->has_expr(ast_dec::expr_type::condition_concat_end) && c.second->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
-						c.second->add_expr<ast_dec::expr_type::condition_concat_start>();
-						c.second->add_expr<ast_dec::expr_type::condition_break>();
 					}
 
 				}
@@ -2092,7 +2192,7 @@ namespace ast_funcs {
 					std::vector<std::uint16_t> compares_double; /* Double compare(jmp 3+ loadb r1,+1; loadb r1 0; loadb r2, 0; ???) */
 
 					/* Make sure it hasnt already been analyzed. */
-					if (!i->has_expr(ast_dec::expr_type::condition_logical_start) && !i->has_expr(ast_dec::expr_type::condition_logical) && !i->has_expr(ast_dec::expr_type::condition_logical_end)) {
+					if (!i->has_expr(ast_dec::expr_type::condition_logical_start) && !i->has_expr(ast_dec::expr_type::condition_logical) && !i->has_expr(ast_dec::expr_type::condition_logical_end) && !i->has_expr(ast_dec::expr_type::condition_concat_member) && !i->has_expr(ast_dec::expr_type::condition_concat_start) && !i->has_expr(ast_dec::expr_type::condition_concat_end)) {
 
 						do {
 							
@@ -2118,6 +2218,24 @@ namespace ast_funcs {
 
 							auto current_jmp = i->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 
+							/* Check next jump and current for different breaks. */
+							const auto next_jmp = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type_addr<lexer_dec::inst_type::branch_condition>(i->address, false));
+							if (next_jmp != nullptr) {
+
+								const auto jmp_prev = ast->main_block->visit_previous_addr(current_jmp);
+								const auto next_jmp_prev = ast->main_block->visit_previous_addr(next_jmp->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
+					
+								if (jmp_prev != nullptr && next_jmp_prev != nullptr && condition_break(jmp_prev) && condition_break(next_jmp_prev)) {
+
+									/* Not same jump */
+									if (jmp_prev->address != next_jmp_prev->address) {
+										break;
+									}
+
+								}
+
+							}
+
 							/* Get any jumps that jumps out of current jump and isnt a break. */
 							std::shared_ptr<ast_dec::node> jump_out_n = nullptr;
 							std::shared_ptr<ast_dec::node> jump_out_temp = nullptr;
@@ -2137,7 +2255,8 @@ namespace ast_funcs {
 							else {
 							
 								/* Found hueristic 2 or just end of normal branch */
-								
+							
+
 								/* Check for compares with current branch. */
 								const auto compare_count = i->lex->count_operand_expr<lexer_dec::operand_types::compare>();
 								if (!compares.empty() || !compares_double.empty()) {
@@ -2774,6 +2893,7 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto, const std::shared_p
 		retn->dissassembly.insert(std::make_pair(pc, dism));
 		pc += dism->len;
 		i += dism->len;
+		retn->total += dism->total;
 	}
 
 	/* Set current proto blocks. */
@@ -2838,6 +2958,7 @@ std::shared_ptr<ast_dec::ast> ast_dec::gen_ast(Proto* proto, const std::shared_p
 					child->dissassembly.insert(std::make_pair(pc, dism));
 					pc += dism->len;
 					i += dism->len;
+					retn->total += dism->total;
 				}
 
 			}

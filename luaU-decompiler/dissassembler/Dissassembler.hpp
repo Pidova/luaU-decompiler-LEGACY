@@ -38,6 +38,9 @@ namespace LuaU_dissassembler {
 
 	struct dissassembly {
 
+		/* Total calculated value based on regs, constants etc. Completly irrelavent too anything useful other than a loss function. */
+		float total = 0.0f;
+
 		std::uintptr_t addr = 0u;
 
 		LuauOpcode op; 

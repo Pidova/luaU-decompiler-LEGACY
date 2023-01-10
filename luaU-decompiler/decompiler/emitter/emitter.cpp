@@ -127,6 +127,11 @@ void emitter::expandable_comment(std::string& dest, const std::string& src) {
     return;
 }
 
+void emitter::expandable_comment_pre(std::string& dest, const std::string& src) {
+    dest.insert(0, "--[[" + src + ((src.back() != '\n') ? "]]\n" : "]]\n"));
+    return;
+}
+
 void emitter::arith(const LuauOpcode op, const bool assignment, std::string& dest, const std::string& src1, const std::string& src2) {
 
     switch (op) {
@@ -135,7 +140,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_ADD: {
 
             if (!assignment)
-                dest += src1 + " + " + src2;
+                dest += "( " + src1 + " + " + src2 + " )";
             else {
                 dest += src1 + " += " + src2;
                 emitter::end_of_line(dest);
@@ -148,7 +153,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_MOD: {
 
             if (!assignment)
-                dest += src1 + " % " + src2;
+                dest += "( " + src1 + " % " + src2 + " )";
             else {
                 dest += src1 + " %= " + src2;
                 emitter::end_of_line(dest);
@@ -161,7 +166,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_SUB: {
 
             if (!assignment)
-                dest += src1 + " - " + src2;
+                dest += "( " + src1 + " - " + src2 + " )";
             else {
                 dest += src1 + " -= " + src2;
                 emitter::end_of_line(dest);
@@ -174,7 +179,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_DIV: {
 
             if (!assignment)
-                dest += src1 + " / " + src2;
+                dest += "( " + src1 + " / " + src2 + " )";
             else {
                 dest += src1 + " /= " + src2;
                 emitter::end_of_line(dest);
@@ -187,7 +192,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_MUL: {         
 
             if (!assignment)
-                dest += src1 + " * " + src2;
+                dest += "( " + src1 + " * " + src2 + " )";
             else {
                 dest += src1 + " *= " + src2;
                 emitter::end_of_line(dest);
@@ -200,7 +205,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_POW: {
             
             if (!assignment)
-                dest += src1 + " ^ " + src2;
+                dest += "( " + src1 + " ^ " + src2 + " )";
             else {
                 dest += src1 + " ^= " + src2;
                 emitter::end_of_line(dest);
@@ -213,7 +218,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_AND: {
            
             if (!assignment)
-                dest += src1 + " and " + src2;
+                dest += "( " + src1 + " and " + src2 + " )";
             else {
                 dest += src1 + " = " + src1 + " and " + src2;
                 emitter::end_of_line(dest);
@@ -226,7 +231,7 @@ void emitter::arith(const LuauOpcode op, const bool assignment, std::string& des
         case LuauOpcode::LOP_OR: {
 
             if (!assignment)
-                dest += src1 + " or " + src2;
+                dest += "( " + src1 + " or " + src2 + " )";
             else {
                 dest += src1 + " = " + src1 + " or " + src2;
                 emitter::end_of_line(dest);

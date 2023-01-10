@@ -1,8 +1,9 @@
+#include "decompiler/decompiler.hpp"
+#include "decompiler/loss/loss.hpp"
+#include "decompiler/transpiler/transpiler.hpp"
 #include "luau-master/VM/include/lua.h"
 #include "luau-master/Compiler/include/luacode.h"
 #include "luau-master/VM/include/lualib.h"
-#include "decompiler/decompiler.hpp"
-#include "decompiler/transpiler/transpiler.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -10,6 +11,11 @@
 /* Throw any string as argument to compile */
 std::string compile(const char* const code) {
 
+	/* Transpiler config */
+	const auto config = std::make_shared<transpiler_data::transpiler_config>();
+	config->post_loss = true;
+
+	/* Compilation data */
 	std::size_t size = 0u;
 	const auto compilation = luau_compile(code, std::strlen(code), NULL, &size);
 	const auto state = luaL_newstate();
@@ -18,9 +24,7 @@ std::string compile(const char* const code) {
 	if (luau_load(state, "Bruh", compilation, size, 0))
 		throw std::exception("Bruh");
 
-	/* Get main proto. */
-	const auto proto = gco2cl((state->top - 1)->value.gc)->l.p;
-	return luaU_decompiler::decompile(proto, std::make_shared<transpiler_data::transpiler_config>());
+	return luaU_decompiler::decompile(gco2cl((state->top - 1)->value.gc)->l.p /* Main proto */, config);
 }
 
 std::int32_t main() {

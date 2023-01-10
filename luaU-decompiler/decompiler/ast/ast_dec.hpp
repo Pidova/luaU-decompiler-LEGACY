@@ -42,16 +42,16 @@ namespace ast_dec {
 		statement_end, /* End statement line. [AST] */
 
 		for_iv_start, /* for i,v in pairs ({ 1 }) do [ALL] */
-		for_iv_end, /* For(i,v) end [AST] */
+		for_iv_end, /* For(i,v) end(Jumpback) [AST] */
 		for_start, /* for ?? in ?? do [ALL] */
-		for_end, /* For end [AST] */
+		for_end, /* For end(Jumpback) [AST] */
 		for_n_start, /* for ?? in ?? do (numeral) [ALL] */
-		for_n_end, /* For(n) end [AST] */
+		for_n_end, /* For(n) end(Jumpback) [AST] */
 		for_prep, /* For preperation instruction [AST] */
 
 		repeat_, /* repeat [ALL] */
 		while_, /* while () follows condition(not jumpback). [ALL] */
-		while_end, /* while () end [AST] */
+		while_end, /* while () end(Jumpback) [AST] */
 		until_, /* until () follows condition(typically jumpback). [ALL] */
 		break_, /* break [ALL] */
 		scope_end, /* scope end (generic) [ALL] */
@@ -67,10 +67,11 @@ namespace ast_dec {
 		else_, /* else [ALL] */
 		condition_nonmutable, /* Condition that cannot be converted into while/if/elseif etc. [AST] */
 		condition_concat_start, /* Concat a condition(universal) (start). [AST] */
+		condition_concat_member, /* Concat a condition(universal) (member). [AST] */
 		condition_concat_end, /* Concat a condition(universal) (end will get written too compare flag). [AST] */
 		condition_true, /* Sets compare flag too true garunteing that while true expressions get set as true (expr type). [ALL] */
 		condition_flag, /* Writes result to flag. [TRANSPILER] */
-		condition_break, /* Conditon leads too break. [TRANSPILER] */
+		condition_break, /* Conditon leads too break. (Safer than break, end exprs. Garunteeds "break; \n end" emit) [TRANSPILER] */
 		condition_emit_next, /* Emits compare data too dest register in next instruction. [TRANSPILER] */
 		/* Different from concat condition doesn't garunteed actual concatation just a hint. */
 		condition_logical_start, /* Start of a logical operation. [AST] */
@@ -199,6 +200,10 @@ namespace ast_dec {
 		template <expr_type type>
 		void add_expr(const std::size_t count = 1u, const element ele = element::back, const std::size_t pos = 0u /* Optional positon overrides ele. */) {
 
+			if (!count) {
+				return;
+			}
+
 			/* Replace only lex with type. */
 			if (this->expr.size() && this->expr.front().first == ast_dec::expr_type::lex /* Used as place holder. */) {
 				this->expr.front().first = type;
@@ -229,6 +234,10 @@ namespace ast_dec {
 
 		/* Appends with nonconsant type. */
 		void add_expr_tt(const expr_type type, const std::size_t count = 1u, const element ele = element::back, const std::size_t pos = 0u /* Optional positon overrides ele. */) {
+
+			if (!count) {
+				return;
+			}
 
 			/* Replace only lex with type. */
 			if (this->expr.size() && this->expr.front().first == ast_dec::expr_type::lex /* Used as place holder. */) {
@@ -449,6 +458,7 @@ namespace ast_dec {
 						case expr_type::condition_or: { retn += "or";  break; }
 						case expr_type::condition_nonmutable: { retn += "condition_nonmutable";  break; }
 						case expr_type::condition_concat_start: { retn += "condition_concat_start";  break; }
+						case expr_type::condition_concat_member: { retn += "condition_concat_member"; break; }
 						case expr_type::condition_concat_end: { retn += "condition_concat_end";  break; }
 						case expr_type::condition_true: { retn += "condition_true"; break; }
 						case expr_type::condition_routine: { retn += "condition_routine"; break; }
@@ -1491,6 +1501,7 @@ namespace ast_dec {
 
 	struct ast {
 
+		float total = 0.0f; /* Used for total only avialable for main ast. */
 		std::size_t ast_id = 0u; /* ID */
 
 

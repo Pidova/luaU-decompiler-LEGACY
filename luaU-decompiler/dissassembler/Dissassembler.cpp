@@ -600,7 +600,10 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 							buffer->data += std::to_string(tt) + split;
 						else
 							buffer->data += std::to_string(tt) + split;
-										
+					
+
+						buffer->total += tt;
+
 						break;
 					}
 
@@ -619,12 +622,15 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 						else				
 							buffer->data += "r" + std::to_string(v) + split;
 
+						buffer->total += current_operand->capture_reg;
+
 						break;
 					}
 
 					case op_table::type::fastcall_idx: {
 						buffer->data += std::string (op_table::fastcall_array[operand_value]) + split;
 						current_operand->fastcall_idx = std::uint8_t(operand_value);
+						buffer->total += current_operand->fastcall_idx;
 						break;
 					}
 
@@ -632,24 +638,28 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 						const auto size = (!operand_value ? 0 : (1 << (operand_value - 1)));
 						buffer->data += std::to_string(size) + split;
 						current_operand->table_size = size;
+						buffer->total += current_operand->table_size;
 						break;
 					}
 
 					case op_table::type::proto: {
 						buffer->data += "proto_" + std::to_string(operand_value) + split;
 						current_operand->proto = operand_value;
+						buffer->total += current_operand->proto;
 						break;
 					}
 
 					case op_table::type::table: {
 						buffer->data += "table_" + std::to_string(operand_value) + split;
 						current_operand->table = operand_value;
+						buffer->total += current_operand->table;
 						break;
 					}
 
 					case op_table::type::upvalue: {
 						buffer->data += "upvalue_" + std::to_string(operand_value) + split;
 						current_operand->upvalue = operand_value;
+						buffer->total += current_operand->upvalue;
 						break;
 					}
 
@@ -670,6 +680,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 						buffer->data += std::to_string(operand_value) + split;
 						current_operand->jmp = operand_value;
 						current_operand->jmp_addr = current_operand->jmp + buffer->addr + 1u;
+						buffer->total += current_operand->jmp;
 
 						break;
 					}
@@ -677,12 +688,14 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 					case op_table::type::reg: {
 						buffer->data += 'r' + std::to_string(operand_value) + split;
 						current_operand->reg = std::uint8_t(operand_value);
+						buffer->total += current_operand->reg;
 						break;
 					}
 
 					case op_table::type::val : {
 						buffer->data += std::to_string(operand_value) + split;
 						current_operand->val = operand_value;
+						buffer->total += current_operand->val;
 						break;
 					}
 
@@ -690,6 +703,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 						--operand_value;
 						buffer->data += std::to_string(operand_value) + split;
 						current_operand->val = operand_value;
+						buffer->total += current_operand->val;
 						break;
 					}
 
@@ -711,6 +725,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 
 						buffer->data += current_operand->k_value + split;
 						current_operand->import_idx = id3;
+						buffer->total += current_operand->import_idx;
 
 						break;
 					}
@@ -723,6 +738,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 						buffer->data += current_operand->k_value + split;
 
 						current_operand->k_idx = operand_value;
+						buffer->total += current_operand->k_idx;
 
 						break;
 					}
@@ -730,6 +746,8 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 					case op_table::type::k_idx_pp:
 					case op_table::type::k_idx: {
 						
+						buffer->total += operand_value;
+
 						const auto kv = p->k[operand_value];
 						
 						switch (kv.tt) {
@@ -797,6 +815,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 
 						buffer->data += current_operand->k_value + split;
 						current_operand->k_idx = operand_value;
+					
 						break;
 					}
 
@@ -824,6 +843,7 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 	const auto start_pc = p->code + pc;
 	buffer->code = start_pc;
 	buffer->addr = pc;
+	buffer->total = std::int16_t(buffer->op);
 
 	/* Clear for next. */
 	buffer->operands.clear();
@@ -834,6 +854,9 @@ void LuaU_dissassembler::dissassemble(const std::uintptr_t pc, const Proto* p, s
 
 	/* Calulate lenght. */
 	buffer->len = (std::uint8_t(reinterpret_cast<const std::uintptr_t>(buffer->code) - reinterpret_cast<const std::uintptr_t>(start_pc)) / sizeof(Instruction)) + 1u;
+
+	/* Condense constant */
+	buffer->total /= 25u; 
 
 	return;
 }

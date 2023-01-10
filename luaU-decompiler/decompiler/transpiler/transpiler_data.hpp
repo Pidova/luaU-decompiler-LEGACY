@@ -33,6 +33,9 @@ namespace transpiler_data {
 		/* Misc */
 		bool smart_variable = false; /* "Smart" variable names. **Ignores prefix(unless unkown) but keeps sufffix** */
 
+		/* Calculates loss of original and current decompilation. */
+		bool post_loss = false;
+
 	};
 
 
