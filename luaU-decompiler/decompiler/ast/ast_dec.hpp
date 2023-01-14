@@ -155,6 +155,7 @@ namespace ast_dec {
 		struct closure_extra {
 			std::size_t closure_idx = 0u; /* Index of relating closure too ast->proto. */
 			std::shared_ptr<node> setglobal_node = nullptr;
+			std::pair <std::shared_ptr<node> /* Begin */, std::shared_ptr<node> /* End */> idx_nodes; /* Set index nodes for closure. */
 		} closure_extra;
 
 		std::shared_ptr<lexer_dec::lexerme> lex; /* Node lexer data. Has all the detailed information. */

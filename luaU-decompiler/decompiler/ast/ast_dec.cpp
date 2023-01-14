@@ -78,7 +78,7 @@ namespace ast_funcs {
 
 			}
 
-
+		
 			/* See if register gets used twice by dest or source with repecting scopes and either or reseting it. */
 			std::uint32_t routine = 0u;
 			std::int32_t scope = 0u;
@@ -95,7 +95,7 @@ namespace ast_funcs {
 			/* Really just visiting future instructions too see if table source, dest, or idx gets set twice indicating end. */
 			const auto rest_nodes = ast->main_block->visit_rest(start->address);
 			for (const auto& s_node : rest_nodes) {
-			
+				
 				++iter_count;
 
 				/* Checks operands if targets get used or not but if it does get used just resets target. */
@@ -183,7 +183,7 @@ namespace ast_funcs {
 					no_locvar = false;
 					break;
 				}
-				
+	
 
 				if (s_node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
 					
@@ -217,7 +217,7 @@ namespace ast_funcs {
 				}
 
 			}
-
+	
 			/* Not locvar by routine. */
 			if (no_locvar || used_next == 1) {
 				return false;
@@ -523,6 +523,7 @@ namespace ast_funcs {
 				for (const auto& i : current_proto->main_block->visit_range_current((closure_node->address + closure_node->lex->dissassembly->len), next->address))
 					i->add_expr<ast_dec::expr_type::dead_instruction>(); /* Handled by before hand. */
 
+				closure_node->closure_extra.idx_nodes = std::make_pair(end_capture, next);
 			}
 			else {
 
@@ -557,7 +558,7 @@ namespace ast_funcs {
 
 	namespace branches {
 
-		/* Set branches conditons in routine with given range. */
+		/* Set branches conditions in routine with given range. */
 		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector <std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */, const bool check_loops = false /* Checks jumps too see if they lead too loop by expr and preform opposite. */) {
 
 			const auto conditions = ast->main_block->visit_range_type<lexer_dec::inst_type::branch_condition>(begin, end);
@@ -1471,6 +1472,7 @@ namespace ast_funcs {
 			auto set_args = [&](const std::shared_ptr<ast_dec::ast>& proto, const bool dont_set = false /* Used for main moves. */) mutable {
 
 				std::vector <std::vector <std::uint32_t>> dests; /* (Scoped) Registers used in dest. **getting written too** */
+				std::vector <std::uint32_t> dests_ns; /* (NOT-Scoped) Registers used in dest. */
 				std::vector <std::vector <std::shared_ptr<ast_dec::node>>> dests_nodes; /* Dest nodes relative to dests (Can't be pair as too this is used for something entirely different from arguments) */
 				std::vector <std::uint32_t> source_no_dest; /* Registers used in source, value but not dest. **Not written too yet but been used** */
 				std::vector <std::uintptr_t> addr_scopes; /* Scopes */
@@ -1521,6 +1523,7 @@ namespace ast_funcs {
 						for (auto i = node->loop_extra.end_node->loop_extra.start_reg; i <= node->loop_extra.end_node->loop_extra.end_reg; ++i)
 							if (std::find(dests.back().begin(), dests.back().end(), i) == dests.back().end()) { /* Didnt find dest */
 								dests.back().emplace_back(i);
+								dests_ns.emplace_back(i);
 								dests_nodes.back().emplace_back(for_dest);
 							}
 							else { /* Found dest, mutate dest node. */
@@ -1571,6 +1574,7 @@ namespace ast_funcs {
 							for (auto a = dest; a < (dest + amt); ++a)
 								if (std::find(dests.back().begin(), dests.back().end(), a) == dests.back().end()) {
 									dests.back().emplace_back(a);
+									dests_ns.emplace_back(a);
 									dests_nodes.back().emplace_back(node);
 								}
 								else {
@@ -1624,11 +1628,14 @@ namespace ast_funcs {
 
 							}
 
-							/* Add placement for call. */
+							/* Append placement for call. */
 							if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.back().begin(), dests.back().end(), start) == dests.back().end() &&
 								std::find(source_no_dest.begin(), source_no_dest.end(), start) == source_no_dest.end()) {
 								source_no_dest.emplace_back(start);
 							}
+
+							/* Append to dest. */
+							dests_ns.emplace_back(start);
 
 							break;
 						}
@@ -1682,6 +1689,11 @@ namespace ast_funcs {
 
 								const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 
+								dests_ns.emplace_back(reg);
+								if (node->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
+									dests_ns.emplace_back(reg + 1u);
+								}
+
 								if (std::find(dests.back().begin(), dests.back().end(), reg) == dests.back().end()) {
 
 									dests.back().emplace_back(reg);
@@ -1730,24 +1742,74 @@ namespace ast_funcs {
 
 				}
 
-
-				/* No dests */
-				if (source_no_dest.empty()) {
-					return;
-				}
-
-				/* Remove dupes */
-				std::sort(source_no_dest.begin(), source_no_dest.end());
-				source_no_dest.erase(std::unique(source_no_dest.begin(), source_no_dest.end()), source_no_dest.end());
-
 				/* Used for main skips arguments set. */
 				if (dont_set) {
 					return;
 				}
 
+				std::size_t max = 0u; /* Find max. */
+				const auto min = 0; /* Args are on bottom of stack. */
 
-				const auto max = *std::max_element(source_no_dest.begin(), source_no_dest.end());
-				const auto min = 0;
+				/* Max could be wrong. See if stack is consitance if theres a hole dec and use that as max. */
+				if (!dests_ns.empty()) {
+					std::sort(dests_ns.begin(), dests_ns.end());
+					dests_ns.erase(std::unique(dests_ns.begin(), dests_ns.end()), dests_ns.end());
+					std::sort(dests_ns.begin(), dests_ns.end());
+				}
+
+				/* Check for holes. */
+				std::int16_t hole_target = 0;
+				if (!dests_ns.empty()) {
+
+					/* Max hole in dest. */
+					auto start = dests_ns.front();
+					for (auto i = 0u; i < dests_ns.size(); ++i) {
+						if ((i + 1u) != dests_ns.size() && dests_ns[i + 1u] != (dests_ns[i] + 1u)) {
+							start = dests_ns[i + 1u];
+						}
+					}
+
+					hole_target = start - 1;
+				}
+
+				/* No dests->source */
+				if (source_no_dest.empty()) {
+
+					/* No dests */
+					if (dests_ns.empty()) {
+						return;
+					}
+
+					/* Nothing */
+					if (!hole_target) {
+						return;
+					}
+					
+					/* Check front for hole. */
+					if (!std::binary_search(source_no_dest.begin(), source_no_dest.end(), hole_target)) {
+						max = hole_target;
+					}
+
+				}
+				else {
+
+					/* Remove dupes */
+					std::sort(source_no_dest.begin(), source_no_dest.end());
+					source_no_dest.erase(std::unique(source_no_dest.begin(), source_no_dest.end()), source_no_dest.end());
+
+					max = *std::max_element(source_no_dest.begin(), source_no_dest.end());
+			
+					/* Check for holes. */
+					if (hole_target) {
+
+						/* Check front for hole. */
+						if (!std::binary_search(source_no_dest.begin(), source_no_dest.end(), hole_target)) {
+							max = hole_target;
+						}
+
+					}
+
+				}
 
 
 				/* Set args (fill stack) */
@@ -2237,7 +2299,7 @@ namespace ast_funcs {
 
 					/* Mutate local closure to newclosure. */
 					if (node->has_expr(ast_dec::expr_type::closure_local)) {
-
+						
 						if (dest->reg != registers.back()) {
 							node->replace_next<ast_dec::expr_type::closure_local, ast_dec::expr_type::closure_newclosure>();
 							ast->protos[node->closure_extra.closure_idx]->closure_type = ast_dec::closure_type::newclosure;
@@ -2250,13 +2312,13 @@ namespace ast_funcs {
 					else {
 					
 						if (dest->reg == registers.back()) {				
-							
+
 							/* See if dest register is logical. */
 							if (ast_funcs::regs::logical_dest_register(ast, node, registers.back())) {
 							
 								/* Mutate global */
 								if (node->has_expr(ast_dec::expr_type::closure_global)) {
-
+								
 									node->replace_next<ast_dec::expr_type::closure_global, ast_dec::expr_type::closure_local>();
 									node->remove_all_expr <ast_dec::expr_type::closure_global>();
 
@@ -2271,6 +2333,16 @@ namespace ast_funcs {
 								}
 								else {									
 									node_var(node->lex->dissassembly->operands.front());
+								}
+
+								/* Has indexes, remove dead instructions. */
+								if (node->closure_extra.idx_nodes.first != nullptr) {
+
+									const auto range = ast->main_block->visit_range_current(node->closure_extra.idx_nodes.first->address, node->closure_extra.idx_nodes.second->address);
+									for (const auto& i : range) {
+										i->remove_all_expr<ast_dec::expr_type::dead_instruction>();
+									}
+
 								}
 
 							}
@@ -2344,7 +2416,8 @@ namespace ast_funcs {
 			for (auto& i : all) {
 
 				/* Loadb or either branch condition. */
-				if (i->lex->dissassembly->op == LuauOpcode::LOP_LOADB || i->lex->type == lexer_dec::inst_type::branch_condition) {
+				const auto i_next = ast->main_block->visit_addr(i->address + i->lex->dissassembly->len);
+				if ((i->lex->dissassembly->op == LuauOpcode::LOP_LOADB && i_next != nullptr && i_next->lex->type == lexer_dec::inst_type::branch_condition) || i->lex->type == lexer_dec::inst_type::branch_condition) {
 
 					const auto cached_init = i;
 					std::vector<std::uint16_t> compares; /* Singular loadb compare(jmp 1+; loadb r1 +1; loadb r1 0; ???) jumps log registers and see if it gets used in compare first. */
