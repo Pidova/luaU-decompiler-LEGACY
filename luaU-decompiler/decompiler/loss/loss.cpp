@@ -26,10 +26,5 @@ float loss::loss(const std::shared_ptr<ast_dec::ast>& main_ast, const std::strin
 	/* Mod it by 100. */
 	auto retn = ((std::fmod(main_ast->total, 100)) - (std::fmod(ast->total, 100)));
 
-	/* Negate if < 0 */
-	if (retn < 0) {
-		retn = -retn;
-	}
-
 	return retn;
 }

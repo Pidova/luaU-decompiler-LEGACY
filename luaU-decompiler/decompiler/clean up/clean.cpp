@@ -26,8 +26,6 @@ void clean_up::clean(std::string& decom) {
 #define spacing "   "
 
 static const char* const new_scope[] = {
-	"elseif",
-	"else",
 	"if",
 	"repeat",
 	"function",
@@ -36,6 +34,12 @@ static const char* const new_scope[] = {
 	"while",
 	"--[[",
 	"(function" 
+};
+
+/* Dec indent for scope return to normal after. */
+static const char* const prev_scope_expr[] = {
+	"elseif",
+	"else"
 };
 
 static const char* const end_scope[] = {
@@ -75,6 +79,13 @@ void clean_up::buetify(std::string& decom) {
 					++multiplier;
 					curr = true;
 				}
+
+			/* Set multiplier. */
+			for (const auto i : prev_scope_expr)
+				if (!decom.compare(pos + 1u, std::strlen(i), i)) {
+					curr = true;
+				}
+
 
 			for (const auto i : end_scope)
 				if (!decom.compare(pos + 1u, std::strlen(i), i))

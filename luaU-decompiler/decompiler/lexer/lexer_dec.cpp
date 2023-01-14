@@ -330,14 +330,14 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		case LuauOpcode::LOP_JUMPXEQKNIL:
 		case LuauOpcode::LOP_JUMPXEQKB: {
 			retn->type = lexer_dec::inst_type::branch_condition;
-			retn->operands = { lexer_dec::operand_types::compare, lexer_dec::operand_types::memaddr, lexer_dec::operand_types::kvalue };
+			retn->operands = { lexer_dec::operand_types::compare, lexer_dec::operand_types::memaddr, lexer_dec::operand_types::comparek_aux };
 			break;
 		}
 
 		case LuauOpcode::LOP_JUMPXEQKN: 
 		case LuauOpcode::LOP_JUMPXEQKS: {
 			retn->type = lexer_dec::inst_type::branch_condition;
-			retn->operands = { lexer_dec::operand_types::compare, lexer_dec::operand_types::memaddr, lexer_dec::operand_types::kvalue };
+			retn->operands = { lexer_dec::operand_types::compare, lexer_dec::operand_types::memaddr, lexer_dec::operand_types::comparek_aux };
 			break;
 		}
 

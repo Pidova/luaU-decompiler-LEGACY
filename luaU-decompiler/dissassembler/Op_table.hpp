@@ -110,6 +110,7 @@ namespace op_table {
 	enum class type : std::uint8_t {
 		reg,
 		val,
+		k_idx_aux, /* Value written to kvalue str if low bits. */
 		jmp,
 		k_idx,
 		aux,
@@ -242,11 +243,11 @@ namespace op_table {
 
 		{ LuauOpcode::LOP_FORGPREP, { op_table::operands::A,  op_table::operands::D }, { op_table::type::reg, op_table::type::jmp } }, // 4C
 
-		{ LuauOpcode::LOP_JUMPXEQKNIL, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp,  op_table::type::val } }, // 4D
-		{ LuauOpcode::LOP_JUMPXEQKB, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp,  op_table::type::val } }, // 4E
+		{ LuauOpcode::LOP_JUMPXEQKNIL, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx_aux } }, // 4D
+		{ LuauOpcode::LOP_JUMPXEQKB, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx_aux } }, // 4E
 
-		{ LuauOpcode::LOP_JUMPXEQKN, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX_24 }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx } }, // 4F
-		{ LuauOpcode::LOP_JUMPXEQKS, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX_24 }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx } } // 50
+		{ LuauOpcode::LOP_JUMPXEQKN, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX_24 }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx_aux } }, // 4F
+		{ LuauOpcode::LOP_JUMPXEQKS, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX_24 }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx_aux } } // 50
 
 	};
 

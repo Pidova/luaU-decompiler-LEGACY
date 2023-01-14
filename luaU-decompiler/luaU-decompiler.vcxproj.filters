@@ -183,6 +183,9 @@
     <ClCompile Include="decompiler\loss\loss.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="decompiler\generic\generic.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="luau-master\Ast\include\Luau\Ast.h">
@@ -350,8 +353,14 @@
     <ClInclude Include="decompiler\loss\loss.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="decompiler\generic\generic.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="compile_me.lua" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" />
   </ItemGroup>
 </Project>

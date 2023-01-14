@@ -38,8 +38,14 @@ namespace ast_dec {
 		arith, /* r1 += r1 + r1 [AST] */
 		arithK, /* r1 += r1 + 1 [AST] */
 
+		/* Generic locvar */
+		locvar, /* Dest is locvar. [ALL] */
+		locvar_upvalue, /* Dest locvar turns into a upvalue. [ALL] */
+
 		statement_begin, /* Begin statement line. [AST] */
 		statement_end, /* End statement line. [AST] */
+
+		return_, /* Generic return. [AST] */
 
 		for_iv_start, /* for i,v in pairs ({ 1 }) do [ALL] */
 		for_iv_end, /* For(i,v) end(Jumpback) [AST] */
@@ -91,15 +97,17 @@ namespace ast_dec {
 		condition_routine_start, 
 		condition_routine_end,
 
-
+		/* Jump */
+		jump_elseif, /* Jump leads too elseif [AST] */
+		jump_else, /* Jump leads too else [AST] */
 
 		table_start, /* Table { [ALL] */
 		table_element, /* Element in table. (Not usable for setlist cause of concatation) [ALL] */
 		table_end, /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) [ALL] */
 		table_index, /* Extra expr used for certain things (Will be appended when everything is done). [ALL] */
 
-		closure_local, /* local function test () **Can be mutated by lv set if it is a lv will be local else newclosure** [ALL] */
-		closure_global, /* function test () **Can be mutated by lv set if it is a lv instead of a global will turn into local** [ALL] */
+		closure_local, /* local function ?? () **Can be mutated by lv set if it is a lv will be local else newclosure** [ALL] */
+		closure_global, /* function ?? () **Can be mutated by lv set if it is a lv instead of a global will turn into local** [ALL] */
 		closure_newclosure, /* (function()  end) [ALL] */
 
 		bad_instruction, /* Instruction will never get executed no matter watch branch is taken or not. [AST] */
@@ -121,8 +129,6 @@ namespace ast_dec {
 		/* Convert destination to local? */
 		struct dest_loc {
 			bool set_prefix = false; /* Used in transpiler to set suffix to local variable name. */
-			bool is_dest_loc = false; /* Turns dest to local. */
-			bool is_upvalue = false; /* locvar is upvalue? (Will use name as the variable automatically overrides all conditions) */
 			std::string name = ""; /* Locvar name (Suffix, actuall variable name if is_upvalue is true, closure names wont get set here)  */
 		} dest_loc;
 
@@ -138,9 +144,10 @@ namespace ast_dec {
 
 		/* Extra information for loops. */
 		struct loop_extra {
+			std::shared_ptr<ast_dec::node> start_node = nullptr; /* Start of loop. */
 			std::shared_ptr<ast_dec::node> end_node = nullptr; /* Used for prologue and epilogue of loop. */
-			std::uint16_t start_reg = 0u; /* Start register (Format) */
-			std::uint16_t end_reg = 0u; /* End register (Format) */
+			std::uint16_t start_reg = 0u; /* Start register (Format, End of loop) */
+			std::uint16_t end_reg = 0u; /* End register (Format, End of loop) */
 			std::unordered_map<std::uint16_t /* Reg */, std::string /* Name */> iteration_names; /* Override iteration variable names. */
 		} loop_extra;
 
@@ -169,8 +176,6 @@ namespace ast_dec {
 
 			/* Dest */
 			this->dest_loc.set_prefix = false;
-			this->dest_loc.is_dest_loc = false;
-			this->dest_loc.is_upvalue = false;
 			this->dest_loc.name.clear();
 
 			/* Branch */
@@ -180,6 +185,7 @@ namespace ast_dec {
 			this->table_extra.end_table = 0u;
 
 			/* Loop */
+			this->loop_extra.start_node = nullptr;
 			this->loop_extra.end_node = nullptr;
 			this->loop_extra.start_reg = 0u;
 			this->loop_extra.end_reg = 0u;
@@ -310,7 +316,7 @@ namespace ast_dec {
 			return std::make_pair(expr_type::lex, 1u);
 		}
 
-		/* Adds expression if type isn't a expr. */
+		/* Adds expression if type isn't a expr. **Used when their should be one garunteed expr of one type.**  */
 		template <expr_type type>
 		void add_existance(const std::size_t count = 1u, const element ele = element::back) {
 
@@ -427,9 +433,14 @@ namespace ast_dec {
 						case expr_type::arith: { retn += "arith";  break; }
 						case expr_type::arithK: { retn += "arithK";  break; }
 		
+						case expr_type::locvar: { retn += "locvar"; break; }
+						case expr_type::locvar_upvalue: { retn += "locvar_upvalue"; break; }
+
 						case expr_type::statement_begin: { retn += "statement_begin"; break; }
 						case expr_type::statement_end: { retn += "statement_end"; break; }
 		
+						case expr_type::return_: { retn += "return_"; break;  }
+
 						case expr_type::for_iv_start: { retn += "for_iv_start";  break; }
 						case expr_type::for_iv_end: { retn += "for_iv_end";  break; }
 						case expr_type::for_start: { retn += "for_start";  break; }
@@ -475,6 +486,9 @@ namespace ast_dec {
 						case expr_type::condition_open: { retn += "condition_open";  break; }
 						case expr_type::condition_open_post: { retn += "condition_open_post"; break;  }
 		
+						case expr_type::jump_elseif: { retn += "jump_elseif"; break; }
+						case expr_type::jump_else: { retn += "jump_else"; break; }
+
 						case expr_type::table_start: { retn += "table_start";  break; }
 						case expr_type::table_element: { retn += "table_element";  break; }
 						case expr_type::table_end: { retn += "table_end";  break; }
@@ -659,7 +673,7 @@ namespace ast_dec {
 			
 			#if display_warnings			
 				if (retn.empty()) {
-					std::printf("Visit_type returned empty for all.\n");
+					std::printf("[WARNING] Visit_type returned empty for all.\n");
 				}
 			#endif 
 
@@ -788,6 +802,33 @@ namespace ast_dec {
 
 			return retn;
 		}
+
+		/* Visit next node with expression. (Includes current address) */
+		template<expr_type type>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_expr_current(const std::uintptr_t address, const bool all) {
+
+			std::vector<std::shared_ptr<node>> retn;
+
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
+
+				if (i->address >= address && i->has_expr(type)) {
+
+					if (all) {
+						retn.emplace_back(i);
+					}
+					else {
+						return i;
+					}
+
+				}
+
+			}
+
+			return retn;
+		}
+
 
 		/* Visit next node with expression. (Ignores current address) */
 		template<expr_type type>
@@ -1224,7 +1265,7 @@ namespace ast_dec {
 
 			const auto all_nodes = this->visit_all();
 			for (const auto& i : all_nodes) {
-
+			
 				if (i->has_expr(target)) {
 					inside = true;
 					begin = i;
@@ -1244,9 +1285,7 @@ namespace ast_dec {
 				}
 
 			}
-		
-			this->remove_dupes(retn);
-				
+	
 
 			#if display_warnings
 				if (retn.empty()) { 

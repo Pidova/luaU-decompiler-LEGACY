@@ -20,6 +20,7 @@ namespace lexer_dec {
 		source, /* Reg source. */
 		integer, /* Integer source. */
 		compare, /* Compare register. */
+		comparek_aux, /* Compare kvalue for low bit will still be kvalue. */
 		memaddr, /* Memory address. */
 		proto, /* Proto idx. */
 		kvalue, /* Kvalue source. */

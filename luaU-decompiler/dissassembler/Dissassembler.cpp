@@ -87,7 +87,7 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 				}
 
 				case LuauOpcode::LOP_FORGPREP_INEXT: {
-					buffer->mnenomic = "forgloop_inext";
+					buffer->mnenomic = "forgprep_inext";
 					buffer->hint = "For loop with (i)next.";
 					break;
 				}
@@ -695,6 +695,14 @@ void set_data(std::shared_ptr<LuaU_dissassembler::dissassembly>& buffer, const P
 					case op_table::type::val : {
 						buffer->data += std::to_string(operand_value) + split;
 						current_operand->val = operand_value;
+						buffer->total += current_operand->val;
+						break;
+					}
+
+					case op_table::type::k_idx_aux: {
+						buffer->data += std::to_string(operand_value) + split;
+						current_operand->val = operand_value;
+						current_operand->k_value = std::to_string(current_operand->val);
 						buffer->total += current_operand->val;
 						break;
 					}

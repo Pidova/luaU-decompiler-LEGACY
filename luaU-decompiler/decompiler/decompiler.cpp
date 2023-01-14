@@ -18,7 +18,7 @@ std::string luaU_decompiler::decompile(Proto* proto, const std::shared_ptr<trans
 			emitter::expandable_comment_pre(decom, "Unable to compile decompilation!");
 		}
 		else {
-			emitter::expandable_comment_pre(decom, std::string ("Loss: " + std::to_string(loss) + "%"));
+			emitter::expandable_comment_pre(decom, ((loss < 0) ? std::string ("Loss: " + std::to_string(loss) + "%") : (loss != 0) ? std::string("Gain: " + std::to_string(loss) + "%") : std::string("Perfect decompilation!")));
 		}
 
 	}

@@ -1,7 +1,7 @@
 #include "emitter.hpp"
 
 
-void emitter::compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const char* const compare_type, const std::string& compare_1, const std::string& compare_2) {
+void emitter::compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const char* const compare_type, std::string compare_1, std::string compare_2) {
 
     const char* cmp;
 
@@ -18,22 +18,22 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
         }
 
         case LuauOpcode::LOP_JUMPXEQKNIL: {
-            cmp = (!opposite) ? " == " : " ~= ";
+            cmp = (!opposite) ? " ~= " : " == ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKB: {
-            cmp = (!opposite) ? " == " : " ~= ";
+            cmp = (!opposite) ? " ~= " : " == ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKS: {
-            cmp = (!opposite) ? " == " : " ~= ";
+            cmp = (!opposite) ? " ~= " : " == ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPXEQKN: {
-            cmp = (!opposite) ? " == " : " ~= ";
+            cmp = (!opposite) ? " ~= " : " == ";
             break;
         }
 
@@ -53,17 +53,31 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
         }
 
         case LuauOpcode::LOP_JUMPIFNOTLT: {
-            cmp = (!opposite) ? " >= " : " <= ";
+            cmp = (!opposite) ? " > " : " < ";
             break;
         }
 
         case LuauOpcode::LOP_JUMPIF: {
-            cmp = (!opposite) ? "" : " not ";
+            cmp = (!opposite) ? "" : "not ";
+
+            /* Fix compare */
+            if (!compare_1.empty()) {
+                compare_2 = compare_1;
+                compare_1.clear();
+            }
+
             break;
         }
 
         case LuauOpcode::LOP_JUMPIFNOT: {
-            cmp = (!opposite) ? " not " : "";
+            cmp = (!opposite) ? "not " : "";
+
+            /* Fix compare */
+            if (!compare_1.empty()) {
+                compare_2 = compare_1;
+                compare_1.clear();
+            }
+
             break;
         }
 
