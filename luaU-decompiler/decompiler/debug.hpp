@@ -1,21 +1,68 @@
+#include "color.hpp"
 
-/* Transpiler */
-#define TANSPILER_DEBUG false
+#define debug_functions true /* Enable debug functions */
 
-#if TANSPILER_DEBUG
-	#define TANSPILER_DEBUG_OPERANDS true /* Needs to be enabled to allow comment data. */
-	#define TANSPILER_DEBUG_PREEXPR false /* Prints data of instruction exprs before exprs are passed. */
-	#define TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE true /* Allows you too override print in debug and just comment it. */
-	#define TANSPILER_DEBUG_PREDECOMPILATION false /* Prints node data per iteration. */
-	#define TANSPILER_DEBUG_POSTDECOMPILATION false /* Prints decompilation data when everything is done. */
-#else /* Nothing */
-	#define TANSPILER_DEBUG_OPERANDS false
-	#define TANSPILER_DEBUG_PREEXPR false
-	#define TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE false
-	#define TANSPILER_DEBUG_PREDECOMPILATION false 
-	#define TANSPILER_DEBUG_POSTDECOMPILATION false
+
+#define universal_debug true /* Enables universal debug good for debugging. */
+#if universal_debug
+
+	/* 1st arg can be str, va_list has too be cstr. */
+	#if defined (_WIN32) || defined (_WIN64)
+		
+		#define debug_line(str, ...) { \
+					std::printf(color_fontcolor_brightcyan color_background_black "[AST-DEBUG](%s) " color_fontcolor_yellow color_background_black, __FUNCTION__); \
+					std::printf(str, __VA_ARGS__); \
+					std::printf(color_fontcolor_white color_background_black "\n"); \
+				};
+		
+		#define debug_warning(str, ...) { \
+					std::printf(color_fontcolor_brightcyan color_background_black "[AST-DEBUG](%s) " color_fontcolor_red color_background_black, __FUNCTION__); \
+					std::printf(str, __VA_ARGS__); \
+					std::printf(color_fontcolor_white color_background_black "\n"); \
+				};
+		
+		#define debug_success(str, ...) { \
+					std::printf(color_fontcolor_brightcyan color_background_black "[AST-DEBUG](%s) " color_fontcolor_green color_background_black, __FUNCTION__); \
+					std::printf(str, __VA_ARGS__); \
+					std::printf(color_fontcolor_white color_background_black "\n"); \
+				};
+		
+		#define debug_init(str) std::printf (color_fontcolor_green color_background_black "[" str "-DEBUG] START" color_fontcolor_white color_background_black "\n")
+		#define debug_close(str) std::printf (color_fontcolor_green color_background_black "[" str "-DEBUG] CLOSE" color_fontcolor_white color_background_black "\n")
+	
+	#else
+
+		#define debug_line(str, ...) { \
+					std::printf("[AST-DEBUG](%s) ", __FUNCTION__); \
+					std::printf(str, __VA_ARGS__); \
+					std::printf("\n"); \
+				};
+		
+		#define debug_warning(str, ...) { \
+					std::printf("[AST-DEBUG](%s) ", __FUNCTION__); \
+					std::printf(str, __VA_ARGS__); \
+					std::printf("\n"); \
+				};
+		
+		#define debug_success(str, ...) { \
+					std::printf("[AST-DEBUG](%s) ", __FUNCTION__); \
+					std::printf(str, __VA_ARGS__); \
+					std::printf("\n"); \
+				};
+		
+		#define debug_init(str) std::printf ("[" str "-DEBUG] START\n")
+		#define debug_close(str) std::printf ("[" str "-DEBUG] CLOSE\n")
+
+	#endif
+
+#else
+
+	#define debug_init(str, ...)
+	#define debug_line(str, ...)
+	#define debug_warning(str, ...)
+	#define debug_success(str, ...)
+	#define debug_close(str, ...)
+
 #endif
 
 
-/* Universal */
-#define debug_functions true /* Enable debug functions */

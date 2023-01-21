@@ -148,12 +148,12 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 		/* Table */
 		case LuauOpcode::LOP_GETTABLE: {
 			retn->type = lexer_dec::inst_type::table_get;
-			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source,  lexer_dec::operand_types::table_idx };
+			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source,  lexer_dec::operand_types::table_reg };
 			break;
 		}
 		case LuauOpcode::LOP_SETTABLE: {
 			retn->type = lexer_dec::inst_type::table_set;
-			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::reg,  lexer_dec::operand_types::table_idx };
+			retn->operands = { lexer_dec::operand_types::source, lexer_dec::operand_types::reg,  lexer_dec::operand_types::table_reg };
 			break;
 		}
 									 

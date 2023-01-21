@@ -1552,7 +1552,7 @@ AstTypeOrPack Parser::parseTypeOrPackAnnotation()
     }
 
     parts.push_back(type);
-
+   
     recursionCounter = oldRecursionCount;
 
     return {parseTypeAnnotation(parts, begin), {}};

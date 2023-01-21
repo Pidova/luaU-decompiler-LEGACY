@@ -356,6 +356,15 @@
     <ClInclude Include="decompiler\generic\generic.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="decompiler\transpiler\transpiler_macros.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="decompiler\color.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="decompiler\transpiler\transpiler_debug.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="compile_me.lua" />

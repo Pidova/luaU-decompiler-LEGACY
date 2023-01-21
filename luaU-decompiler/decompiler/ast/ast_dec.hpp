@@ -41,11 +41,19 @@ namespace ast_dec {
 		/* Generic locvar */
 		locvar, /* Dest is locvar. [ALL] */
 		locvar_upvalue, /* Dest locvar turns into a upvalue. [ALL] */
+		locvar_multret, /* Dest is locvar(Multret). [ALL] */
 
 		statement_begin, /* Begin statement line. [AST] */
 		statement_end, /* End statement line. [AST] */
 
+		table, /* Table instruction. [AST] */
+
 		return_, /* Generic return. [AST] */
+		
+		/* Multret concat **Applicable too move, set(table/global/upv)** */
+		call_mulret_start, /* Call multret concat start [TRANSPILER] */
+		call_mulret_member, /* Call multret concat member [TRANSPILER] */
+		call_mulret_end, /* Call multret concat end [TRANSPILER] */
 
 		for_iv_start, /* for i,v in pairs ({ 1 }) do [ALL] */
 		for_iv_end, /* For(i,v) end(Jumpback) [AST] */
@@ -67,6 +75,11 @@ namespace ast_dec {
 
 		concat_routine_start, /* Concat routine start. [AST] */
 		concat_routine_end, /* Concat routine end. [AST] */
+
+		conditional_expression_predicted, /* Indication that this may be the end of a conditional_expression. (Does not garunteed one) [AST] */
+		conditional_expression_start, /* Conditional expression routine start. [AST] */
+		conditional_expression_end, /* Conditional expression routine end. (Compare flag gets sets in dest(Hard coded else for LOP_LOADB/LOP_GETIMPORT(no src reg))) [AST] */
+		conditional_expression_end_emit, /* Same as conditonal_expression_end but it emits data too the end of compare flag [TRANSPILER]*/
 
 		if_, /* if () [ALL] */
 		elseif_, /* elseif () [ALL] */
@@ -130,6 +143,8 @@ namespace ast_dec {
 		struct dest_loc {
 			bool set_prefix = false; /* Used in transpiler to set suffix to local variable name. */
 			std::string name = ""; /* Locvar name (Suffix, actuall variable name if is_upvalue is true, closure names wont get set here)  */
+			std::vector <std::string> multret_names; /* Locvar names for multret follows name. (All variable names will be here including first, name is for ones without multret  (Garunteed)) */
+			std::size_t multret_amount = 0u; /* Locvar mulret count for regs. */
 		} dest_loc;
 
 		/* Extra information for branch. */
@@ -162,46 +177,11 @@ namespace ast_dec {
 		
 		/* Special */
 		std::shared_ptr<node> sub_node = nullptr; /* When a move instruction is hit this will be the source node(mutable by for loop scopes(preps or jumptoo if no prep)). */
-		std::vector<std::shared_ptr<node>> dest_nodes; /* Where dests where intialy initialized(mutable by for loop scopes).  */
-		std::vector<std::shared_ptr<node>> source_nodes; /* Where sources where intialy initialized(mutable by for loop scopes).  */
-
+		std::vector<std::shared_ptr<node>> dest_nodes_init; /* Where dests where intialy initialized(mutable by for loop scopes). (MAY BE UNSORTED) */
+		std::vector<std::shared_ptr<node>> source_nodes_init; /* Where sources where intialy initialized(mutable by for loop scopes). (MAY BE UNSORTED)  */
+		std::vector<std::shared_ptr<node>> source_nodes; /* If a instruction has source/reg operands with regs it will get when those regs where last set(Can be init, not arg). (MAY BE UNSORTED) */
 
 		/* Node functions */
-
-		/* Vinellifys node */
-		void reset_node() {
-
-			/* Expr */
-			this->expr.clear();
-			this->add_expr<ast_dec::expr_type::lex>(1u);
-
-			/* Dest */
-			this->dest_loc.set_prefix = false;
-			this->dest_loc.name.clear();
-
-			/* Branch */
-			this->branch_extra.opposite = false;
-
-			/* Table */
-			this->table_extra.end_table = 0u;
-
-			/* Loop */
-			this->loop_extra.start_node = nullptr;
-			this->loop_extra.end_node = nullptr;
-			this->loop_extra.start_reg = 0u;
-			this->loop_extra.end_reg = 0u;
-			this->loop_extra.iteration_names.clear();
-
-			/* Closure */
-			this->closure_extra.closure_idx = 0u;
-
-			/* Special */
-			this->sub_node = nullptr;
-			this->dest_nodes.clear();
-			this->source_nodes.clear();
-
-			return;
-		}
 
 		/* Appends expr */
 		template <expr_type type>
@@ -279,7 +259,7 @@ namespace ast_dec {
 		void remove_expr() {
 
 			/* Replace only lex with type. */
-			if (this->expr.size() == 1u) {
+			if (this->expr.size() == 1u && this->expr.front().first == type) {
 				this->expr.front().first = ast_dec::expr_type::lex;
 				this->expr.front().second = 1u;
 			}
@@ -383,19 +363,17 @@ namespace ast_dec {
 		/* Collapses expr by count. */
 		void collapse_expr() {
 
-			for (auto i = 0u; i < this->expr.size(); i++) {
+			for (auto i = 0u; i < this->expr.size(); ++i) {
 
 				auto expr = this->expr[i];
-				if (expr.second > 1u) {
-					
-					while (expr.second > 1u) {
 
-						this->add_expr_tt(expr.first, 1u, ast_dec::element::back, i);
-						expr.second--;
+				while (expr.second > 1u) {
 
-					}
+					this->add_expr_tt(expr.first, 1u, ast_dec::element::back, i);
+					--expr.second;
 
 				}
+				
 
 			}
 
@@ -436,11 +414,18 @@ namespace ast_dec {
 		
 						case expr_type::locvar: { retn += "locvar"; break; }
 						case expr_type::locvar_upvalue: { retn += "locvar_upvalue"; break; }
-
+						case expr_type::locvar_multret: { retn += "locvar_multret"; break; }
+													  
 						case expr_type::statement_begin: { retn += "statement_begin"; break; }
 						case expr_type::statement_end: { retn += "statement_end"; break; }
 		
+						case expr_type::table: { retn += "table";  break; }
+
 						case expr_type::return_: { retn += "return_"; break;  }
+
+						case expr_type::call_mulret_start: { retn += "call_mulret_start"; break; }
+						case expr_type::call_mulret_member: { retn += "call_mulret_member"; break; }
+						case expr_type::call_mulret_end: { retn += "call_mulret_end"; break; }
 
 						case expr_type::for_iv_start: { retn += "for_iv_start";  break; }
 						case expr_type::for_iv_end: { retn += "for_iv_end";  break; }
@@ -463,6 +448,11 @@ namespace ast_dec {
 						case expr_type::concat_routine_start: { retn += "concat_routine_start";  break; }
 						case expr_type::concat_routine_end: { retn += "concat_routine_end";  break; }
 		
+						case expr_type::conditional_expression_predicted: { retn += "conditional_expression_predicted"; break; }
+						case expr_type::conditional_expression_start: { retn += "conditional_expression_start"; break; }
+						case expr_type::conditional_expression_end: { retn += "conditional_expression_end"; break; }
+						case expr_type::conditional_expression_end_emit: { retn += "conditional_expression_end_emit"; break; }
+
 						case expr_type::if_: { retn += "if";  break; }
 						case expr_type::elseif_: { retn += "elseif";  break; }
 						case expr_type::else_: { retn += "else";  break; }
@@ -534,11 +524,30 @@ namespace ast_dec {
 				return;
 			}
 
-			std::string debug_get_dissassembly() {
-				return std::to_string (this->lex->dissassembly->addr) + " " + this->lex->dissassembly->data;
+		#endif
+		
+
+		/* Gets dissassembly */
+		enum class str_type : std::uint8_t {
+			dissassembly
+		};
+
+		template<str_type type = str_type::dissassembly>
+		std::string str() {
+
+			switch (type) {
+
+				case str_type::dissassembly: {
+					return std::string(std::to_string(this->lex->dissassembly->addr) + " " + this->lex->dissassembly->data);
+				}
+
+				default: {
+					break;
+				}
+
 			}
 
-		#endif
+		}
 
 	};
 	
@@ -681,6 +690,58 @@ namespace ast_dec {
 			return retn;
 		}
 
+		/* Visits next/all types in a block. (Ignores current) */
+		template<lexer_dec::inst_type type>
+		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_type_next_addr(const bool all /* All nodes with instruction. */, const std::uintptr_t addr) {
+
+			std::vector<std::shared_ptr<node>> retn;
+
+			/* Iterate through all nodes and find given type. */
+			const auto all_nodes = this->visit_rest(addr);
+			for (const auto& i : all_nodes) {
+
+				if (i->lex->type == type) {
+
+					if (all) { /* Passed all so emplace node. */
+						retn.emplace_back(i);
+					}
+					else {/* Not all so return node. */
+						return i;
+					}
+
+				}
+
+			}
+
+			#if display_warnings			
+				if (retn.empty()) {
+					std::printf("[WARNING] Visit_type_next_addr returned empty for all.\n");
+				}
+			#endif 
+
+			return retn;
+		}
+
+		/* Visits previous type from an address. (Includes current) */
+		template<lexer_dec::inst_type type>
+		std::shared_ptr<node> visit_prev_type_current(const std::uintptr_t target) {
+
+			std::shared_ptr<node> retn = nullptr;
+
+			/* Iterate through all nodes and find given type. */
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
+
+				if (i->lex->type == type && i->address <= target) {
+					retn = i;
+				}
+
+			}
+
+			return retn;
+		}
+
+
 		/* Visits next/all opcode from addr. (Ignores current.) */
 		template<LuauOpcode op>
 		std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_next_inst(const std::uintptr_t addr, const bool all /* All nodes with instruction. */) {
@@ -730,6 +791,11 @@ namespace ast_dec {
 			return false;
 		}
 
+		/* Visits next. */
+		std::shared_ptr<node> visit_next(const std::shared_ptr<node> node) {
+
+			return this->visit_addr(node->address + node->lex->dissassembly->len);
+		}
 
 		/* Visit node with address. */
 		std::shared_ptr<node> visit_addr(const std::uintptr_t addr) {
@@ -1493,6 +1559,60 @@ namespace ast_dec {
 
 			return retn;
 		}
+
+		/* Sees wether if a range start, sources(end) is filled with instructions dest all eventually lead too sources(arg). Start is ignored for first iteration. */
+		bool filled(const std::shared_ptr<node>& start /* Start of anlyzation. */, const std::shared_ptr<node>& sources) {
+
+			std::vector<std::uintptr_t> analyzed_addresses;
+			std::vector<std::shared_ptr<ast_dec::node>> vect;
+
+			/* Only one address check for dest. */
+			if ((start->address + start->lex->dissassembly->len) == sources->address) {
+				return sources->lex->has_operand_expr<lexer_dec::operand_types::dest>();
+			}
+
+			/* Go through each source too see if they fill wil single instruction. */
+			if (!sources->source_nodes.empty()) {
+
+				vect.insert(vect.begin(), sources->source_nodes.begin(), sources->source_nodes.end());
+
+				do {
+
+					auto curr_node = vect.front();
+
+					if (curr_node->address >= start->address && !curr_node->source_nodes.empty()) {
+						vect.insert(vect.end(), curr_node->source_nodes.begin(), curr_node->source_nodes.end());
+					}
+
+					if (curr_node->address >= start->address && std::find(analyzed_addresses.begin(), analyzed_addresses.end(), curr_node->address) == analyzed_addresses.end()) {
+						analyzed_addresses.emplace_back(curr_node->address);
+					}
+
+					/* Remove current. */
+					vect.erase(std::remove(vect.begin(), vect.end(), curr_node), vect.end());
+
+				} while (vect.size());
+
+			}
+
+
+			/* Check all anlyzed addresses make sure they fill. */
+			bool fill = false;
+			auto on = start;
+			std::sort(analyzed_addresses.begin(), analyzed_addresses.end());
+			for (const auto i : analyzed_addresses) {
+
+				on = this->visit_addr(on->address + on->lex->dissassembly->len);
+
+				if (!(fill = (i == on->address))) {
+					break;
+				}
+
+			}
+
+			return fill;
+		}
+
 
 		private:
 

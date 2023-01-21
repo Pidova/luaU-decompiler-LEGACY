@@ -10,7 +10,7 @@
 namespace emitter {
 
 	/* Compare emitting. */
-    void compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const char* const compare_type, std::string compare_1, std::string compare_2);
+    void compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const char* const compare_type, std::string compare_1, std::string compare_2, const bool emit_no_parenth_compare);
 
 	/* String to string emitting. */
 	void str(std::string& dest, const std::string& src);

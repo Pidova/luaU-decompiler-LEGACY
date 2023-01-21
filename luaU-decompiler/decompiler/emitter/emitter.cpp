@@ -1,7 +1,8 @@
 #include "emitter.hpp"
+#include <iostream>
 
 
-void emitter::compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const char* const compare_type, std::string compare_1, std::string compare_2) {
+void emitter::compare(const LuauOpcode op, const bool opposite, const bool nested, std::string& dest, const char* const compare_type, std::string compare_1, std::string compare_2, const bool emit_no_parenth_compare) {
 
     const char* cmp;
 
@@ -87,7 +88,7 @@ void emitter::compare(const LuauOpcode op, const bool opposite, const bool neste
   
     }
 
-    dest += (nested) ? (compare_1 + cmp + compare_2) : (std::string (compare_type) + " (" + compare_1 + cmp + compare_2 + ") then\n");
+    dest += (nested) ? (compare_1 + cmp + compare_2) : (std::string (compare_type) + ((emit_no_parenth_compare) ? " " : " (") + compare_1 + cmp + compare_2 + ((emit_no_parenth_compare) ? " then\n" : ") then\n"));
 
 	return;
 }
@@ -137,12 +138,12 @@ void emitter::write_line(std::string& dest, const std::string& src) {
 }
 
 void emitter::expandable_comment(std::string& dest, const std::string& src) {
-    dest += "--[[\n" + src + ((src.back() != '\n') ? "]]\n" : "]]\n");
+    dest += "--[[\n" + src + ((src.back() != '\n') ? "\n]]\n" : "]]\n");
     return;
 }
 
 void emitter::expandable_comment_pre(std::string& dest, const std::string& src) {
-    dest.insert(0, "--[[" + src + ((src.back() != '\n') ? "]]\n" : "]]\n"));
+    dest.insert(0, "--[[" + src + ((src.back() != '\n') ? "\n]]\n" : "]]\n"));
     return;
 }
 
@@ -455,7 +456,7 @@ std::string emitter::create::locvar_name(const std::string& prefix, const std::s
     const auto suffix_str = std::to_string(suffix);
 
     std::string dest = prefix;
-
+   
     if (suffix_chars) {
 
         for (const auto c : suffix_str)

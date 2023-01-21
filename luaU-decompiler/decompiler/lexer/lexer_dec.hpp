@@ -27,6 +27,7 @@ namespace lexer_dec {
 		kvalue_dest, /* Kvalue dest. */
 		upvalue, /* Upvalue idx. */
 		table_idx, /* Table idx. */
+		table_reg, /* Table idx reg. */
 		fastcall_idx, /* Fastcall function idx. */
 		capture /* Capture type. */
 	};

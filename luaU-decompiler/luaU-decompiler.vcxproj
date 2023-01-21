@@ -203,6 +203,7 @@
     <ClInclude Include="decompiler\ast\ast_config.hpp" />
     <ClInclude Include="decompiler\ast\post_ast.hpp" />
     <ClInclude Include="decompiler\clean up\clean.hpp" />
+    <ClInclude Include="decompiler\color.hpp" />
     <ClInclude Include="decompiler\decompiler.hpp" />
     <ClInclude Include="decompiler\emitter\emitter.hpp" />
     <ClInclude Include="decompiler\generic\generic.hpp" />
@@ -210,6 +211,8 @@
     <ClInclude Include="decompiler\transpiler\transpiler.hpp" />
     <ClInclude Include="decompiler\debug.hpp" />
     <ClInclude Include="decompiler\transpiler\transpiler_data.hpp" />
+    <ClInclude Include="decompiler\transpiler\transpiler_debug.hpp" />
+    <ClInclude Include="decompiler\transpiler\transpiler_macros.hpp" />
     <ClInclude Include="dissassembler\Dissassembler.hpp" />
     <ClInclude Include="dissassembler\Op_table.hpp" />
     <ClInclude Include="decompiler\lexer\lexer_dec.hpp" />

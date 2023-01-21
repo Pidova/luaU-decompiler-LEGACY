@@ -18,7 +18,6 @@ void clean_up::clean(std::string& decom) {
 	/* Clean comments. */
     replace_string(decom, "]]\n--[[", "");
     replace_string(decom, "--[[", "--[[\n");
-    replace_string(decom, "]]", "\n]]");
 
 	return;
 }

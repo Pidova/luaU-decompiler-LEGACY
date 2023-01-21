@@ -4,14 +4,11 @@
 #include "transpiler.hpp"
 #include "../emitter/emitter.hpp"
 #include "../generic/generic.hpp"
-#include "../debug.hpp"
+#include "transpiler_debug.hpp"
+#include "transpiler_macros.hpp"
 
 
-#define flag_compare -1
-#define char_valid(ch) ((ch >= 0x30 /* '0' */ && ch <= 0x39 /* '9' */) || (ch >= 0x41 /* 'A' */ && ch <= 0x5A /* 'Z' */) || (ch >= 0x61 /* 'a' */ && ch <= 0x7A /* 'z' */))
 
-/* Sees if idx needs string type idx. */
-#define str_idx(idx) std::isdigit(idx.front()) || std::find_if(idx.begin(), idx.end(), [](const char c) { return (!std::isalpha(c) && !std::isdigit(c)); }) != idx.end()
 
 /* Suffixes */
 namespace str {
@@ -94,6 +91,7 @@ namespace suffixes {
 	std::uintptr_t loop_variable_suffix = 0u; 
 	std::uintptr_t iterator_prefix_suffix = 0u;
 	std::uintptr_t loop_variable_prefix_2_suffix = 0u;
+	std::uintptr_t smart_variable_prefix = 0u;
 }
 
 namespace registers {
@@ -208,6 +206,7 @@ namespace registers {
 
 		private:
 			/*
+			    -2 : multret flag 
 				-1 : compare flag 
 				0+ : general purpose registers.
 			*/
@@ -221,7 +220,7 @@ namespace registers {
 			}
 			
 			std::shared_ptr<reg> operator[](const std::intptr_t reg) {
-
+	
 				if (this->reg_exists(reg))
 					return this->registers[reg];
 				else {
@@ -229,7 +228,7 @@ namespace registers {
 					auto ptr = std::make_shared<registers::reg>();
 					this->registers.insert(std::make_pair(reg, ptr));
 
-					if (reg > -1 /* First flag */)
+					if (reg > flag_first /* First flag */)
 						ptr->type = registers::type::flag;
 
 					return ptr;
@@ -241,8 +240,9 @@ namespace registers {
 
 				reg_scope retn;
 
-				for (const auto& i : this->registers)
+				for (const auto& i : this->registers) {
 					retn[i.first]->replicate(i.second);
+				}
 
 				return retn;
 			}
@@ -261,11 +261,11 @@ namespace lv {
 			switch (expr.first) {
 
 				case ast_dec::expr_type::table_end: {
-					return "table_";
+					return "table_" + std::to_string(suffixes::smart_variable_prefix++);
 				}
 
 				case ast_dec::expr_type::concat_routine_end: {
-					return "concat_";
+					return "concat_" + std::to_string(suffixes::smart_variable_prefix++);
 				}
 
 				case ast_dec::expr_type::call_routine_end: {
@@ -303,16 +303,16 @@ namespace lv {
 
 					}
 
-					return compiled;
+					return compiled + std::to_string(suffixes::smart_variable_prefix++);
 				}
 
 				case ast_dec::expr_type::table_index: {
-					return "idx_";
+					return "idx_" + std::to_string(suffixes::smart_variable_prefix++);
 				}
 
 				case ast_dec::expr_type::arithK:
 				case ast_dec::expr_type::arith: {
-					return "arith_";
+					return "arith_" + std::to_string(suffixes::smart_variable_prefix++);
 				}
 
 				default: {
@@ -376,8 +376,12 @@ namespace type_handler {
 
 }
 
-std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<transpiler_data::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
 
+
+
+
+std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<transpiler_data::transpiler_config>& config, std::vector<registers::reg_scope>& regs) {
+	
 	std::string decompilation = "";
 
 	/* Go through everything linearly everything has already passed through doing it linearly lessers headaches. */
@@ -385,7 +389,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 	for (const auto& node : all) {
 
 		/* Fix lv name. */
-		if (node->has_expr(ast_dec::expr_type::locvar) && (config->smart_variable || !node->dest_loc.set_prefix) && !node->has_expr(ast_dec::expr_type::locvar_upvalue)) {
+		if (node->has_expr(ast_dec::expr_type::locvar) && (config->smart_variable || !node->dest_loc.set_prefix) && !node->has_expr(ast_dec::expr_type::locvar_upvalue) && !(config_char(config))) {
 			node->dest_loc.name = ((config->smart_variable) ? lv::smart_name(regs, node, config->variable_prefix) : node->dest_loc.name);
 			node->dest_loc.set_prefix = true;
 		} 
@@ -445,7 +449,15 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					case ast_dec::expr_type::call_routine_end: {
 
 						/* Dec expr. */
-						--regs.back()[flag_compare]->special.inside_expr;
+						if (regs.back()[flag_compare]->special.inside_expr) {
+							--regs.back()[flag_compare]->special.inside_expr;
+						}
+						else {
+							#if TANSPILER_DEBUG_WARNINGS
+								std::printf("[TRANSPILER-WARNING] Trying too dec 0 unsigned flag.\n");
+							#endif
+						}
+
 
 						break;
 					}
@@ -470,22 +482,34 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					}
 
 
+					case ast_dec::expr_type::conditional_expression_end: {
+
+						if (node->lex->has_operand_expr<lexer_dec::operand_types::source>()) {
+
+							regs.back()[node->lex->operand_expr <lexer_dec::operand_types::source>().front()->reg]->set<registers::type::expr>(regs.back()[flag_compare]->data);
+							regs.back()[flag_compare]->clear(true);
+
+						}
+
+						break;
+					}
+
 					case ast_dec::expr_type::if_:
 					case ast_dec::expr_type::elseif_: {
-
-
+					
 						/* if/elseif (?? (??) ??) */
 						const auto compares = type_handler::handle_compare(regs, node);
 						const auto cmp_1 = compares.first;
 						const auto cmp_2 = compares.second;
-
-						emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", regs.back()[flag_compare]->data + cmp_1, cmp_2);
+						
+						emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", regs.back()[flag_compare]->data + cmp_1, cmp_2, config->emit_no_parenth_compare);
 	
 						
 						/* Only scope for if, elseif gets handled speratly. */
 						if (expr.first == ast_dec::expr_type::if_) {
 							regs.emplace_back(regs.back().clone());
 						}
+	
 
 						/* Clear compare flag. */
 						regs.back()[flag_compare]->clear(true);
@@ -544,7 +568,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 							const auto cmp_1 = compares.first;
 							const auto cmp_2 = compares.second;
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", regs.back()[flag_compare]->data + cmp_1, cmp_2);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", regs.back()[flag_compare]->data + cmp_1, cmp_2, config->emit_no_parenth_compare);
 
 						}
 						else {
@@ -577,7 +601,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 							const auto cmp_1 = compares.first;
 							const auto cmp_2 = compares.second;
 
-							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", regs.back()[flag_compare]->data + cmp_1, cmp_2);
+							emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, compiled, "", regs.back()[flag_compare]->data + cmp_1, cmp_2, config->emit_no_parenth_compare);
 
 						}
 						else {
@@ -842,6 +866,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 						str << "*	[table_idx]: " << std::to_string(oper->table) << std::endl;
 						break;
 					}
+															
+					case lexer_dec::operand_types::table_reg: {
+						str << "*	[table_reg]: " << std::to_string(oper->reg) << std::endl;
+						break;
+					}
 
 					case lexer_dec::operand_types::fastcall_idx: {
 						str << "*	[fastcall_idx]: " << std::to_string(oper->fastcall_idx) << std::endl;
@@ -877,8 +906,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 			std::cout << "[transpiler.cpp] (pre-decompilation): " << decompilation << std::endl;
 		#endif
 
-		if (node->has_expr(ast_dec::expr_type::dead_instruction))
+		if (node->has_expr(ast_dec::expr_type::dead_instruction)) {
 			continue;
+		}
+
 
 		/* Instruction handler. */
 		switch (node->lex->dissassembly->op) {
@@ -940,7 +971,17 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					source = regs.back()[flag_compare]->data;
 				}
 				else if (node->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
-					source = std::stoi(source) ? "true" : "false"; /* Change too string. */
+
+					if (node->has_expr(ast_dec::expr_type::conditional_expression_end)) {
+
+						source = regs.back()[flag_compare]->data;
+						regs.back()[flag_compare]->clear(true);
+
+					}
+					else {
+						source = std::stoi(source) ? "true" : "false"; /* Change too string. */
+					}
+
 				}
 
 
@@ -1007,6 +1048,25 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
 				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
+
+				/* Multret call */
+				if (node->has_expr(ast_dec::expr_type::call_mulret_start) || node->has_expr(ast_dec::expr_type::call_mulret_member) || node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+
+					auto mul = regs.back()[flag_mulret];
+					
+					if (mul->data.back() != ',' && !mul->data.empty()) {
+						mul->data += ", ";
+					}
+
+					mul->data += dest->data;
+					
+					if (node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+						emitter::vararg_equal(decompilation, mul->data, mul->sub_data);
+						mul->clear();
+					}
+					
+					continue;
+				}
 
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
@@ -1190,7 +1250,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 
 				/* Emit compare to compare flag. */
-				emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, (next_condition != nullptr) ? next_condition->data : regs.back()[flag_compare]->data, NULL, cmp1, cmp2);
+				emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, true, (next_condition != nullptr) ? next_condition->data : regs.back()[flag_compare]->data, NULL, cmp1, cmp2, config->emit_no_parenth_compare);
 
 
 				/* Automatically emit parenthesis for condition emitter. */
@@ -1377,8 +1437,16 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 			case LuauOpcode::LOP_GETIMPORT: {
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+				auto source = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
 				
+
+				if (node->has_expr(ast_dec::expr_type::conditional_expression_end)) {
+
+					source = regs.back()[flag_compare]->data;
+					regs.back()[flag_compare]->clear(true);
+
+				}
+
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
 
@@ -1460,13 +1528,45 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					}
 
 				compiled_call += ")";
-		
+			
 				/* No return just emit. */
 				if (!node->lex->dissassembly->operands[2]->val) {
 					emitter::write_line(decompilation, compiled_call);
 					continue;
 				}
 			
+				/* Return has multiple returns fill. */
+				if (retn > 1) { 
+
+					if (node->has_expr(ast_dec::expr_type::locvar)) {
+					
+						std::string compiled = "";
+
+						for (auto i = 0u; i < retn; ++i) {
+							
+							regs.back()[call + i]->set<registers::type::var>(node->dest_loc.multret_names[i]);
+
+							/* Compile locvars */
+							compiled += node->dest_loc.multret_names[i];
+							if ((i + 1u) != retn) {
+								compiled += ", ";
+							}
+
+						}
+
+						emitter::new_vararg_equal(decompilation, compiled, compiled_call);
+
+					}
+					else {
+
+						regs.back()[call]->set<registers::type::expr>(compiled_call);
+						regs.back()[flag_mulret]->sub_data = compiled_call;
+
+					}
+
+					continue;
+				}
+
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
 					
@@ -1490,11 +1590,6 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					}
 
 				}
-
-				/* Return has multiple returns fill upper with nils. */
-				if (retn > 0)
-					for (auto i = 0u; i < (retn - 1u); ++i)   /* Fill with nil. */
-						regs.back()[i + call + 1u]->set<registers::type::expr>("nil");
 
 				break;
 			}
@@ -1599,6 +1694,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					if (val == LUA_MULTRET)
 						val = generic::fix_mulret(ast, node->address);
 
+					/* Skip, "emit_no_last_return" */
+					if (!val && config->emit_no_last_return && node == ast->main_block->visit_all().back()) {
+						continue;
+					}
+
 					/* Check to make sure if last dest reg is current dest reg and was multret if so just one return format. */
 					if (original_val == -1 && dest == val)
 						compiled = ' ' + regs.back()[dest]->data;
@@ -1632,6 +1732,25 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg];
 				const auto dest = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
+
+				/* Multret call */
+				if (node->has_expr(ast_dec::expr_type::call_mulret_start) || node->has_expr(ast_dec::expr_type::call_mulret_member) || node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+
+					auto mul = regs.back()[flag_mulret];
+
+					if (mul->data.back() != ',' && !mul->data.empty()) {
+						mul->data += ", ";
+					}
+
+					mul->data += dest;
+
+					if (node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+						emitter::vararg_equal(decompilation, mul->data, mul->sub_data);
+						mul->clear();
+					}
+
+					continue;
+				}
 
 				emitter::vararg_equal(decompilation, dest, source->data);
 
@@ -1677,6 +1796,26 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg];
 				const auto idx = node->lex->operand_expr<lexer_dec::operand_types::upvalue>().front()->val;
 
+				/* Multret call */
+				if (node->has_expr(ast_dec::expr_type::call_mulret_start) || node->has_expr(ast_dec::expr_type::call_mulret_member) || node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+
+					auto mul = regs.back()[flag_mulret];
+
+					if (mul->data.back() != ',' && !mul->data.empty()) {
+						mul->data += ", ";
+					}
+
+					mul->data += ast->upvalues[idx].first;
+
+					if (node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+						emitter::vararg_equal(decompilation, mul->data, mul->sub_data);
+						mul->clear();
+					}
+
+					continue;
+				}
+
+
 				emitter::vararg_equal(decompilation, ast->upvalues[idx].first, dest->data);
 
 				break;
@@ -1684,7 +1823,14 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 			case LuauOpcode::LOP_GETUPVAL: {
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
-				const auto source = ast->upvalues[node->lex->operand_expr<lexer_dec::operand_types::upvalue>().front()->upvalue].first;
+				auto source = ast->upvalues[node->lex->operand_expr<lexer_dec::operand_types::upvalue>().front()->upvalue].first;
+
+				if (node->has_expr(ast_dec::expr_type::conditional_expression_end)) {
+
+					source = regs.back()[flag_compare]->data;
+					regs.back()[flag_compare]->clear(true);
+
+				}
 
 				/* Vararg.*/
 				if (dest->type == registers::type::var || dest->type == registers::type::arg) {
@@ -1944,7 +2090,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
 				const auto source = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
-				const auto idx = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg]->data;
+				const auto idx = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::table_reg>().front()->reg]->data;
 
 				const auto compiled = source + '[' + idx + ']';
 
@@ -2013,7 +2159,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					}   
 
 					case LuauOpcode::LOP_SETTABLE: {
-						idx = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::table_idx>().front()->reg]->data;
+						idx = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::table_reg>().front()->reg]->data;
 						break;
 					}
 
@@ -2031,6 +2177,26 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				else {
 					compiled = std::string("[") + idx + std::string("]");
 				}
+
+				/* Multret call */
+				if (node->has_expr(ast_dec::expr_type::call_mulret_start) || node->has_expr(ast_dec::expr_type::call_mulret_member) || node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+
+					auto mul = regs.back()[flag_mulret];
+
+					if (mul->data.back() != ',' && !mul->data.empty()) {
+						mul->data += ", ";
+					}
+
+					mul->data += table->data + compiled;
+
+					if (node->has_expr(ast_dec::expr_type::call_mulret_end)) {
+						emitter::vararg_equal(decompilation, mul->data, mul->sub_data);
+						mul->clear();
+					}
+
+					continue;
+				}
+
 
 				/* Element */
 				if (node->has_expr(ast_dec::expr_type::table_element)) {
@@ -2177,6 +2343,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 	return decompilation;
 }
 
+
 void transpile_ast(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_data::transpiler_config>& config, std::string& str) {
 
 	registers::reg_scope main_scope;
@@ -2191,11 +2358,15 @@ void transpile_ast(const std::shared_ptr<ast_dec::ast>& main_ast, const std::sha
 		}
 	}
 
+	const auto transpiled = transpile_blocks(main_ast, config, scopes);
+	str.reserve(transpiled.size());
+
 	/* Transpile main block. */
-	str.append(transpile_blocks(main_ast, config, scopes));
+	str.append(transpiled);
 
 	return;
 }
+
 
 std::string transpiler::transpile(const std::shared_ptr<ast_dec::ast>& main_ast, const std::shared_ptr<transpiler_data::transpiler_config>& config) {
 

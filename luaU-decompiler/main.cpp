@@ -8,6 +8,11 @@
 #include <fstream>
 #include <sstream>
 
+#if _USRDLL
+
+#endif
+
+
 /* Throw any string as argument to compile */
 std::string compile(const char* const code) {
 
@@ -15,14 +20,16 @@ std::string compile(const char* const code) {
 	const auto config = std::make_shared<transpiler_data::transpiler_config>();
 	config->post_loss = false;
 
+
 	/* Compilation data */
 	std::size_t size = 0u;
 	const auto compilation = luau_compile(code, std::strlen(code), NULL, &size);
 	const auto state = luaL_newstate();
 
 	/* Load see if theres something wrong. */
-	if (luau_load(state, "Bruh", compilation, size, 0))
-		throw std::exception("Bruh");
+	if (luau_load(state, "Bruh", compilation, size, 0)) {
+		throw std::exception("Fix your script pls.");
+	}
 
 	return luaU_decompiler::decompile(gco2cl((state->top - 1)->value.gc)->l.p /* Main proto */, config);
 }

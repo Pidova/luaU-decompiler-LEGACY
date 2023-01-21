@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <string>
 
-/* Global transpiler data */
+/* Global transpiler data (Public) */
 namespace transpiler_data {
 
 	/* Transpiler config */
@@ -31,10 +31,14 @@ namespace transpiler_data {
 		bool include_data = false; /* Includes bytecode, disasm per line */
 
 		/* Misc */
-		bool smart_variable = false; /* "Smart" variable names. **Ignores prefix(unless unkown) but keeps sufffix** */
+		bool smart_variable = false; /* "Smart" variable names. **Ignores prefix(unless unkown) but keeps suffix** */
 
 		/* Calculates loss of original and current decompilation. */
 		bool post_loss = false;
+
+		/* Emit (Change emittion codes) */
+		bool emit_no_parenth_compare = false; /* Changes compare(if/elseif) emittion to if ?? instead of if (??). */
+		bool emit_no_last_return = true; /* Doesn't emit last return if it has no return. */
 
 	};
 
