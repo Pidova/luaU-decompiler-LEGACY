@@ -267,8 +267,9 @@
     </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\Internals.md" />
+    <None Include="..\Known Issues.text" />
     <None Include="..\README.md" />
-    <None Include="Known Issues.text" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

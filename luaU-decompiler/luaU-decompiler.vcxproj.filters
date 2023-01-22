@@ -371,6 +371,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" />
-    <None Include="Known Issues.text" />
+    <None Include="..\Known Issues.text" />
+    <None Include="..\Internals.md" />
   </ItemGroup>
 </Project>
