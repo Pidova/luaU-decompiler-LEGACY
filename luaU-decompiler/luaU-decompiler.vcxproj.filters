@@ -371,5 +371,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" />
+    <None Include="Known Issues.text" />
   </ItemGroup>
 </Project>

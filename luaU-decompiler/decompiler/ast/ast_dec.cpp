@@ -235,7 +235,7 @@ namespace ast_funcs {
 	
 				/* Set but now used outside of scope. */
 				if (dest_scope > scope && scope > 0) {
-					debug_success("Used outside of scope valid register on: %s.", s_node->str().c_str());
+					debug_success("Used outside of scope valid register on %s", s_node->str().c_str());
 					no_locvar = false;
 					break;
 				}
@@ -251,7 +251,7 @@ namespace ast_funcs {
 					
 					/* Just ended with it just using it as dest. */
 					if (used_target_1_dest && !used_target_1_source) {
-						debug_success("Return used register as source on: %s", s_node->str().c_str());
+						debug_success("Return used register as source on %s", s_node->str().c_str());
 						no_locvar = false;
 						break;
 					}
@@ -273,7 +273,7 @@ namespace ast_funcs {
 
 				/* Used by source twice. */
 				if (used_source_twice) {
-					debug_success("Used register twice as a source on %s.", s_node->str().c_str());
+					debug_success("Used register twice as a source on %s", s_node->str().c_str());
 					no_locvar = false;
 					break;
 				}
@@ -281,7 +281,7 @@ namespace ast_funcs {
 
 				/* Used in source in routine. */
 				if (used_source_routine) {
-					debug_success("Used register as source in routine on %s.", s_node->str().c_str());
+					debug_success("Used register as source in routine on %s", s_node->str().c_str());
 					no_locvar = false;
 					break;
 				}
@@ -702,7 +702,7 @@ namespace ast_funcs {
 	namespace branches {
 
 		/* Set logical operations in routine with given range. */
-		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector <std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */, const bool check_loops = false /* Checks jumps too see if they lead too loop by expr and preform opposite. */) {
+		void set(std::shared_ptr<ast_dec::ast>& ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector <std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */, const bool check_loops = false /* Checks jumps too see if they lead too loop by expr and preform opposite. */, const bool last_include = false /* Includes last compare as or. */) {
 
 			const auto conditions = ast->main_block->visit_range_type<lexer_dec::inst_type::branch_condition>(begin, end);
 			const auto over_target = *std::max_element(dead.begin(), dead.end());
@@ -731,14 +731,6 @@ namespace ast_funcs {
 						++jmp_hit[jmp];
 					}
 
-					/* See if prev from jump has logical hint. */
-					const auto jmp_prev = ast->main_block->visit_previous_addr(jmp);
-					if (jmp_prev->has_expr(ast_dec::expr_type::conditional_expression_predicted)) {
-
-						node->add_expr<ast_dec::expr_type::condition_or>();
-
-					}
-
 					/* Hit dead? */
 					if (std::find(dead.begin(), dead.end(), jmp) != dead.end()) {
 						
@@ -750,11 +742,17 @@ namespace ast_funcs {
 						/* Not the last branch. */
 						if (conditions.back() != node) {
 							node->add_expr<ast_dec::expr_type::condition_and>();
-						}
+						}	
 						
 						/* Always opposite */
 						node->branch_extra.opposite = true;
-					
+
+						/* Include last */
+						if (conditions.back() == node && last_include) {
+							node->add_expr<ast_dec::expr_type::condition_or>();
+							node->branch_extra.opposite = true;
+						}
+
 						/* Fix for loop/while/repeat/generic */
 						const auto prev = ast->main_block->visit_previous_addr(jmp);
 						if (check_loops && prev != nullptr && condition_break_out(prev)) {
@@ -2896,6 +2894,8 @@ namespace ast_funcs {
 
 						do {
 							
+							debug_success("Starting with node %s", i->str().c_str());
+
 							/* Attempts to prevent bugs. */
 							if (node_hit != i) {
 								node_hit = i;
@@ -2905,6 +2905,7 @@ namespace ast_funcs {
 								
 								/* Looped over 3 on the same node. */
 								if (node_nit_b) {
+									debug_warning("Looped infinitly for %s", i->str().c_str());
 									#if display_warnings 				
 										std::printf("[WARNING] Looped infinitely on %s for logical conditions.\n", i->lex->dissassembly->data.c_str());
 									#endif
@@ -2917,20 +2918,24 @@ namespace ast_funcs {
 							/* Get next branch jump. */
 							if (i->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
 								i = ast->main_block->visit_next(i);
+								debug_line("Mutated loadb i node too %s", i->str().c_str());
 							}
 
 							/* No compare routine */
 							if (!i->has_expr(ast_dec::expr_type::condition_routine_start) && !i->has_expr(ast_dec::expr_type::condition_routine_end) && !i->has_expr(ast_dec::expr_type::condition_routine)) {
+								debug_warning("No compare routine for %s", i->str().c_str());
 								break;
 							}
 						
 							/* Get next compare jump if current isnt one. */
 							if (i->lex->type != lexer_dec::inst_type::branch_condition) {
 								i = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type_addr<lexer_dec::inst_type::branch_condition>(i->address, false));
+								debug_line("Current wasn't compare changed too %s", i->str().c_str());
 							}
 						
 							/* Not a compare branch something went wrong. */
 							if (i == nullptr || i->lex->type != lexer_dec::inst_type::branch_condition) {
+								debug_warning("Current is not a compare.");
 								break;
 							}
 
@@ -2949,6 +2954,7 @@ namespace ast_funcs {
 							}
 							/* Not concat */
 							if (retn) {
+								debug_warning("Has return, not concat.");
 								break;
 							}
 
@@ -2964,6 +2970,7 @@ namespace ast_funcs {
 
 									/* Not same jump */
 									if (jmp_prev->address != next_jmp_prev->address) {
+										debug_warning("Next is break out.");
 										break;
 									}
 
@@ -2986,6 +2993,7 @@ namespace ast_funcs {
 							/* Found hueristic 1 check passthrough again. */
 							if (jump_out_n != nullptr) {
 								i = jump_out_n;	
+								debug_success("Jump out found for %s", i->str().c_str());
 							}
 							else {
 								
@@ -3038,15 +3046,19 @@ namespace ast_funcs {
 
 								/* Make sure compare has 2 compares. */
 								if (compare_count != 2u) {
-								
+									
+									debug_line("Compare count isn't 2.");
+
 									const auto next = ast->main_block->visit_next(i);
 
 									/* Nothing */
 									if (next == nullptr) {
+										debug_warning("Next is nullptr.");
 										break;
 									}
 
 									if (next->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
+										debug_line("Next is loadb.");
 										continue;
 									}
 
@@ -3056,19 +3068,25 @@ namespace ast_funcs {
 								
 								/* Nothing*/
 								if (next == nullptr) {
+									debug_warning("Next is nullptr.");
 									break;
 								}
 								
 								/* Next has loadb with jump. */
 								if (next->lex->dissassembly->op == LuauOpcode::LOP_LOADB && next->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
 
+									debug_line("Next is loadb with jump on %s", next->str().c_str());
+
 									/* Singular */
 									if (current_jmp == (next->address + next->lex->dissassembly->len)) {
 										
+										debug_success("Current jump = next.");
+
 										compares.push_back(next->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
 
 										/* Exceeded max of 2 routine is something else. */
 										if (compares.size() > 2u) {
+											debug_warning("Compares exceeded max of 2.");
 											break;
 										}
 
@@ -3085,18 +3103,25 @@ namespace ast_funcs {
 								const auto prev = ast->main_block->visit_previous_addr(current_jmp);
 								if (prev->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
 
+									debug_line("Previous is loadb with %s", prev->str().c_str());
+
 									/* Doesnt have jump check previous. */
 									if (!prev->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
+
+										debug_line("Previous doesn't have jump");
 
 										const auto p_prev = ast->main_block->visit_previous_addr(prev->address);
 
 										/* Has previous loadb jump.  */
 										if (p_prev->lex->dissassembly->op == LuauOpcode::LOP_LOADB && p_prev->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp) {
 											
+											debug_line("Prev-Previous is loadb with jump.");
+
 											compares_double.emplace_back(p_prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
 
 											/* Exceeded max of 2 routine is something else. */
 											if (compares_double.size() > 2u) {
+												debug_warning("Compares exceeded max of 2.");
 												break;
 											}
 
@@ -3106,6 +3131,7 @@ namespace ast_funcs {
 											continue;
 										}
 										else {
+											debug_line("Prev-Previous is not loadb with jump.");
 											break;
 										}
 
@@ -3125,22 +3151,30 @@ namespace ast_funcs {
 
 									/* No next end. */
 									if (next_inst == nullptr) {
+										debug_warning("Next instruction is nullptr.");
 										break;
 									} else if (next_jmp == nullptr) {
+
+										debug_warning("Next jump is nullptr.");
 
 										/* Still could be logical exprssion. */
 
 										/* Logical operation. */
 										if (ast->main_block->filled(i, prev)) {
 
+											debug_result("Current - previous is filled %s - %s", i->str().c_str(), prev->str().c_str());
+
 											i = ast->main_block->visit_addr(current_jmp);
+											debug_line("Current - previous is filled, current changed too %s", i->str().c_str());
 
 											if (cached_init->lex->type == lexer_dec::inst_type::branch_condition) {
 												cached_init = ast->main_block->visit_previous_addr(cached_init->address);
+												debug_result("Cached changed too %s", cached_init->str().c_str());
 											}
 
 											predicted_logical = true;
-											
+											debug_success("Predicted logical is true.");
+
 										}
 									
 										break;
@@ -3155,11 +3189,17 @@ namespace ast_funcs {
 									/* Jump too same address possibly or? */
 									if (current_jmp == next_jmp->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) {					
 										
+										debug_line("Current jump = next jump on %s", next_jmp->str().c_str());
+
 										/* No compare routine */
 										if (!next_inst->has_expr(ast_dec::expr_type::condition_routine_start) && !next_inst->has_expr(ast_dec::expr_type::condition_routine_end) && !next_inst->has_expr(ast_dec::expr_type::condition_routine)) {
 										
+											debug_line("No compare routine for %s", next_inst->str().c_str());
+
 											/* Logical operation. */
 											if (ast->main_block->filled(i, ast->main_block->visit_previous_addr(next_jmp->address))) {
+
+												debug_success("Next jump and current is filled.");
 
 												i = next_jmp;
 
@@ -3171,6 +3211,7 @@ namespace ast_funcs {
 
 											}
 											else {
+												debug_warning("Next jump and current is not filled.");
 												break;
 											}
 
@@ -3179,14 +3220,19 @@ namespace ast_funcs {
 
 											/* Has compare routine following next. */
 											i = next_jmp;
-											
+											debug_line("Current mutated too %s", i->str().c_str());
+
 											/* Maybe logical operation? */
 											if (i->lex->type == lexer_dec::inst_type::branch_condition) {
 												
+												debug_line("Current is branch condition.");
+
 												const auto jmp_target_next = i->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
 									
 												/* Logical operation */
 												if (ast->main_block->filled(i, ast->main_block->visit_previous_addr(jmp_target_next))) {
+
+													debug_success("Previous jump and current is filled.");
 
 													i = ast->main_block->visit_previous_addr(jmp_target_next);
 
@@ -3208,11 +3254,14 @@ namespace ast_funcs {
 									/* Next is loadb check also next. */
 									if (next_inst->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
 										next_inst = ast->main_block->visit_next(next_inst);
+										debug_line("Next instuction mutated too %s", next_inst->str().c_str());
 									}
 								
 									/* Logical operation. */
 									if (ast->main_block->filled(i, prev)) {
 										
+										debug_success("Current and previous is filled for %s", prev->str().c_str());
+
 										i = ast->main_block->visit_addr(current_jmp);
 
 										if (cached_init->lex->type == lexer_dec::inst_type::branch_condition) {
@@ -3227,7 +3276,7 @@ namespace ast_funcs {
 									if (ast->main_block->filled(i, ast->main_block->visit_previous_addr(next_jmp_target))) {
 
 										/* Check too see if regs gets used. */
-
+										debug_success("Current and previous instruction is filled.");
 
 										i = ast->main_block->visit_addr(current_jmp);
 
@@ -3337,29 +3386,44 @@ namespace ast_funcs {
 						} while (true);
 				
 						cached_init->add_expr<ast_dec::expr_type::condition_logical_start>();
-		
-					
+						debug_result("Cached init added expr conditon logical start on %s", cached_init->str().c_str());
+						debug_line("Current is currently %s", i->str().c_str());
+
 						/* Fixed i. */
-						if (!predicted_logical && (i->lex->dissassembly->op != LuauOpcode::LOP_LOADB || i->lex->type != lexer_dec::inst_type::branch_condition || i->lex->type != lexer_dec::inst_type::branch_condition)) {
+						if (!predicted_logical && (i->lex->dissassembly->op != LuauOpcode::LOP_LOADB || i->lex->type != lexer_dec::inst_type::branch_condition)) {
 						
-							const auto prev = ast->main_block->visit_previous_addr(i->address);
-							i = (prev != nullptr) ?  ((cached_init->address < prev->address) ? prev : i) : i;
+							auto prev = ast->main_block->visit_previous_addr(i->address);
+							prev = (prev != nullptr) ?  ((cached_init->address < prev->address) ? prev : i) : i;
 						
+							if (prev->lex->dissassembly->op == LuauOpcode::LOP_LOADB || prev->lex->type == lexer_dec::inst_type::branch_condition) {
+							
+								i = prev;
+								debug_result("Mutated current too %s", i->str().c_str());
+
+							}
+
 						}
 
 						if (predicted_logical) {
 
-							cached_init->add_expr<ast_dec::expr_type::conditional_expression_predicted>();
+							debug_line("Is predicted logical.");
+
+							i->add_expr<ast_dec::expr_type::conditional_expression_predicted>();
+							debug_success("Added conditional expression predicted too current on %s", i->str().c_str());
 
 							/* Fix i too previous instruction from jump. */
 							const auto prev_cond = ast->main_block->visit_prev_type_current<lexer_dec::inst_type::branch_condition>(i->address);
 							if (prev_cond != nullptr && i->address == prev_cond->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr) {
 
 								i = ast->main_block->visit_previous_addr(i->address);
+								debug_result("Mutated current for predicted logical too %s", i->str().c_str());
 
 							}
 
 						}
+
+
+						debug_line("Adding condition logical exprs too members range from %s - %s", cached_init->str().c_str(), i->str().c_str());
 
 						/* Members */
 						const auto range = ast->main_block->visit_range(cached_init->address, i->address);
@@ -3368,6 +3432,7 @@ namespace ast_funcs {
 
 						/* End */
 						i->add_expr<ast_dec::expr_type::condition_logical_end>();	
+						debug_success("Added condition logical end expr too %s", i->str().c_str());
 
 					}
 
@@ -3392,6 +3457,8 @@ namespace ast_funcs {
 
 				auto set = [&]() mutable -> void {
 
+					debug_success("Setting logical expression start %s, end %s ", start_node->str().c_str(), i->str().c_str());
+
 					/* Set start */
 					start_node->add_existance<ast_dec::expr_type::conditional_expression_start>();
 					start_node->add_existance<ast_dec::expr_type::condition_concat_start>();
@@ -3399,12 +3466,13 @@ namespace ast_funcs {
 					/* Set ends */
 					i->add_existance<ast_dec::expr_type::condition_concat_end>();
 					i->add_existance<ast_dec::expr_type::conditional_expression_end>();
+					i->add_existance<ast_dec::expr_type::condition_append_source>();
 
 					/* Remove LOP_LOADB dead expr. */
 					i->remove_expr<ast_dec::expr_type::dead_instruction>();
 
 					/* Set logical operations. */
-					ast_funcs::branches::set(ast, start_node->address, i->address, { target_cond->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr }, -1, true);
+					ast_funcs::branches::set(ast, start_node->address, i->address, { target_cond->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr }, -1, true, true);
 
 					/* Remove emitted next */
 					target_cond->remove_expr<ast_dec::expr_type::condition_emit_next>();
@@ -3414,38 +3482,58 @@ namespace ast_funcs {
 
 				if (i->has_expr(ast_dec::expr_type::condition_logical_start)) {
 
+					debug_line("Current node has logical start %s", i->str().c_str());
+
 					/* Set start */
 					if (!count) {
 						start_node = i;
 					}
 
 					++count;
+					debug_result("Increased count too %d", count);;
 				}
 
 
 				if (count != 1u && i->has_expr(ast_dec::expr_type::condition_logical_end)) {
+
+					debug_line("Decreasing count because current node has logical end expr on %s", i->str().c_str());
 					--count;
+					debug_result("Decreased count too %d", count);
+
 				}
 				else if (i->has_expr(ast_dec::expr_type::condition_logical_end)) {
+
+					debug_line("Current node has condition logical end expr on %s", i->str().c_str());
 
 					auto target = i;
 					const auto loadb = i->lex->dissassembly->op == LuauOpcode::LOP_LOADB;
 					
 					if (!i->has_expr(ast_dec::expr_type::conditional_expression_predicted)) {
 
+						debug_line("Current node doesn't have conditional expression predicted on %s", i->str().c_str());
+
 						/* See if loadb with jump exists if so get it. */
 						if (!target->lex->has_operand_expr<lexer_dec::operand_types::memaddr>() || !target->lex->operand_expr<lexer_dec::operand_types::memaddr>().back()->val) {
+							debug_line("Target doesnt have jump operand on %s", target->str().c_str());
 							target = ast->main_block->visit_previous_addr(target->address);
 						}
 
 						/* Not expression */
 						if (target == nullptr || (target->lex->dissassembly->op != LuauOpcode::LOP_LOADB && target->lex->type != lexer_dec::inst_type::branch_condition)) {
+							
+							debug_line("Target is nullptr, not loadb, or branch condition on %s", target->str().c_str());
 							--count;
+							debug_result("Decreased count too %d", count);
+
 							continue;
 						}
 
 						if (!target->lex->operand_expr<lexer_dec::operand_types::memaddr>().back()->val) {
+
+							debug_line("Target doesn't jump on %s", target->str().c_str());
 							--count;
+							debug_result("Decreased count too %d", count);
+
 							continue;
 						}
 
@@ -3453,19 +3541,32 @@ namespace ast_funcs {
 
 						/* Not expression */
 						if (target_cond == nullptr || target_cond->lex->type != lexer_dec::inst_type::branch_condition) {
+							debug_result("Target condition is nullptr or isnt a branch condition.");
 							--count;
-
+							debug_result("Decreased count too %d", count);
 						}
 						else if ((loadb && target_cond->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr == i->address) || (!loadb && target_cond->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr == (i->address + i->lex->dissassembly->len))) {
 
+							debug_line("Target condition is expected loadb with jump or expected branch compare on %s", target->str().c_str());
+							
 							if (!(--count)) {
 								set();
 							}
+
+							debug_result("Decreased count too %d", count);
+						}
+						else {
+
+							debug_warning("Nothing hit decreasing count.");
+							--count;
+							debug_result("Decreased count too %d", count);
 
 						}
 
 					}
 					else {
+
+						debug_line("Current node does have conditional expression predicted on %s", i->str().c_str());
 
 						/* Get previous from address with type of branch compare. */
 						target_cond = ast->main_block->visit_prev_type_current<lexer_dec::inst_type::branch_condition>(i->address);

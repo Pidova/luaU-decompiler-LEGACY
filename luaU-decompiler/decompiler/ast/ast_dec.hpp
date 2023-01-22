@@ -96,6 +96,7 @@ namespace ast_dec {
 		condition_logical_start, /* Start of a logical operation. [AST] */
 		condition_logical, /* Apart of a logical operation. [AST] */
 		condition_logical_end, /* End of a logical operation. [AST] */
+		condition_append_source, /* Appends source too flag compare flag. [TRANSPILER] */
 
 		/* Will get emmited to condition flag post compare. */
 		condition_and, /* if/elseif/nested(and) appends to if_statements (Can be applied to until or while) [ALL] */
@@ -472,6 +473,7 @@ namespace ast_dec {
 						case expr_type::condition_logical_start: { retn += "condition_logical_start"; break; }
 						case expr_type::condition_logical: { retn += "condition_logical"; break; }
 						case expr_type::condition_logical_end: { retn += "condition_logical_end"; break; }
+						case expr_type::condition_append_source: { retn += "condition_append_source"; break; }
 		
 						case expr_type::condition_close: { retn += "condition_close";  break; }
 						case expr_type::condition_open: { retn += "condition_open";  break; }
@@ -1571,6 +1573,11 @@ namespace ast_dec {
 				return sources->lex->has_operand_expr<lexer_dec::operand_types::dest>();
 			}
 
+			/* No dest */
+			if (!start->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+				return false;
+			}
+
 			/* Go through each source too see if they fill wil single instruction. */
 			if (!sources->source_nodes.empty()) {
 
@@ -1579,6 +1586,11 @@ namespace ast_dec {
 				do {
 
 					auto curr_node = vect.front();
+
+					/* No dest */
+					if (!curr_node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+						return false;
+					}
 
 					if (curr_node->address >= start->address && !curr_node->source_nodes.empty()) {
 						vect.insert(vect.end(), curr_node->source_nodes.begin(), curr_node->source_nodes.end());
