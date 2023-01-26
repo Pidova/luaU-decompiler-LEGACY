@@ -219,7 +219,10 @@
     <ClCompile Include="decompiler\ast\ast_functions\functions\branches.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\concat.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\functions\concats.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\cache\global.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

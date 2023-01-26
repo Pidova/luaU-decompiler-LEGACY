@@ -141,10 +141,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="decompiler\ast\ast_dec.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\cache\global.cpp" />
     <ClCompile Include="decompiler\ast\ast_functions\functions\arguements.cpp" />
     <ClCompile Include="decompiler\ast\ast_functions\functions\branches.cpp" />
     <ClCompile Include="decompiler\ast\ast_functions\functions\call.cpp" />
-    <ClCompile Include="decompiler\ast\ast_functions\functions\concat.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\concats.cpp" />
     <ClCompile Include="decompiler\ast\ast_functions\functions\instructions.cpp" />
     <ClCompile Include="decompiler\ast\ast_functions\functions\locvars.cpp" />
     <ClCompile Include="decompiler\ast\ast_functions\functions\loops.cpp" />
