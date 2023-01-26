@@ -255,10 +255,10 @@ int luau_load(lua_State* L, const char* chunkname, const char* data, size_t size
                 const auto id = read<uint32_t>(data, size, offset);
                 const auto id_ = (((id >> 30) > 0) ? ((id >> 20) & 1023) : -1);
 
-                if (id_ >= 0 && id_ <= p->sizek) 
+                if (id_ >= 0 && id_ <= p->sizek)
                     setobj(L, &p->k[j], &p->k[id_]);
 
-           
+
 
                 break;
             }

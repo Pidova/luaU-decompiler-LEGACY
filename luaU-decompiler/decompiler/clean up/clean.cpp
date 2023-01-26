@@ -1,151 +1,138 @@
+#include "clean.hpp"
+#include "clean_macro.hpp"
 #include <iostream>
 #include <regex>
 #include <string>
-#include "clean.hpp"
-#include "clean_macro.hpp"
 
-void replace_string(std::string& dest, const char* const srch, const char* const repl) {
-	std::size_t pos = 0u;
-	while ((pos = dest.find(srch, pos)) != std::string::npos) {
-		dest.replace(pos, std::strlen(srch), repl);
-		pos += std::strlen(repl);
-	}
-	return;
+void replace_string(std::string &dest, const char *const srch, const char *const repl) {
+      std::size_t pos = 0u;
+      while ((pos = dest.find(srch, pos)) != std::string::npos) {
+            dest.replace(pos, std::strlen(srch), repl);
+            pos += std::strlen(repl);
+      }
+      return;
 }
 
-void clean_up::clean(std::string& decom) {
+void clean_up::clean(std::string &decom) {
 
-	/* Clean comments. */
-    replace_string(decom, "]]\n--[[", "");
-    replace_string(decom, "--[[", "--[[\n");
+      /* Clean comments. */
+      replace_string(decom, "]]\n--[[", "");
+      replace_string(decom, "--[[", "--[[\n");
 
-	return;
+      return;
 }
 
 #define spacing "   "
 
-static const char* const new_scope[] = {
-	"if",
-	"repeat",
-	"function",
-	"local function",
-	"for",
-	"while",
-	"--[[",
-	"(function" 
-};
+static const char *const new_scope[] = {
+    "if",
+    "repeat",
+    "function",
+    "local function",
+    "for",
+    "while",
+    "--[[",
+    "(function"};
 
 /* Dec indent for scope return to normal after. */
-static const char* const prev_scope_expr[] = {
-	"elseif",
-	"else"
-};
+static const char *const prev_scope_expr[] = {
+    "elseif",
+    "else"};
 
-static const char* const end_scope[] = {
-	"end",
-	"until",
-	"]]"
-};
+static const char *const end_scope[] = {
+    "end",
+    "until",
+    "]]"};
 
+void clean_up::buetify(std::string &decom) {
 
-void clean_up::buetify(std::string& decom) {
+      const auto indent = std::string(spacing);
 
-	const auto indent = std::string(spacing);
+      /* How many indentations we currently want. */
+      std::int64_t multiplier = 0;
+      std::int64_t table_multiplier = 0;
 
-	/* How many indentations we currently want. */
-	std::int64_t multiplier = 0;
-	std::int64_t table_multiplier = 0;
+      /* Makes sures it isn't in string. */
+      bool clean = true;
 
-	/* Makes sures it isn't in string. */
-	bool clean = true;
+      /* Add line ending at the front to signal compare. */
+      decom.insert(decom.begin(), '\n');
 
-	/* Add line ending at the front to signal compare. */
-	decom.insert(decom.begin(), '\n');
+      for (auto pos = 0u; pos < decom.length(); ++pos) {
 
-	for (auto pos = 0u; pos < decom.length(); ++pos) {
-		
-		bool curr = false; /* Currently on indent. */
-		const auto ch = decom[pos];
+            bool curr = false; /* Currently on indent. */
+            const auto ch = decom[pos];
 
-		/* Not inside string. */
-		if (ch == '\"' || ch == '\'')
-			clean ^= true;
+            /* Not inside string. */
+            if (ch == '\"' || ch == '\'')
+                  clean ^= true;
 
+#if buetify_table
 
-		#if buetify_table
-		
-		/* Start */
-		if (clean) {
+            /* Start */
+            if (clean) {
 
-			if (ch == '{') {
-				++table_multiplier;
-			}
+                  if (ch == '{') {
+                        ++table_multiplier;
+                  }
 
-			if (ch == '}' && table_multiplier != 0) {
-				--table_multiplier;
-			}
+                  if (ch == '}' && table_multiplier != 0) {
+                        --table_multiplier;
+                  }
 
-			if (table_multiplier != multiplier && ch == ',') {
+                  if (table_multiplier != multiplier && ch == ',') {
 
-				decom.insert(pos + 1, "\n");
-				
-				for (auto o = 0u; o < table_multiplier; ++o)
-					decom.insert(pos + 2, indent);
+                        decom.insert(pos + 1, "\n");
 
-			}
+                        for (auto o = 0u; o < table_multiplier; ++o)
+                              decom.insert(pos + 2, indent);
+                  }
+            }
 
-		}
+#endif
 
-		#endif
+            /* See if new line and were not in a string. */
+            if (ch == '\n' && clean) {
 
+                  /* Set multiplier. */
+                  for (const auto i : new_scope)
+                        if (!decom.compare(pos + 1u, std::strlen(i), i)) {
+                              ++multiplier;
+                              ++table_multiplier;
+                              curr = true;
+                        }
 
-		/* See if new line and were not in a string. */
-		if (ch == '\n' && clean) {
+                  /* Set multiplier. */
+                  for (const auto i : prev_scope_expr)
+                        if (!decom.compare(pos + 1u, std::strlen(i), i)) {
+                              curr = true;
+                        }
 
-			/* Set multiplier. */
-			for (const auto i : new_scope)
-				if (!decom.compare(pos + 1u, std::strlen(i), i)) {
-					++multiplier;
-					++table_multiplier;
-					curr = true;
-				}
+                  for (const auto i : end_scope)
+                        if (!decom.compare(pos + 1u, std::strlen(i), i)) {
+                              --multiplier;
+                              --table_multiplier;
+                        }
 
-			/* Set multiplier. */
-			for (const auto i : prev_scope_expr)
-				if (!decom.compare(pos + 1u, std::strlen(i), i)) {
-					curr = true;
-				}
+                  /* Fix mul */
+                  if (multiplier < 0)
+                        multiplier = 0;
 
+                  /* Newclosures look weird so reverse it. */
+                  if (!decom.compare(pos + 1u, (sizeof("(function") - 1u), "(function")) {
+                        decom.erase(pos, 1u);
+                        continue;
+                  }
 
-			for (const auto i : end_scope)
-				if (!decom.compare(pos + 1u, std::strlen(i), i)) {
-					--multiplier;
-					--table_multiplier;
-				}
+                  /* Format */
+                  auto nmul = multiplier;
+                  if (nmul && curr) /* else, elseif need to dec. */
+                        --nmul;
 
-			/* Fix mul */
-			if (multiplier < 0)
-				multiplier = 0;
+                  for (auto o = 0u; o < nmul; ++o)
+                        decom.insert(pos + 1, indent);
+            }
+      }
 
-			/* Newclosures look weird so reverse it. */
-			if (!decom.compare(pos + 1u, (sizeof("(function") - 1u), "(function")) {
-				decom.erase(pos, 1u);
-				continue;
-			}
-
-
-			/* Format */
-			auto nmul = multiplier;
-			if (nmul && curr) /* else, elseif need to dec. */
-				--nmul;
-
-			for (auto o = 0u; o < nmul; ++o)
-				decom.insert(pos + 1, indent);
-
-		}
-
-	}
-
-	return;
+      return;
 }
-

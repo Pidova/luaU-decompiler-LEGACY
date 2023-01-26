@@ -4,8 +4,7 @@ std::unordered_map<std::shared_ptr<ast_dec::node> /* Branch */, std::shared_ptr<
 
 void global_cache::clear() {
 
-	global_cache::scopes::cached_ends.clear();
+      global_cache::scopes::cached_ends.clear();
 
-	return;
+      return;
 }
-

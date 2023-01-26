@@ -8,7 +8,6 @@
 #define flag_compare -1
 #define flag_mulret -2
 
-
 /* Macros */
 #define char_valid(ch) ((ch >= 0x30 /* '0' */ && ch <= 0x39 /* '9' */) || (ch >= 0x41 /* 'A' */ && ch <= 0x5A /* 'Z' */) || (ch >= 0x61 /* 'a' */ && ch <= 0x7A /* 'z' */) || ch == 0x5F /* _ */)
 
@@ -19,20 +18,19 @@
 #define config_char(config) config->upvalue_suffix_char || config->arg_suffix_char || config->function_suffix_char || config->iteration_suffix_char || config->var_suffix_char
 
 /* Appends source too compare flag or sets compare flag for source. */
-#define logical_expression_dest(node, regs, str) { \
-	\
-	/* Append source too compare flag. */ \
-	if (node->has_expr(ast_dec::expr_type::condition_append_source)) { \
-	\
-		regs.back()[flag_compare]->data += str; \
-	\
-	} \
-	\
-	/* Source = compare flag */\
-	if (node->has_expr(ast_dec::expr_type::conditional_expression_end)) { \
-	\
-		str = regs.back()[flag_compare]->data; \
-		regs.back()[flag_compare]->clear(true); \
-	\
-	} \
-};
+#define logical_expression_dest(node, regs, str)                                  \
+      {                                                                           \
+                                                                                  \
+            /* Append source too compare flag. */                                 \
+            if (node->has_expr(ast_dec::expr_type::condition_append_source)) {    \
+                                                                                  \
+                  regs.back()[flag_compare]->data += str;                         \
+            }                                                                     \
+                                                                                  \
+            /* Source = compare flag */                                           \
+            if (node->has_expr(ast_dec::expr_type::conditional_expression_end)) { \
+                                                                                  \
+                  str = regs.back()[flag_compare]->data;                          \
+                  regs.back()[flag_compare]->clear(true);                         \
+            }                                                                     \
+      };

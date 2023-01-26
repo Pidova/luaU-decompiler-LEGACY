@@ -953,9 +953,11 @@ void BytecodeBuilder::expandJumps()
     const int kMaxJumpDistanceConservative = 32767 / 3;
 
     // we will need to process jumps in order
-    std::sort(jumps.begin(), jumps.end(), [](const Jump& lhs, const Jump& rhs) {
-        return lhs.source < rhs.source;
-    });
+    std::sort(jumps.begin(), jumps.end(),
+        [](const Jump& lhs, const Jump& rhs)
+        {
+            return lhs.source < rhs.source;
+        });
 
     // first, let's add jump thunks for every jump with a distance that's too big
     // we will create new instruction buffers, with remap table keeping track of the moves: remap[oldpc] = newpc
