@@ -221,7 +221,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 			break;
 		}
 		case LuauOpcode::LOP_SETLIST: {
-			retn->type = lexer_dec::inst_type::expression;
+			retn->type = lexer_dec::inst_type::set_table;
 			retn->operands = { lexer_dec::operand_types::dest, lexer_dec::operand_types::source, lexer_dec::operand_types::integer, lexer_dec::operand_types::integer };
 			break;
 		}

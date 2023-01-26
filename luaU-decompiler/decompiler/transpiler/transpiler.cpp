@@ -339,7 +339,11 @@ namespace type_handler {
 
 			/* These are completely different from one another. */
 			case LuauOpcode::LOP_JUMPXEQKB:
-			case LuauOpcode::LOP_JUMPXEQKN:
+			case LuauOpcode::LOP_JUMPXEQKN: {
+				retn.first = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::compare>().front()->reg]->data;
+				retn.second = node->lex->operand_expr<lexer_dec::operand_types::comparek_aux>().front()->k_value;
+				break;
+			}
 			case LuauOpcode::LOP_JUMPXEQKS: {
 				retn.first = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::compare>().front()->reg]->data;
 				retn.second = node->lex->operand_expr<lexer_dec::operand_types::comparek_aux>().front()->k_value;
@@ -440,6 +444,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 							}
 
 							regs.back()[reg]->set_sub_append<registers::type::expr>("{ ");
+							
 						}
 						
 						/* Inc expr. */
@@ -2161,6 +2166,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				switch (node->lex->dissassembly->op) {
 
 					case LuauOpcode::LOP_SETTABLEKS: {
+
 						idx = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
 
 						/* Erase , ", ' */
@@ -2172,7 +2178,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 							idx.erase(std::remove(idx.begin(), idx.end(), '\''), idx.end());
 						}
 
-						if (!(legal = ((str_idx(idx))) ? false : true)) {
+						if (!(legal = ((str_idx(idx) || idx.empty())) ? false : true)) {
 							idx.insert(idx.begin(), '\"');
 							idx.insert(idx.end(), '\"');
 						}
@@ -2199,7 +2205,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				
 				std::string compiled = "";
 				if (legal) {
-					compiled = std::string(".") + idx;
+					compiled = (node->has_expr(ast_dec::expr_type::table_element) ? std::string("") : std::string(".")) + idx;
 				}
 				else {
 					compiled = std::string("[") + idx + std::string("]");
@@ -2231,7 +2237,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 					compiled += std::string (" = ") + value->data;
 
 					/* Append */
-					table->sub_data += compiled + ((node->table_extra.end_table == node->lex->dissassembly->addr) ? "" : ", ");
+					table->sub_data += compiled + ((node->table_extra.end_table == node->lex->dissassembly->addr || node->table_extra.end_table == ast->main_block->visit_next(node)->address) ? "" : ", ");
 
 					/* Not a table end so add end. */
 					const auto table_ends = node->count_expr<ast_dec::expr_type::table_end>();
@@ -2240,11 +2246,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				}
 				
 				auto source = table->sub_data;
-
+			
 				logical_expression_dest(node, regs, source);
-
+				
 				/* Table */
-				if (node->table_extra.end_table == node->lex->dissassembly->addr) {
+				if (node->table_extra.end_table == node->lex->dissassembly->addr || node->table_extra.end_table == ast->main_block->visit_next(node)->address) {
 
 					/* Vararg.*/
 					if (table->type == registers::type::var || table->type == registers::type::arg) {
@@ -2262,7 +2268,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 						}
 						else {
-
+					
 							/* General purpose. */
 							table->set<registers::type::expr>(source);
 
@@ -2324,6 +2330,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				/* Table is already created before hand just decide like locvar or something. */
 				const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
 				const auto start = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+				const auto end = node->count_expr<ast_dec::expr_type::table_end>();
 				auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
 
 				/* Fix for multret. */
@@ -2333,8 +2340,12 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 
 				/* Add setlist data. */
 				for (auto i = 0u; i < unsigned(amt); ++i) 
-					dest->sub_data += regs.back()[start + i]->data + (((i + 1u) == amt) ? " }" : ", ");
+					dest->sub_data += regs.back()[start + i]->data + (((i + 1u) == amt) ? "" : ", ");
 				
+				/* Add ends */
+				for (auto i = 0u; i < end; ++i)
+					dest->sub_data += " }";
+
 				auto source = dest->sub_data;
 
 				logical_expression_dest(node, regs, source);

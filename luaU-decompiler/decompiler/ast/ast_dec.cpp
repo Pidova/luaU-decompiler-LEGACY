@@ -1,34 +1,10 @@
 #include <algorithm>
+#include "ast_macros.hpp"
 #include "ast_dec.hpp"
 #include "post_ast.hpp"
 #include "../emitter/emitter.hpp"
 #include "../generic/generic.hpp"
 
-#define node_nonmutable(node) node->has_expr(ast_dec::expr_type::condition_nonmutable)
-
-#define routine_inc(node, routine) routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() + node->count_expr <ast_dec::expr_type::condition_concat_start>() + node->count_expr <ast_dec::expr_type::conditional_expression_start>()
-#define routine_dec(node, routine) routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() + node->count_expr <ast_dec::expr_type::condition_concat_end>() + node->count_expr <ast_dec::expr_type::conditional_expression_end>()
-
-/* Same thing as routines(inc/dec) but conditional concat routines gets ignored because they don't garunteed a locvar. */
-#define routine_inc_lv(node, routine) routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() + node->count_expr <ast_dec::expr_type::conditional_expression_start>()
-#define routine_dec_lv(node, routine) routine -= node->count_expr <ast_dec::expr_type::concat_routine_end>() + node->count_expr <ast_dec::expr_type::call_routine_end>() + node->count_expr <ast_dec::expr_type::table_end>() + node->count_expr <ast_dec::expr_type::conditional_expression_end>()
-
-/* Has generic condition break? */
-#define condition_break(node)    (node->has_expr(ast_dec::expr_type::break_) || \
-								  node->has_expr(ast_dec::expr_type::condition_break) || \
-								  node->has_expr(ast_dec::expr_type::return_) || \
-								  node->has_expr(ast_dec::expr_type::until_) || \
-								  node->has_expr(ast_dec::expr_type::while_end) || \
-								  node->has_expr(ast_dec::expr_type::for_end) || \
-								  node->has_expr(ast_dec::expr_type::for_n_end) || \
-								  node->has_expr(ast_dec::expr_type::for_iv_end))
-
-/* Has condition break out? */
-#define condition_break_out(node) (node->has_expr(ast_dec::expr_type::until_) || \
-								   node->has_expr(ast_dec::expr_type::while_end) || \
-								   node->has_expr(ast_dec::expr_type::for_end) || \
-								   node->has_expr(ast_dec::expr_type::for_n_end) || \
-								   node->has_expr(ast_dec::expr_type::for_iv_end)) 
 
 
 
@@ -51,6 +27,169 @@ namespace global_cache {
 
 
 namespace ast_funcs {
+
+	namespace calls {
+
+		/*
+			Calls are a bit special in luaU because they rely on parent registers for both arguments and stack. Using this call routines usally get assembled right before
+			a call opcode is executed. We get the beggining of this by judging by it's parent target register stack found in the call opcode in previous code. Note you can
+			assemble the call and everything ahead of time and call later but that is very impracticle and very unoptimized which is generally not done.
+		*/
+		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
+
+			const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CALL>(true));
+
+			/* Set call info. */
+			for (const auto& node : calls) {
+
+				auto prev = ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg);
+
+				/* Namecall gets special treatment. */
+				if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
+
+					const auto data = prev->lex->operand_expr< lexer_dec::operand_types::dest>().front()->reg;
+					const auto data_1 = prev->lex->operand_expr< lexer_dec::operand_types::source>().front()->reg;
+
+					/* Call first operand will be the same as previous. */
+					if (data == data_1) {
+						ast->main_block->visit_previous_dest_register(prev->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+					}
+					else {
+
+						const auto args = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val - 1u;
+
+						if (args) {
+							/* Set previous as call register + 2(1 is reserved, other is slot) */
+							ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg + 2u)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+						}
+						else {
+							/* No args namecall is end. */
+							prev->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+						}
+
+					}
+
+				}
+				else {
+
+					/* Next is end and has args fix prev. */
+					if (ast->main_block->visit_next(prev) == node && node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val) {
+
+						prev = ast->main_block->visit_previous_dest_register(prev->address, node->lex->dissassembly->operands.front()->reg + 1);
+
+					}
+
+					prev->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
+				}
+
+				node->add_expr<ast_dec::expr_type::call_routine_end>(); /* Call end. */
+			}
+
+			return;
+		}
+
+
+		/* Sets multret call routines **Only applies to variables/args initing variables will get handled by transpiler automatically** */
+		void set_multret_routines(std::shared_ptr<ast_dec::ast>& ast) {
+
+			std::uint32_t routine = 0u;
+
+			/* Checking for regs and vector reg. */
+			bool first = false;
+			std::vector<std::uint16_t> check_regs;
+
+			const auto all = ast->main_block->visit_all();
+			for (const auto& node : all) {
+
+				/* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
+				routine_inc_lv(node, routine);
+				routine_dec_lv(node, routine);
+
+				/* Call? */
+				if (!routine && node->lex->type == lexer_dec::inst_type::call && !node->has_expr(ast_dec::expr_type::locvar)) {
+
+					auto retn = node->lex->operand_expr<lexer_dec::operand_types::integer>().back()->val;
+					const auto start = node->lex->dissassembly->operands.front()->reg;
+
+					/* Fix for multret. */
+					if (retn == LUA_MULTRET) {
+						retn = generic::fix_mulret(ast, node->address);
+					}
+
+					if (retn > 1) {
+
+						/* Add multrets. */
+						for (auto i = start; i < (start + retn); ++i) {
+							check_regs.emplace_back(i);
+						}
+
+						first = true;
+
+					}
+
+				}
+
+				/* Looks for regs. */
+				if (check_regs.size() && node->lex->has_operand_expr<lexer_dec::operand_types::source>()) {
+
+					const auto sources = node->lex->operand_expr<lexer_dec::operand_types::source>();
+					for (const auto& operand : sources) {
+
+						const auto reg = operand->reg;
+						if (std::find(check_regs.begin(), check_regs.end(), reg) != check_regs.end()) {
+
+							/* First */
+							if (first) {
+								node->add_expr<ast_dec::expr_type::call_mulret_start>();
+								first = false;
+							}
+							else {
+
+								if (check_regs.size() == 1u) {
+									node->add_expr<ast_dec::expr_type::call_mulret_end>();
+								}
+								else {
+									node->add_expr<ast_dec::expr_type::call_mulret_member>();
+								}
+
+							}
+
+							check_regs.erase(std::remove(check_regs.begin(), check_regs.end(), reg), check_regs.end());
+
+						}
+
+					}
+
+				}
+
+			}
+
+			return;
+		}
+
+		/* Register gets used in call? */
+		bool reg_arg(std::shared_ptr<ast_dec::ast>& ast, const std::shared_ptr<ast_dec::node>& call, const std::uint16_t target) {
+
+			/* Call */
+			if (call->lex->type == lexer_dec::inst_type::call && call->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+				const auto dest = call->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+				auto arg = call->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+				if (arg == LUA_MULTRET) {
+					arg = generic::fix_mulret(ast, call->address);
+				}
+
+				if (arg) {
+					return ((1u + dest) <= target && (1u + dest + arg) >= target);
+				}
+
+			}
+
+			return false;
+		}
+
+	}
 
 	namespace scopes {
 
@@ -270,6 +409,17 @@ namespace ast_funcs {
 				s_node->lex->operand_expr_callback<lexer_dec::operand_types::reg>(check_usage);
 				s_node->lex->operand_expr_callback<lexer_dec::operand_types::table_reg>(check_usage);
 
+				/* Call */
+				if (ast_funcs::calls::reg_arg(ast, s_node, target)) {
+
+					debug_line("Source argument was hit on %s", s_node->str().c_str());
+
+					used_target_1_source = true;
+					used_target_1_dest = false;
+					dest_scope = 0;
+					dest_node = nullptr;
+
+				}
 
 				/* Used by source twice. */
 				if (used_source_twice) {
@@ -327,6 +477,11 @@ namespace ast_funcs {
 
 			}
 
+			/* Not used at all. */
+			if (!used_target_1_source && dest_node == start) {
+				debug_success("Not used at all.");
+				return true;
+			}
 
 			/* Not locvar by routine. */
 			if (no_locvar || (no_locvar && used_next == 1)) {
@@ -1215,139 +1370,6 @@ namespace ast_funcs {
 				node->add_expr<ast_dec::expr_type::concat_routine_end>(); /* Concat end. */
 			}
 			
-			return;
-		}
-
-	}
-
-	namespace calls {
-
-		/* 
-			Calls are a bit special in luaU because they rely on parent registers for both arguments and stack. Using this call routines usally get assembled right before
-			a call opcode is executed. We get the beggining of this by judging by it's parent target register stack found in the call opcode in previous code. Note you can
-			assemble the call and everything ahead of time and call later but that is very impracticle and very unoptimized which is generally not done.
-		*/
-		void set_routines(std::shared_ptr<ast_dec::ast>& ast) {
-
-			const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_inst<LuauOpcode::LOP_CALL>(true));
-			
-			/* Set call info. */
-			for (const auto& node : calls) {
-
-				const auto prev = ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg);
-
-				/* Namecall gets special treatment. */
-				if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
-
-					const auto data = prev->lex->operand_expr< lexer_dec::operand_types::dest>().front()->reg;
-					const auto data_1 = prev->lex->operand_expr< lexer_dec::operand_types::source>().front()->reg;
-					
-					/* Call first operand will be the same as previous. */
-					if (data == data_1) {
-						ast->main_block->visit_previous_dest_register(prev->address, node->lex->dissassembly->operands.front()->reg)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
-					}
-					else {
-
-						const auto args = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val - 1u;
-
-						if (args) {
-							/* Set previous as call register + 2(1 is reserved, other is slot) */
-							ast->main_block->visit_previous_dest_register(node->address, node->lex->dissassembly->operands.front()->reg + 2u)->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
-						}
-						else {
-							/* No args namecall is end. */
-							prev->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
-						}
-
-					}
-
-				}
-				else {
-					prev->add_expr<ast_dec::expr_type::call_routine_start>(); /* Call start */
-				}
-
-				node->add_expr<ast_dec::expr_type::call_routine_end>(); /* Call end. */
-			}
-
-			return;
-		}
-
-
-		/* Sets multret call routines **Only applies to variables/args initing variables will get handled by transpiler automatically** */
-		void set_multret_routines(std::shared_ptr<ast_dec::ast>& ast) {
-
-			std::uint32_t routine = 0u;
-
-			/* Checking for regs and vector reg. */
-			bool first = false;
-			std::vector<std::uint16_t> check_regs;
-
-			const auto all = ast->main_block->visit_all();
-			for (const auto& node : all) {
-
-				/* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
-				routine_inc_lv(node, routine);
-				routine_dec_lv(node, routine);
-
-				/* Call? */
-				if (!routine && node->lex->type == lexer_dec::inst_type::call && !node->has_expr(ast_dec::expr_type::locvar)) {
-
-					auto retn = node->lex->operand_expr<lexer_dec::operand_types::integer>().back()->val;
-					const auto start = node->lex->dissassembly->operands.front()->reg;
-
-					/* Fix for multret. */
-					if (retn == LUA_MULTRET) {
-						retn = generic::fix_mulret(ast, node->address);
-					}
-
-					if (retn > 1) {
-
-						/* Add multrets. */
-						for (auto i = start; i < (start + retn); ++i) {
-							check_regs.emplace_back(i);
-						}
-
-						first = true;
-
-					}
-
-				}
-
-				/* Looks for regs. */
-				if (check_regs.size() && node->lex->has_operand_expr<lexer_dec::operand_types::source>()) {
-
-					const auto sources = node->lex->operand_expr<lexer_dec::operand_types::source>();
-					for (const auto& operand : sources) {
-
-						const auto reg = operand->reg;
-						if (std::find(check_regs.begin(), check_regs.end(), reg) != check_regs.end()) {
-
-							/* First */
-							if (first) {
-								node->add_expr<ast_dec::expr_type::call_mulret_start>();
-								first = false;
-							}
-							else {
-
-								if (check_regs.size() == 1u) {
-									node->add_expr<ast_dec::expr_type::call_mulret_end>();
-								}
-								else {
-									node->add_expr<ast_dec::expr_type::call_mulret_member>();
-								}
-
-							}
-
-							check_regs.erase(std::remove(check_regs.begin(), check_regs.end(), reg), check_regs.end());
-
-						}
-
-					}
-
-				}
-
-			}
-
 			return;
 		}
 
@@ -2267,7 +2289,7 @@ namespace ast_funcs {
 					continue;
 
 
-				std::uint16_t reg = 0u; /* Previous register dest. */
+				std::uint16_t table_reg = 0u; /* Current register table target. */
 				std::uint32_t nested_count = 0u; /* Used for node analysis. */
 				std::uintptr_t node_size = 0u;
 				std::uintptr_t array_size = 0u; 
@@ -2278,6 +2300,11 @@ namespace ast_funcs {
 				std::vector<std::uintptr_t> predicted_sizes;
 				std::vector<std::uintptr_t> node_sizes;
 				std::vector<std::uintptr_t> array_sizes;
+				std::vector<std::uint16_t> table_target;
+				std::vector<std::uint16_t> table_target_uf; /* Unfinished reg set table set when hit table end. */
+				std::unordered_map<std::uint16_t /* reg */, std::shared_ptr<ast_dec::node> /* node */> dest_map;
+
+				std::shared_ptr<ast_dec::node> last_set = table;
 
 
 
@@ -2288,12 +2315,14 @@ namespace ast_funcs {
 						predicted_sizes.emplace_back(predicted_size);
 						node_sizes.emplace_back(node_size);
 						array_sizes.emplace_back(array_size);
+						table_target.emplace_back(table_reg);
 					}
 					else {
 
 						predicted_sizes.pop_back();
 						node_sizes.pop_back();
 						array_sizes.pop_back();
+						table_target.pop_back();
 
 						/* Check size */
 						if (!predicted_sizes.empty())
@@ -2304,6 +2333,9 @@ namespace ast_funcs {
 
 						if (!array_sizes.empty())
 							array_size = array_sizes.back();
+
+						if (!table_target.empty())
+							table_reg = table_target.back();
 
 					}
 
@@ -2329,18 +2361,24 @@ namespace ast_funcs {
 							node_size = x;
 							array_size = operands.back()->val;
 				
+							if (x) {
+								--x;
+								x = x | (x >> 1);
+								x = x | (x >> 2);
+								x = x | (x >> 4);
+								x = x | (x >> 8);
+								x = x | (x >> 16);
+								predicted_size = x - (x >> 1);
+							}
 
-							--x;
-							x = x | (x >> 1);
-							x = x | (x >> 2);
-							x = x | (x >> 4);
-							x = x | (x >> 8);
-							x = x | (x >> 16);
-							predicted_size = x - (x >> 1);
+							table_reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+							debug_result("Set size for %s, node size %" PRIuPTR ", array size %" PRIuPTR ", predicted size %" PRIuPTR ", target %d", node->str().c_str(), node_size, array_size, predicted_size, table_reg);
 
 							cache(true);
 							node->add_expr<ast_dec::expr_type::table_start>();
-							
+							debug_success("Added table start expr too %s", node->str().c_str());
+
 							break;
 						}
 
@@ -2359,38 +2397,57 @@ namespace ast_funcs {
 							auto x = table->lsizenode;
 							const auto pow = 1 << x;
 
-							x = pow;
-							--x;
-							x = x | (x >> 1);
-							x = x | (x >> 2);
-							x = x | (x >> 4);
-							x = x | (x >> 8);
-							x = x | (x >> 16);
-							predicted_size = x;
+							if (pow) {
+								predicted_size = std::pow(std::log2(pow) - 1u, 2u); /* Last too next power of too from pow. */
+							}
+
 							array_size = table->sizearray;
 							node_size = pow; 
-						
+							table_reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+							debug_result("Set size for %s, node size %" PRIuPTR ", array size %" PRIuPTR ", predicted size %" PRIuPTR ", target %d ", node->str().c_str(), node_size, array_size, predicted_size, table_reg);
+
 							cache(true);
 							node->add_expr<ast_dec::expr_type::table_start>();
+							debug_success("Added table start expr too %s", node->str().c_str());
+
 							break;
 						}
 
 						case LuauOpcode::LOP_SETLIST: {
 
+							const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
 							auto amt = node->lex->dissassembly->operands[2]->val;
 							if (amt == LUA_MULTRET) {
-								amt = reg;
+								amt = generic::fix_mulret(ast, node->address);
 							}
 							
 							array_size -= std::uintptr_t (amt);
+	
+
+							/* Target */
+							if (std::find (table_target_uf.begin (), table_target_uf.end(), dest) != table_target_uf.end()) {
+
+								for (auto i = 0u; i < std::count(table_target_uf.begin(), table_target_uf.end(), dest); ++i) {
+									node->add_expr<ast_dec::expr_type::table_end>();
+									cache(false);
+									--nested_count;
+									debug_success("Added extra table end expr.");
+								}
+
+							}
 							
-							if (predicted_sizes.size () > 1u && !node_size && !array_size) {		
+
+							/* Could be set by end if end? */
+							if (node_sizes.size() /* Base line must have members. */) {
 								node->add_expr<ast_dec::expr_type::table_end>();
 								ends.emplace_back(node->address);
+								cache(false);
 							}
-
-							cache(false);
-
+		
+							debug_result("Decreased array size for %s, array size %" PRIuPTR, node->str().c_str(), array_size);
+							debug_success("Added table end expr too %s", node->str().c_str());
+				
 							break;
 						}
 
@@ -2403,7 +2460,8 @@ namespace ast_funcs {
 					return;
 				};
 				
-
+				
+				const auto inside_call_routine = ast->main_block->inside_routine<ast_dec::expr_type::call_mulret_start, ast_dec::expr_type::call_mulret_end>(table->address);
 		
 				/* Add first info */
 				if (table->has_expr(ast_dec::expr_type::table)) {
@@ -2413,104 +2471,240 @@ namespace ast_funcs {
 					
 					if (array_size || node_size) {
 
-
-						std::shared_ptr<ast_dec::node> set_node = table;
-
-						const auto nodes = ast->main_block->visit_rest(table->address);
-						for (const auto& node : nodes) {				
+						auto nodes = ast->main_block->visit_rest(table->address);
+						for (auto& node : nodes) {				
 							
-							set_size(node);
-						
-							/* Set previous dest register. */
-							if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
-								reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+							/* Map out dest */
+							if (!inside_call_routine && node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+								const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+								
+								if (dest_map.find(dest) == dest_map.end()) {
+									dest_map.insert(std::make_pair(dest, node)); /* Add */
+								}
+								else {
+									dest_map[dest] = node; /* Change */
+								}
+
 							}
 
+							/* New/set table instruction inc/dec for nested. */
+							if (node->has_expr(ast_dec::expr_type::table)) {
+
+								++nested_count;
+								debug_line("Hit table increased nested count too %d from %s", nested_count, node->str().c_str());
+
+							}
+							else if (node->lex->type == lexer_dec::inst_type::set_table) {
+
+								--nested_count;
+								debug_line("Hit set table decreased nested count too %d from %s", nested_count, node->str().c_str());
+
+							}
+
+							set_size(node);
+			
 							/* Node_size equals predicted_size or is less then predicted_size that means that it exceeded predicted_size. */
 							if (node_size) {
 
 								/* Table set so check if it's the end. */
 								if (node->lex->type == lexer_dec::inst_type::table_set) {
+									
+									debug_result("Current table %s, node size %" PRIuPTR ", array size %" PRIuPTR ", predicted size %" PRIuPTR ", target %d, nested %d", node->str().c_str(), node_size, array_size, predicted_size, table_reg, nested_count);
 
-									/* Dec not predicted. */
-									if (predicted_size <= node_size) {
+									/* Double check new set table. */
+									if (node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg != table_reg) {
 
-										--node_size;
-										node->add_expr<ast_dec::expr_type::table_element>();
+										debug_line("Current reg and table target does not match.");
+
+										--node_size; /* Dec for node. */
+										node->add_expr<ast_dec::expr_type::table_end>(); /* End of table. */
+										last_set = node;
+										cache(false); /* Revert back cache. */
+
+										debug_success("Added table end expr too %s", node->str().c_str());
+
+										/* End of a nested table. */
+										if (nested_count) {
+											--nested_count;
+										}
+										else {  /* Nested table is 0 and we entered a new table. */
+											break;
+										}
 
 									}
 									else {
 
-										set_node = node;
+										/* Check next from last set. */
+										const auto source = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+										if (dest_map.find(source) != dest_map.end() && node != ast->main_block->visit_next(dest_map[source])) {
 
-										/* Target table. */
-										const auto table_reg = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+											debug_warning("Dest set is not next from node %s and set %s", node->str().c_str(), ast->main_block->visit_next(dest_map[source])->str().c_str());
+
+											node = dest_map[source];
+											goto node_end;
+										}
 
 
-										/* Really just visiting future instructions too see if table source, dest, or idx gets set twice indicating end. */
-										const auto rest_nodes = ast->main_block->visit_rest(set_node->address);
-										for (const auto& i : rest_nodes) {
+										/* Dec not predicted. */
+										if (predicted_size < (node_size - 1u)) {
 
+											--node_size;
+											node->add_expr<ast_dec::expr_type::table_element>();
+											last_set = node;
+											debug_line("Decreased node size too %" PRIuPTR " from %s", node_size, node->str().c_str());
 
-											/* New table instruction inc for nested. */
-											if (i->has_expr(ast_dec::expr_type::table)) {
-												++nested_count;
-											}
+										}
+										else {
 
-											if (i->lex->has_operand_expr<lexer_dec::operand_types::dest>() && predicted_size > node_size) {
+											std::uint32_t routine = 0u;
 
-												/* Dest is logical out of table. */
-												if (regs::logical_dest_register(ast, i, i->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg)) {
-													node_size = 0;
-													goto node_end;
+											/* Really just visiting future instructions too see if table source, dest, or idx gets set twice indicating end. */
+											const auto rest_nodes = ast->main_block->visit_rest(node->address);
+											for (const auto& i : rest_nodes) {
+
+												/* Log routines */
+												routine_inc_basic(i, routine);
+												routine_dec_basic(i, routine);
+
+												/* Skip */
+												if (routine) {
+													continue;
 												}
 
-											}
-											else {
+												/* End (new/end nested table) */
+												if (nested_count) {
 
-												if (i->lex->type == lexer_dec::inst_type::table_set) {
-										
-													/* Table has same table source as current table source valid element.*/
-													if (table_reg == i->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg) {
-	
-														/* Node size = 0 for scope so set current. */
-														if (!(--node_size)) {
-															set_node = i;
-															set_node->add_expr<ast_dec::expr_type::table_element>();
-														}
+													if (i->lex->type == lexer_dec::inst_type::set_table) {
 
-														node->add_expr<ast_dec::expr_type::table_element>();
+														debug_line("Hit setlist for nested table set on %s", i->str().c_str());
 
-														break;
-													}
-													else { /* New table */
+														node->add_existance<ast_dec::expr_type::table_element>();
+														last_set = node;
+														last_set = i;
 
-														--node_size; /* Inc for node. */
-														node->add_expr<ast_dec::expr_type::table_end>(); /* End of table. */
 														cache(false); /* Revert back cache. */
 
-														/* End of a nested table. */
-														if (nested_count) {
-															--nested_count;
+													}
+													else if (i->has_expr(ast_dec::expr_type::table)) {
+
+														debug_line("Hit new forming nested table set on %s", i->str().c_str());
+
+														node->add_existance<ast_dec::expr_type::table_element>();
+														last_set = node;
+
+													}
+
+													break;
+												}
+
+												if (i->lex->has_operand_expr<lexer_dec::operand_types::dest>() && predicted_size > node_size) {
+
+													debug_line("Hit dest from predicted on %s for %s", i->str().c_str(), node->str().c_str());
+
+													/* Dest is logical out of table. */
+													if (regs::logical_dest_register(ast, i, i->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg)) {
+														
+														debug_warning("Reg is logical end.");
+
+														node->add_existance<ast_dec::expr_type::table_element>();
+														last_set = node;
+														node_size = 0;
+														goto node_end;
+													}
+
+												}
+												else {
+
+													/* Current is table Set. */
+													if (i->lex->type == lexer_dec::inst_type::table_set) {
+
+														debug_line("Hit table set on %s for %s", i->str().c_str(), node->str().c_str());
+
+														/* Table has same table source as current table source valid element.*/
+														if (table_reg == i->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg) {
+
+															debug_line("Same table source as current valid element.");
+
+															--node_size; /* Dec for node. */
+															node->add_existance<ast_dec::expr_type::table_element>();
+															last_set = node;
+
+															break;
 														}
-														else {  /* Nested table is 0 and we entered a new table. */
+														else { /* New table */
+
+															if (nested_count) {
+
+																/* Inside nested */
+
+																debug_line("New nested table.");
+
+																--node_size; /* Dec for node. */
+
+																node->add_existance<ast_dec::expr_type::table_element>();
+																last_set = i;
+																cache(false); /* Revert back cache. */
+
+																if (array_size) {
+
+																	table_target_uf.emplace_back(table_reg);
+																	debug_warning("Current table still has array size apppended reg to cache for later set on %s", i->str().c_str());
+
+																}
+																else {
+																	i->add_expr<ast_dec::expr_type::table_end>(); /* End of table. */
+
+																	/* Dec nested table */
+																	--nested_count;
+																	debug_success("Added table end expr too %s", i->str().c_str());
+
+																}
+
+															}
+															else {
+
+																debug_line("New table.");
+
+																/* End */
+																if (array_size) {
+
+																	table_target_uf.emplace_back(table_reg);
+																	debug_warning("Array size still not 0, cached table reg target.");
+
+																}
+																else {
+																	node->add_existance<ast_dec::expr_type::table_element>();
+																	last_set = node;
+																	node_size = 0;
+																	goto node_end;
+																}
+
+															}
+
 															break;
 														}
 
-														/* Target mets then its okay. */
-														//if (used_target_1 && ((target_2 != -1 && used_target_2) || target_2 == -1)) {
-														//	break;
-														//}
+													}
+													else if (no_dest(i)) {
+														/* Something different */
 
-														break;
+														debug_warning("Jumping too end because of not table set or dest on %s", i->str().c_str());
+
+														node->add_existance<ast_dec::expr_type::table_element>();
+														last_set = node;
+														node_size = 0;
+														goto node_end;
 													}
 
 												}
-												else {/* check for new table */
-													node_size = 0;
-													goto node_end;
-												}
 
+											}
+
+											/* Fail case */
+											if (!node->has_expr(ast_dec::expr_type::table_element)) {
+												node->add_existance<ast_dec::expr_type::table_element>();
+												last_set = node;
 											}
 
 										}
@@ -2518,14 +2712,23 @@ namespace ast_funcs {
 									}
 
 								}
-								std::cout << "node_size " << node_size << std::endl;
+								else if (no_dest(node)) {
+
+									debug_warning("No dest adbrupt end for %s", node->str().c_str());
+									node = last_set;
+
+									goto node_end;
+								}
+
 							}
 
 							/* Found end, end anlysis. */
 							if (!node_size && !array_size) {
 							node_end:
-								set_node->add_expr<ast_dec::expr_type::table_end>();
+								debug_success("Adding table end expr too %s", node->str().c_str());
+								node->add_expr<ast_dec::expr_type::table_end>();
 								ends.emplace_back(node->address);
+								cache(false); /* Revert back cache. */
 								break;
 							}
 
@@ -2678,7 +2881,7 @@ namespace ast_funcs {
 					const auto calls = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr_scope<ast_dec::expr_type::call_routine_start>(node->address, true));
 					for (const auto& call : calls) {
 
-						const auto node_end = ast->main_block->visit_relative_next_expr_scope<ast_dec::expr_type::call_routine_end>(call->address, { ast_dec::expr_type::call_routine_start });
+						const auto node_end = ast->main_block->visit_relative_next_expr_scope_current<ast_dec::expr_type::call_routine_end>(call->address, { ast_dec::expr_type::call_routine_start });
 					
 						/* Target dest reg used in call routine dest. */
 						for (const auto& call_node : ast->main_block->visit_range(call->address, node_end->address))
@@ -2693,7 +2896,7 @@ namespace ast_funcs {
 					const auto concats = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_next_expr_scope<ast_dec::expr_type::concat_routine_start>(node->address, true));
 					for (const auto& concat : concats) {
 						
-						const auto node_end = ast->main_block->visit_relative_next_expr_scope<ast_dec::expr_type::concat_routine_end>(concat->address, { ast_dec::expr_type::concat_routine_start });
+						const auto node_end = ast->main_block->visit_relative_next_expr_scope_current<ast_dec::expr_type::concat_routine_end>(concat->address, { ast_dec::expr_type::concat_routine_start });
 					
 						/* Target dest reg used in call routine dest. */
 						for (const auto& concat_node : ast->main_block->visit_range(concat->address, node_end->address))
@@ -2877,8 +3080,8 @@ namespace ast_funcs {
 			for (auto& i : all) {
 
 				/* Loadb or either branch condition. */
-				const auto i_next = ast->main_block->visit_next(i);
-				if ((i->lex->dissassembly->op == LuauOpcode::LOP_LOADB && i_next != nullptr) || i->lex->type == lexer_dec::inst_type::branch_condition) {
+				const auto i_next = ast->main_block->visit_next(i); // (i->lex->dissassembly->op == LuauOpcode::LOP_LOADB && i_next != nullptr) || 
+				if (i->lex->type == lexer_dec::inst_type::branch_condition) {
 
 					auto cached_init = i; /* Mutable by logical operations. */
 					std::vector<std::uint16_t> compares; /* Singular loadb compare(jmp 1+; loadb r1 +1; loadb r1 0; ???) jumps log registers and see if it gets used in compare first. */

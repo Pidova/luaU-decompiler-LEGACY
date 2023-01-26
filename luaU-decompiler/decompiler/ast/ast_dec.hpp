@@ -351,6 +351,15 @@ namespace ast_dec {
 			return count;
 		}
 
+		/* Counts expr count total with non static type. */
+		std::uintptr_t count_expr(const expr_type type) {
+			std::uintptr_t count = 0u;
+			for (const auto& i : this->expr)
+				if (i.first == type)
+					count += i.second;
+			return count;
+		}
+
 		/* Counts expr member total. */
 		template <expr_type type>
 		std::uintptr_t count_expr_member() {
@@ -1252,33 +1261,58 @@ namespace ast_dec {
 		template<expr_type target>
 		std::shared_ptr<node> visit_relative_next_expr(const std::uintptr_t on_address, const std::vector<expr_type> rel) {
 
-			auto count = 0u;
+			auto count = 0;
 
 			/* Iterate through block nodes and find given instruction. */
-			const auto all_nodes = this->visit_all();
+			const auto all_nodes = this->visit_rest(on_address);
 			for (const auto& i : all_nodes) {
-		
-				/* If current node address isnt bigger repeat till it is.*/
-				if (i->address <= on_address) {
-					continue;
-				}
-
 
 				/* Inc for relative. */
 				for (const auto r : rel)
 					if (i->has_expr(r)) {
-						++count; 
-						break;
+						count += i->count_expr(r);
 					}
 
 				/* If found op dec if count isnt 0. If it is 0 then return node. */
 				if (i->has_expr(target)) {
 
-					if (!count) {
+					count -= i->count_expr<target>();
+
+					if (count <= 0) {
 						return i;
 					}
-					else {
-						--count;
+
+				}
+
+			}
+
+			throw std::runtime_error("Returning no data for visit_relative_next_expr_scope_current.");
+		}
+
+
+		/* Visits next relative node to expr being target and args being addatives till exprs(rel arg) hits = dec and exper_target(template target) = inc(singular) and its 0.  (Includes current) */
+		template<expr_type target>
+		std::shared_ptr<node> visit_relative_next_expr_scope_current(const std::uintptr_t on_address, const std::vector<expr_type> rel) {
+
+			auto count = 0;
+
+			/* Iterate through block nodes and find given instruction. */
+			const auto all_nodes = this->visit_rest_curr(on_address);
+			for (const auto& i : all_nodes) {
+
+				/* Inc for relative. */
+				for (const auto r : rel)
+					if (i->has_expr(r)) {
+						count += i->count_expr(r);
+					}
+
+				/* If found op dec if count isnt 0. If it is 0 then return node. */
+				if (i->has_expr(target)) {
+
+					count -= i->count_expr<target>();
+
+					if (count <= 0) {
+						return i;
 					}
 
 				}
@@ -1365,7 +1399,34 @@ namespace ast_dec {
 			return retn;
 		}
 
+		/* See if address is inside rotuine. (Doesnt count close). */
+		template<expr_type target, expr_type close>
+		bool inside_routine(const std::uintptr_t addr) {
 
+			std::int32_t count = 0;
+
+			const auto all_nodes = this->visit_all();
+			for (const auto& i : all_nodes) {
+
+				/* Inc */
+				if (i->has_expr(target)) {
+					++count;
+				}
+
+				/* Dec */
+				if (count != 0 && i->has_expr(close)) {
+					--count;
+				}
+
+				/* Inside */
+				if (count && i->address == addr) {
+					return true;
+				}
+
+			}
+
+			return false;	
+		}
 
 		/* Visits expr routines in range (includes start and end). */
 		template<expr_type target, expr_type close>

@@ -201,6 +201,7 @@
   <ItemGroup>
     <ClInclude Include="decompiler\ast\ast_dec.hpp" />
     <ClInclude Include="decompiler\ast\ast_config.hpp" />
+    <ClInclude Include="decompiler\ast\ast_macros.hpp" />
     <ClInclude Include="decompiler\ast\post_ast.hpp" />
     <ClInclude Include="decompiler\clean up\clean.hpp" />
     <ClInclude Include="decompiler\color.hpp" />

@@ -247,7 +247,7 @@ namespace op_table {
 		{ LuauOpcode::LOP_JUMPXEQKB, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx_aux } }, // 4E
 
 		{ LuauOpcode::LOP_JUMPXEQKN, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX_24 }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx_aux } }, // 4F
-		{ LuauOpcode::LOP_JUMPXEQKS, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX_24 }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx_aux } } // 50
+		{ LuauOpcode::LOP_JUMPXEQKS, { op_table::operands::A,  op_table::operands::D,  op_table::operands::AUX_24 }, { op_table::type::reg, op_table::type::jmp,  op_table::type::k_idx } } // 50
 
 	};
 

@@ -3,6 +3,7 @@
 #include <string>
 #include "clean.hpp"
 
+#define buetify_table true /* Buetifys table */
 
 void replace_string(std::string& dest, const char* const srch, const char* const repl) {
 	std::size_t pos = 0u;
@@ -47,12 +48,14 @@ static const char* const end_scope[] = {
 	"]]"
 };
 
+
 void clean_up::buetify(std::string& decom) {
 
 	const auto indent = std::string(spacing);
 
 	/* How many indentations we currently want. */
-	std::int64_t multiplier = 0u;
+	std::int64_t multiplier = 0;
+	std::int64_t table_multiplier = 0;
 
 	/* Makes sures it isn't in string. */
 	bool clean = true;
@@ -69,6 +72,34 @@ void clean_up::buetify(std::string& decom) {
 		if (ch == '\"' || ch == '\'')
 			clean ^= true;
 
+
+		#if buetify_table
+		
+		/* Start */
+		if (clean) {
+
+			if (ch == '{') {
+				++table_multiplier;
+			}
+
+			if (ch == '}' && table_multiplier != 0) {
+				--table_multiplier;
+			}
+
+			if (table_multiplier != multiplier && ch == ',') {
+
+				decom.insert(pos + 1, "\n");
+				
+				for (auto o = 0u; o < table_multiplier; ++o)
+					decom.insert(pos + 2, indent);
+
+			}
+
+		}
+
+		#endif
+
+
 		/* See if new line and were not in a string. */
 		if (ch == '\n' && clean) {
 
@@ -76,6 +107,7 @@ void clean_up::buetify(std::string& decom) {
 			for (const auto i : new_scope)
 				if (!decom.compare(pos + 1u, std::strlen(i), i)) {
 					++multiplier;
+					++table_multiplier;
 					curr = true;
 				}
 
@@ -87,8 +119,10 @@ void clean_up::buetify(std::string& decom) {
 
 
 			for (const auto i : end_scope)
-				if (!decom.compare(pos + 1u, std::strlen(i), i))
+				if (!decom.compare(pos + 1u, std::strlen(i), i)) {
 					--multiplier;
+					--table_multiplier;
+				}
 
 			/* Fix mul */
 			if (multiplier < 0)

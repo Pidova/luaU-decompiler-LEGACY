@@ -3,7 +3,7 @@
 #define debug_functions true /* Enable debug functions */
 
 
-#define universal_debug true /* Enables universal debug good for debugging. */
+#define universal_debug false /* Enables universal debug good for debugging. */
 #if universal_debug
 
 	/* 1st arg can be str, va_list has too be cstr. */

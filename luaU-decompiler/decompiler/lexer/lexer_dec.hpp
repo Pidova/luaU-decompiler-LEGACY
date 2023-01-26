@@ -43,6 +43,7 @@ namespace lexer_dec {
 		unary, /* Minus, Not, and Lenght. */
 		table_get, /* Table get. */
 		table_set, /* Table set. */
+		set_table, /* Set table opcodes. (Not init) */
 		upvalue_gs, /* Table get/set. */
 		expression, /* Everything else. */
 		call /* Call */

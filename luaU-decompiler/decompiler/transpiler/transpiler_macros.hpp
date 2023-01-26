@@ -9,10 +9,10 @@
 
 
 /* Macros */
-#define char_valid(ch) ((ch >= 0x30 /* '0' */ && ch <= 0x39 /* '9' */) || (ch >= 0x41 /* 'A' */ && ch <= 0x5A /* 'Z' */) || (ch >= 0x61 /* 'a' */ && ch <= 0x7A /* 'z' */))
+#define char_valid(ch) ((ch >= 0x30 /* '0' */ && ch <= 0x39 /* '9' */) || (ch >= 0x41 /* 'A' */ && ch <= 0x5A /* 'Z' */) || (ch >= 0x61 /* 'a' */ && ch <= 0x7A /* 'z' */) || ch == 0x5F /* _ */)
 
 /* Sees if idx needs string type idx. */
-#define str_idx(idx) std::isdigit(idx.front()) || std::find_if(idx.begin(), idx.end(), [](const char c) { return (!std::isalpha(c) && !std::isdigit(c)); }) != idx.end()
+#define str_idx(idx) std::isdigit(idx.front()) || std::find_if(idx.begin(), idx.end(), [](const char c) { return !char_valid(c); }) != idx.end()
 
 /* Config has char suffix? */
 #define config_char(config) config->upvalue_suffix_char || config->arg_suffix_char || config->function_suffix_char || config->iteration_suffix_char || config->var_suffix_char
