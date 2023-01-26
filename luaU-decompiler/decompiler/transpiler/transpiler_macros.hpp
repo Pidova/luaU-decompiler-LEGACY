@@ -1,6 +1,7 @@
 #pragma once
 #include "transpiler.hpp"
 
+#define debug_name "TRANSPILER-DEBUG"
 
 /* Flag */
 #define flag_first -1

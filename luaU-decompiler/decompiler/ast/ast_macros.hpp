@@ -1,5 +1,7 @@
 #pragma once
 
+#define debug_name "AST-DEBUG"
+
 #define node_nonmutable(node) node->has_expr(ast_dec::expr_type::condition_nonmutable)
 
 #define routine_inc(node, routine) routine += node->count_expr <ast_dec::expr_type::concat_routine_start>() + node->count_expr <ast_dec::expr_type::call_routine_start>() + node->count_expr <ast_dec::expr_type::table_start>() + node->count_expr <ast_dec::expr_type::condition_concat_start>() + node->count_expr <ast_dec::expr_type::conditional_expression_start>()

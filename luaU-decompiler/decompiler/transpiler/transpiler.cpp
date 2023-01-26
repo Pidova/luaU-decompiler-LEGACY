@@ -2234,8 +2234,14 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast>& ast, const std
 				/* Element */
 				if (node->has_expr(ast_dec::expr_type::table_element)) {
 					
-					compiled += std::string (" = ") + value->data;
 
+					/* No line break for the front can be possible for some stuff. */
+					if (value->data.front() == '\n') {
+						value->data.erase(value->data.begin());
+					}
+
+					compiled += std::string (" = ") + value->data;
+					
 					/* Append */
 					table->sub_data += compiled + ((node->table_extra.end_table == node->lex->dissassembly->addr || node->table_extra.end_table == ast->main_block->visit_next(node)->address) ? "" : ", ");
 

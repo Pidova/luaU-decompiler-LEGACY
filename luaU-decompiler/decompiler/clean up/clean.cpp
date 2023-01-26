@@ -2,8 +2,7 @@
 #include <regex>
 #include <string>
 #include "clean.hpp"
-
-#define buetify_table true /* Buetifys table */
+#include "clean_macro.hpp"
 
 void replace_string(std::string& dest, const char* const srch, const char* const repl) {
 	std::size_t pos = 0u;

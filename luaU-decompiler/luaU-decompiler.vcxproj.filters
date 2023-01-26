@@ -186,6 +186,42 @@
     <ClCompile Include="decompiler\generic\generic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\call.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\locvars.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\tables.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\arguements.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\loops.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\scopes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\instructions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\regs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\upvalues.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\proto.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\branches.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\functions\concat.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="luau-master\Ast\include\Luau\Ast.h">
@@ -368,6 +404,9 @@
     <ClInclude Include="decompiler\ast\ast_macros.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="decompiler\clean up\clean_macro.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="compile_me.lua" />
@@ -376,5 +415,7 @@
     <None Include="..\README.md" />
     <None Include="..\Known Issues.text" />
     <None Include="..\Internals.md" />
+    <None Include="decompiler\ast\ast_functions\ast_functions.hpp" />
+    <None Include="TODO.text" />
   </ItemGroup>
 </Project>

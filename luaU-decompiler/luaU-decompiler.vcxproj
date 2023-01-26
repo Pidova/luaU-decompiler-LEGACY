@@ -141,6 +141,18 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="decompiler\ast\ast_dec.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\arguements.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\branches.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\call.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\concat.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\instructions.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\locvars.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\loops.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\proto.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\regs.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\scopes.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\tables.cpp" />
+    <ClCompile Include="decompiler\ast\ast_functions\functions\upvalues.cpp" />
     <ClCompile Include="decompiler\ast\post_ast.cpp" />
     <ClCompile Include="decompiler\clean up\clean.cpp" />
     <ClCompile Include="decompiler\decompiler.cpp" />
@@ -204,6 +216,7 @@
     <ClInclude Include="decompiler\ast\ast_macros.hpp" />
     <ClInclude Include="decompiler\ast\post_ast.hpp" />
     <ClInclude Include="decompiler\clean up\clean.hpp" />
+    <ClInclude Include="decompiler\clean up\clean_macro.hpp" />
     <ClInclude Include="decompiler\color.hpp" />
     <ClInclude Include="decompiler\decompiler.hpp" />
     <ClInclude Include="decompiler\emitter\emitter.hpp" />
@@ -271,6 +284,8 @@
     <None Include="..\Internals.md" />
     <None Include="..\Known Issues.text" />
     <None Include="..\README.md" />
+    <None Include="decompiler\ast\ast_functions\ast_functions.hpp" />
+    <None Include="TODO.text" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -2747,6 +2747,7 @@ namespace ast_funcs {
 
 			}
 
+			std::cout << "RET " << ast->tree_str() << std::endl;
 			return;
 		}
 
