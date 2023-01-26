@@ -285,6 +285,7 @@
     <None Include="..\Internals.md" />
     <None Include="..\Known Issues.text" />
     <None Include="..\README.md" />
+    <None Include=".clang-format" />
     <None Include="decompiler\ast\ast_functions\ast_functions.hpp" />
     <None Include="TODO.text" />
   </ItemGroup>
