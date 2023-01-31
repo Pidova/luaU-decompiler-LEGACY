@@ -1,37 +1,5 @@
 #include "post_ast.hpp"
 
-void ast_post::table::set_node_end(const std::shared_ptr<ast_dec::ast> &ast) {
-
-      std::vector<std::uintptr_t> nodes_end;
-      auto table_starts = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_expr<ast_dec::expr_type::table_start>(true));
-      std::reverse(table_starts.begin(), table_starts.end());
-
-      for (const auto &i : table_starts) {
-
-            /* No elements */
-            if (i->has_expr(ast_dec::expr_type::table_end)) {
-                  i->table_extra.end_table = i->address;
-                  nodes_end.emplace_back(i->address);
-                  continue;
-            }
-
-            const auto start_node = i->address;
-            const auto end_node = ast->main_block->visit_relative_next_expr_scope_current<ast_dec::expr_type::table_end>(i->address, {ast_dec::expr_type::table_start})->address;
-
-            const auto range = ast->main_block->visit_range_current(start_node, end_node);
-            for (const auto &node : range) {
-
-                  /* Not set */
-                  if (!node->table_extra.end_table) {
-                        node->table_extra.end_table = end_node;
-                  }
-            }
-
-            nodes_end.emplace_back(end_node);
-      }
-
-      return;
-}
 
 void ast_post::table::set_indexs(const std::shared_ptr<ast_dec::ast> &ast) {
 
@@ -42,6 +10,27 @@ void ast_post::table::set_indexs(const std::shared_ptr<ast_dec::ast> &ast) {
 
                   i->add_expr<ast_dec::expr_type::table_index>();
             }
+      }
+
+      return;
+}
+
+void ast_post::table::fill_elements(const std::shared_ptr<ast_dec::ast> &ast) {
+
+      const auto table_starts = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_expr<ast_dec::expr_type::table_start>(true));
+      for (const auto &i : table_starts) {
+
+            const auto range = ast->main_block->visit_range_current(i->address, ast->main_block->visit_relative_next_expr_scope_current<ast_dec::expr_type::table_end>(i->address, {ast_dec::expr_type::table_start})->address);
+            for (const auto &node : range) {
+
+                if (node->lex->type == lexer_dec::inst_type::set_table) {
+                  
+                    node->add_existance<ast_dec::expr_type::table_element>();
+
+                }
+
+            }
+
       }
 
       return;

@@ -46,7 +46,12 @@ namespace lexer_dec {
             set_table,        /* Set table opcodes. (Not init) */
             upvalue_gs,       /* Table get/set. */
             expression,       /* Everything else. */
-            call              /* Call */
+            call,             /* Call */
+            set_global,       /* Set global */
+            get_global,       /* Set global */
+            new_table,         /* Creates table */
+            capture,           /* Capture */
+            return_           /* Return */
       };
 
       struct lexerme {

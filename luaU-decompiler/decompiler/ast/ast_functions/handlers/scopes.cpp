@@ -16,7 +16,7 @@ std::shared_ptr<ast_dec::node> ast_funcs::scopes::end_of_scope(std::shared_ptr<a
       for (const auto &node : all) {
 
             /* End of scope. */
-            if (!scope && (node->has_expr(ast_dec::expr_type::return_) || node->lex->type == lexer_dec::inst_type::branch)) {
+            if (!scope && (node->lex->type == lexer_dec::inst_type::return_ || node->lex->type == lexer_dec::inst_type::branch)) {
                   global_cache::scopes::cached_ends.insert(std::make_pair(start, node)); /* Append */
                   return node;
             }

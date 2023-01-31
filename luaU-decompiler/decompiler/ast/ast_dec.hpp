@@ -5,6 +5,7 @@
 #include "../transpiler/transpiler_data.hpp"
 #include "ast_config.hpp"
 #include "ast_dec.hpp"
+#include "ast_functions/ast_functions_macros.hpp"
 #include <algorithm>
 #include <inttypes.h>
 #include <iostream>
@@ -13,6 +14,8 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+
+
 
 /*
 
@@ -48,8 +51,6 @@ namespace ast_dec {
 
             table, /* Table instruction. [AST] */
 
-            return_, /* Generic return. [AST] */
-
             /* Multret concat **Applicable too move, set(table/global/upv)** */
             call_mulret_start,  /* Call multret concat start [TRANSPILER] */
             call_mulret_member, /* Call multret concat member [TRANSPILER] */
@@ -62,6 +63,8 @@ namespace ast_dec {
             for_n_start,  /* for ?? in ?? do (numeral) [ALL] */
             for_n_end,    /* For(n) end(Jumpback) [AST] */
             for_prep,     /* For preperation instruction [AST] */
+
+            register_scope_dest, /* Register set in scope but used outside of it before getting set. [ALL] */
 
             repeat_,   /* repeat [ALL] */
             while_,    /* while () follows condition(not jumpback). [ALL] */
@@ -114,10 +117,10 @@ namespace ast_dec {
             jump_elseif, /* Jump leads too elseif [AST] */
             jump_else,   /* Jump leads too else [AST] */
 
-            table_start,   /* Table { [ALL] */
-            table_element, /* Element in table. (Not usable for setlist cause of concatation) [ALL] */
-            table_end,     /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) [ALL] */
-            table_index,   /* Extra expr used for certain things (Will be appended when everything is done). [ALL] */
+            table_start,        /* Table { [ALL] */
+            table_element,      /* Element in table. (Not usable for setlist cause of concatation) [ALL] */
+            table_end,          /* Table } (Will get ignored and use SETLIST instruction integral operand amt if it hits SETLIST.) [ALL] */
+            table_index,        /* Extra expr used for certain things (Will be appended when everything is done). [ALL] */
 
             closure_local,      /* local function ?? () **Can be mutated by lv set if it is a lv will be local else newclosure** [ALL] */
             closure_global,     /* function ?? () **Can be mutated by lv set if it is a lv instead of a global will turn into local** [ALL] */
@@ -131,6 +134,11 @@ namespace ast_dec {
       enum class element {
             front,
             back
+      };
+
+      enum class str_type : std::uint8_t {
+            dissassembly,
+            all
       };
 
       struct node {
@@ -186,7 +194,7 @@ namespace ast_dec {
             /* Appends expr */
             template <expr_type type>
             void add_expr(const std::size_t count = 1u, const element ele = element::back, const std::size_t pos = 0u /* Optional positon overrides ele. */) {
-
+                    
                   if (!count) {
                         return;
                   }
@@ -215,7 +223,7 @@ namespace ast_dec {
             }
 
             /* Appends with nonconsant type. */
-            void add_expr_tt(const expr_type type, const std::size_t count = 1u, const element ele = element::back, const std::size_t pos = 0u /* Optional positon overrides ele. */) {
+            void add_expr_tt(const expr_type type, const std::size_t count = 1u, const element ele = element::back, const std::size_t pos = 0u /* Optional positon overrides elee. */) {
 
                   if (!count) {
                         return;
@@ -368,6 +376,7 @@ namespace ast_dec {
                               this->add_expr_tt(expr.first, 1u, ast_dec::element::back, i);
                               --expr.second;
                         }
+
                   }
 
                   return;
@@ -388,10 +397,11 @@ namespace ast_dec {
                   return sub;
             }
 
-            /* Turns expr pair into a string. */
+            
 
 #if node_debug
 
+            /* Turns expr pair into a string. */
             std::string expr_str(const std::pair<expr_type, std::size_t> &p) {
 
                   std::string retn = "";
@@ -439,11 +449,6 @@ namespace ast_dec {
                               break;
                         }
 
-                        case expr_type::return_: {
-                              retn += "return_";
-                              break;
-                        }
-
                         case expr_type::call_mulret_start: {
                               retn += "call_mulret_start";
                               break;
@@ -483,6 +488,11 @@ namespace ast_dec {
                         }
                         case expr_type::for_prep: {
                               retn += "for_prep";
+                              break;
+                        }
+
+                        case expr_type::register_scope_dest: {
+                              retn += "register_scope_dest";
                               break;
                         }
 
@@ -714,6 +724,7 @@ namespace ast_dec {
                   return;
             }
 
+            /* Prints everything */
             void debug_print_all(const char *const state = " ") {
                   std::printf("[Node-Debug(%s)] %" PRIuPTR " %s", state, this->lex->dissassembly->addr, this->lex->dissassembly->data.c_str());
                   for (const auto &i : this->expr)
@@ -724,25 +735,33 @@ namespace ast_dec {
 
 #endif
 
-            /* Gets dissassembly */
-            enum class str_type : std::uint8_t {
-                  dissassembly
-            };
-
             template <str_type type = str_type::dissassembly>
             std::string str() {
 
                   switch (type) {
+
+                        case str_type::all: {
+
+                              auto retn = std::to_string(this->lex->dissassembly->addr) + " " + this->lex->dissassembly->data;
+
+                              for (const auto &i : this->expr)
+                                    retn += this->expr_str(i);
+
+                              return retn;
+                        }
 
                         case str_type::dissassembly: {
                               return std::string(std::to_string(this->lex->dissassembly->addr) + " " + this->lex->dissassembly->data);
                         }
 
                         default: {
-                              break;
+                              return "";
                         }
+
                   }
+
             }
+
       };
 
       struct block {
@@ -1410,7 +1429,7 @@ namespace ast_dec {
             template <expr_type target>
             std::shared_ptr<node> visit_relative_next_expr_scope_current(const std::uintptr_t on_address, const std::vector<expr_type> rel) {
 
-                  auto count = 0;
+                  std::intptr_t count = 0;
 
                   /* Iterate through block nodes and find given instruction. */
                   const auto all_nodes = this->visit_rest_curr(on_address);
@@ -1719,7 +1738,9 @@ namespace ast_dec {
             }
 
             /* Sees wether if a range start, sources(end) is filled with instructions dest all eventually lead too sources(arg). Start is ignored for first iteration. */
-            bool filled(const std::shared_ptr<node> &start /* Start of anlyzation. */, const std::shared_ptr<node> &sources) {
+            bool filled(const std::shared_ptr<node> &start /* Start of anlyzation. */, const std::shared_ptr<node> &sources, const bool ignore_routines = false /* Ignores routine exprs until start is hit with -1 = 0. */) {
+
+                  std::intptr_t routine = 0;
 
                   std::vector<std::uintptr_t> analyzed_addresses;
                   std::vector<std::shared_ptr<ast_dec::node>> vect;
@@ -1743,6 +1764,17 @@ namespace ast_dec {
 
                               auto curr_node = vect.front();
 
+                              if (!ignore_routines) {
+                                    
+                                    routine_inc_safe(curr_node, routine);
+                                    routine_dec_safe(curr_node, routine);
+
+                                    if (routine) {
+                                        goto skip;
+                                    }
+
+                              }
+
                               /* No dest */
                               if (!curr_node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
                                     return false;
@@ -1756,10 +1788,13 @@ namespace ast_dec {
                                     analyzed_addresses.emplace_back(curr_node->address);
                               }
 
+                          skip:
+
                               /* Remove current. */
                               vect.erase(std::remove(vect.begin(), vect.end(), curr_node), vect.end());
 
                         } while (vect.size());
+
                   }
 
                   /* Check all anlyzed addresses make sure they fill. */
@@ -1773,12 +1808,14 @@ namespace ast_dec {
                         if (!(fill = (i == on->address))) {
                               break;
                         }
+
                   }
 
                   return fill;
             }
 
           private:
+
             /* Removes scope dupes. */
             void remove_dupes(std::vector<block *> &scopes) {
                   std::sort(scopes.begin(), scopes.end());
@@ -1819,6 +1856,7 @@ namespace ast_dec {
                   std::vector<std::shared_ptr<node>> all_nodes;
 
             } cached;
+
       };
 
       struct ast {
@@ -1965,7 +2003,7 @@ namespace ast_dec {
                               const auto branch_not_taken = block->branches.back()->node_start;
 
                               /* Most greater relative too branch_taken. */
-                              auto greater = 0u;
+                              std::size_t greater = 0u;
                               for (const auto &i : indent_multiplier)
                                     if (i.first > greater && i.first < branch_taken) {
                                           greater = i.first;

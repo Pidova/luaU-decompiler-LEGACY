@@ -17,8 +17,8 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
       }
 
       /* See if register gets used twice by dest or source with repecting scopes and either or reseting it. */
-      std::uint32_t routine = 0u;
-      std::int32_t scope = 0u;
+      std::intptr_t routine = 0;
+      std::intptr_t scope = 0;
       std::size_t iter_count = 0u; /* Counts times it was iterated. */
       const auto target_1 = target;
       bool used_target_1_dest = true;
@@ -60,6 +60,8 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                               return;
                         }
 
+                        debug_line("Reset data.");
+
                         used_target_1_source = true;
                         used_target_1_dest = false;
 
@@ -90,13 +92,13 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
             }
 
             /* Out of scope or last scope and hit return. */
-            if (scope < 0 || (!scope && s_node->has_expr(ast_dec::expr_type::return_))) {
+            if (scope < 0 || (!scope && s_node->lex->type == lexer_dec::inst_type::return_)) {
                   debug_line("Register use out of scope or hit return without scoped.");
                   break;
             }
 
             /* End of scope */
-            if (!scope && s_node->has_expr(ast_dec::expr_type::return_)) {
+            if (!scope && s_node->lex->type == lexer_dec::inst_type::return_) {
 
                   /* Just ended with it just using it as dest. */
                   if (used_target_1_dest && !used_target_1_source) {
@@ -104,6 +106,13 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                         no_locvar = false;
                         break;
                   }
+            }
+
+            /* Capture */
+            if (s_node->lex->type == lexer_dec::inst_type::capture && s_node->lex->has_operand_expr<lexer_dec::operand_types::source>() && s_node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg == target_1) {      
+                 debug_line("Register used on capture for %s", s_node->str().c_str());
+                 no_locvar = (dest_node != start);
+                 break;
             }
 
             /* Inc for concat start, call start, and table start. Dec for concat end, call end, and start end. */
@@ -172,8 +181,8 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                         used_target_1_source = false;
                         dest_node = s_node;
                         dest_node_nm = s_node;
-                        set_scope = scope;
-                        dest_scope = scope;
+                        set_scope = std::int32_t (scope);
+                        dest_scope = std::int32_t (scope);
                   }
             }
       }
@@ -192,7 +201,7 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
 
       /* Ignore var next to return. */
       const auto next = ast->main_block->visit_next(start);
-      if (next != nullptr && next->has_expr(ast_dec::expr_type::return_) && iter_count == 1u) {
+      if (next != nullptr && next->lex->type == lexer_dec::inst_type::return_ && iter_count == 1u) {
             debug_warning("Register created right before a return instruction not a locvar.");
             return false;
       }
@@ -211,3 +220,5 @@ void ast_funcs::regs::set_statements(std::shared_ptr<ast_dec::ast> &ast) {
             }
       }
 }
+
+

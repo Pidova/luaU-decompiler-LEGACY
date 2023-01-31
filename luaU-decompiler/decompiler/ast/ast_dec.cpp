@@ -2,18 +2,12 @@
 #include "../emitter/emitter.hpp"
 #include "../generic/generic.hpp"
 #include "ast_functions/ast_functions.hpp"
-#include "ast_macros.hpp"
 #include "post_ast.hpp"
 #include <algorithm>
 
 namespace ast_init {
 
       void init_ast(std::shared_ptr<ast_dec::ast> &ast) {
-
-#if display_analysis
-            std::printf("[AST] Return instruction(s) exprs.\n");
-#endif
-            ast_funcs::instructions::set_return_exprs(ast);
 
 #if display_analysis
             std::printf("[AST] Setting table exprs.\n");
@@ -46,6 +40,11 @@ namespace ast_init {
             ast_funcs::tables::set_routines(ast);
 
 #if display_analysis
+            std::printf("[AST] Setting table node ends.\n");
+#endif
+            ast_funcs::tables::set_node_end(ast);
+
+#if display_analysis
             std::printf("[AST] Setting valid branch routines.\n");
 #endif
             ast_funcs::branches::set_valid_branch_routine(ast);
@@ -64,11 +63,11 @@ namespace ast_init {
             std::printf("[AST] Setting logical operations.\n");
 #endif
             ast_funcs::locvars::set_logical_operations(ast);
-
+            
 #if display_analysis
             std::printf("[AST] Setting logical expressions.\n");
 #endif
-            ast_funcs::locvars::set_logical_expression(ast);
+            ast_funcs::logical::set_logical_expression(ast);
 
 #if display_analysis
             std::printf("[AST] Setting if/elseif/else routines.\n");
@@ -78,7 +77,7 @@ namespace ast_init {
 #if display_analysis
             std::printf("[AST] Setting locvars.\n");
 #endif
-            ast_funcs::locvars::set_lv(ast, ast->arg_regs.size());
+            ast_funcs::locvars::set_lv(ast, std::uint16_t(ast->arg_regs.size()));
 
 #if display_analysis
             std::printf("[AST] Setting upvalues.\n");
@@ -101,14 +100,14 @@ namespace ast_init {
       void post_ast(std::shared_ptr<ast_dec::ast> &ast) {
 
 #if display_analysis
-            std::printf("[POST-AST] Setting table node ends.\n");
-#endif
-            ast_post::table::set_node_end(ast);
-
-#if display_analysis
             std::printf("[POST-AST] Setting table indexes exprs.\n");
 #endif
             ast_post::table::set_indexs(ast);
+
+#if display_analysis
+            std::printf("[POST-AST] Double checking settable in table routines.\n");
+#endif
+            ast_post::table::fill_elements(ast);
 
 #if display_analysis
             std::printf("[POST-AST] Setting arith exprs.\n");

@@ -6,7 +6,7 @@
 #include <iostream>
 #include <sstream>
 
-float loss::loss(const std::shared_ptr<ast_dec::ast> &main_ast, const std::string &decompiled, bool &failed) {
+double loss::loss(const std::shared_ptr<ast_dec::ast> &main_ast, const std::string &decompiled, bool &failed) {
 
       /* Decompiled compilation data. */
       std::size_t size = 0u;

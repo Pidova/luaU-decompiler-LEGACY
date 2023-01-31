@@ -166,7 +166,6 @@ void ast_funcs::proto::set_closure_info(const std::shared_ptr<ast_dec::ast> &cur
             } else { /* Shouldn't happen but incase it does. */
                   throw std::runtime_error("Unkown expression for closure_type.");
             }
-
       }
 
       return;

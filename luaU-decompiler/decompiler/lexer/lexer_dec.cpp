@@ -22,7 +22,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
                   break;
             }
             case LuauOpcode::LOP_RETURN: {
-                  retn->type = lexer_dec::inst_type::expression;
+                  retn->type = lexer_dec::inst_type::return_;
                   retn->operands = {lexer_dec::operand_types::reg, lexer_dec::operand_types::integer}; /* Operands are dest, int */
                   break;
             }
@@ -101,12 +101,12 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 
             /* Global */
             case LuauOpcode::LOP_GETGLOBAL: {
-                  retn->type = lexer_dec::inst_type::expression;
+                  retn->type = lexer_dec::inst_type::get_global;
                   retn->operands = {lexer_dec::operand_types::dest, lexer_dec::operand_types::integer, lexer_dec::operand_types::kvalue};
                   break;
             }
             case LuauOpcode::LOP_SETGLOBAL: {
-                  retn->type = lexer_dec::inst_type::expression;
+                  retn->type = lexer_dec::inst_type::set_global;
                   retn->operands = {lexer_dec::operand_types::source, lexer_dec::operand_types::integer, lexer_dec::operand_types::kvalue};
                   break;
             }
@@ -208,12 +208,12 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
 
                   /* Table stuff */
             case LuauOpcode::LOP_NEWTABLE: {
-                  retn->type = lexer_dec::inst_type::expression;
+                  retn->type = lexer_dec::inst_type::new_table;
                   retn->operands = {lexer_dec::operand_types::dest, lexer_dec::operand_types::integer, lexer_dec::operand_types::integer};
                   break;
             }
             case LuauOpcode::LOP_DUPTABLE: {
-                  retn->type = lexer_dec::inst_type::expression;
+                  retn->type = lexer_dec::inst_type::new_table;
                   retn->operands = {lexer_dec::operand_types::dest, lexer_dec::operand_types::integer};
                   break;
             }
@@ -296,7 +296,7 @@ std::shared_ptr<lexer_dec::lexerme> lexer_dec::lexer(std::shared_ptr<LuaU_dissas
                   break;
             }
             case LuauOpcode::LOP_CAPTURE: {
-                  retn->type = lexer_dec::inst_type::expression;
+                  retn->type = lexer_dec::inst_type::capture;
                   if (retn->dissassembly->operands.front()->capture_ref == 2u)
                         retn->operands = {lexer_dec::operand_types::capture, lexer_dec::operand_types::upvalue};
                   else

@@ -51,6 +51,7 @@ void clean_up::buetify(std::string &decom) {
       /* How many indentations we currently want. */
       std::int64_t multiplier = 0;
       std::int64_t table_multiplier = 0;
+      std::int64_t parenthesis_counter = 0;
 
       /* Makes sures it isn't in string. */
       bool clean = true;
@@ -67,32 +68,45 @@ void clean_up::buetify(std::string &decom) {
             if (ch == '\"' || ch == '\'')
                   clean ^= true;
 
-#if buetify_table
-
             /* Start */
             if (clean) {
 
+                  if (ch == '(') {
+                        ++parenthesis_counter;
+                  }
+
+                  if (ch == ')' && parenthesis_counter != 0) {
+                        --parenthesis_counter;
+                  }
+
                   if (ch == '{') {
                         ++table_multiplier;
+                        parenthesis_counter = 0;
                   }
 
                   if (ch == '}' && table_multiplier != 0) {
                         --table_multiplier;
                   }
 
-                  if (table_multiplier != multiplier && ch == ',') {
+                  if (table_multiplier != multiplier && ch == ',' && !parenthesis_counter) {
+
+                      #if buetify_indent_table
 
                         decom.insert(pos + 1, "\n");
 
                         for (auto o = 0u; o < table_multiplier; ++o)
                               decom.insert(pos + 2, indent);
+
+                     #endif
+
                   }
+
             }
 
-#endif
+
 
             /* See if new line and were not in a string. */
-            if (ch == '\n' && clean) {
+            if ((ch == '\n' || table_multiplier != multiplier) && clean) {
 
                   /* Set multiplier. */
                   for (const auto i : new_scope)
@@ -119,18 +133,23 @@ void clean_up::buetify(std::string &decom) {
                         multiplier = 0;
 
                   /* Newclosures look weird so reverse it. */
-                  if (!decom.compare(pos + 1u, (sizeof("(function") - 1u), "(function")) {
+                  if (!decom.compare(pos + 1u, (sizeof("(function") - 1u), "(function") && table_multiplier == multiplier) {
                         decom.erase(pos, 1u);
                         continue;
                   }
 
                   /* Format */
-                  auto nmul = multiplier;
-                  if (nmul && curr) /* else, elseif need to dec. */
-                        --nmul;
 
-                  for (auto o = 0u; o < nmul; ++o)
-                        decom.insert(pos + 1, indent);
+                  if (ch == '\n') {
+
+                        auto nmul = multiplier;
+                        if (nmul && curr) /* else, elseif need to dec. */
+                              --nmul;
+
+                        for (auto o = 0u; o < nmul; ++o)
+                              decom.insert(pos + 1, indent);
+                  }
+
             }
       }
 

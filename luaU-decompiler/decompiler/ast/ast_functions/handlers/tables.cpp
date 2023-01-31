@@ -41,8 +41,9 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
             if (!valid)
                   continue;
 
+            std::intptr_t table_count = 0;
             std::uint16_t table_reg = 0u;    /* Current register table target. */
-            std::uint32_t nested_count = 0u; /* Used for node analysis. */
+            std::int32_t nested_count = 0; /* Used for node analysis. */
             std::uintptr_t node_size = 0u;
             std::uintptr_t array_size = 0u;
             std::uintptr_t predicted_size = 0u; /* Previous power of 2 for array_size, gives us more context on end. */
@@ -120,6 +121,7 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
 
                               cache(true);
                               node->add_expr<ast_dec::expr_type::table_start>();
+                              ++table_count;
                               debug_success("Added table start expr too %s", node->str().c_str());
 
                               break;
@@ -141,7 +143,7 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
                               const auto pow = 1 << x;
 
                               if (pow) {
-                                    predicted_size = std::pow(std::log2(pow) - 1u, 2u); /* Last too next power of too from pow. */
+                                    predicted_size = std::uintptr_t(std::pow(std::log2(pow) - 1u, 2u)); /* Last too next power of too from pow. */
                               }
 
                               array_size = table->sizearray;
@@ -152,6 +154,7 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
 
                               cache(true);
                               node->add_expr<ast_dec::expr_type::table_start>();
+                              ++table_count;
                               debug_success("Added table start expr too %s", node->str().c_str());
 
                               break;
@@ -174,18 +177,20 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
                                           node->add_expr<ast_dec::expr_type::table_end>();
                                           cache(false);
                                           --nested_count;
+                                          --table_count;
                                           debug_success("Added extra table end expr.");
                                     }
                               }
 
                               /* Could be set by end if end? */
-                              if (node_sizes.size() /* Base line must have members. */) {
+                              if (node_sizes.size() /* Base line must have members. */ && (predicted_size < (node_size - 1u)) /* May have some nodes left? */) {
                                     node->add_expr<ast_dec::expr_type::table_end>();
-                                    ends.emplace_back(node->address);
+                                    --table_count;
+                                    ends.emplace_back(node->address);   
                                     cache(false);
-                              }
+                              } 
 
-                              debug_result("Decreased array size for %s, array size %" PRIuPTR, node->str().c_str(), array_size);
+                              debug_result("Decreased array size for %s, array size %" PRIuPTR ", node size %" PRIuPTR, node->str().c_str(), array_size, node_size);
                               debug_success("Added table end expr too %s", node->str().c_str());
 
                               break;
@@ -237,7 +242,7 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
                               }
 
                               set_size(node);
-
+                          
                               /* Node_size equals predicted_size or is less then predicted_size that means that it exceeded predicted_size. */
                               if (node_size) {
 
@@ -251,6 +256,7 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
 
                                                 debug_line("Current reg and table target does not match.");
 
+                                                --table_count;
                                                 --node_size;                                     /* Dec for node. */
                                                 node->add_expr<ast_dec::expr_type::table_end>(); /* End of table. */
                                                 last_set = node;
@@ -287,32 +293,38 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
 
                                                 } else {
 
-                                                      std::uint32_t routine = 0u;
+                                                      bool hit_nested = false; /* Hit nested table while analysis? */
+                                                      std::intptr_t routine = 0;
 
                                                       /* Really just visiting future instructions too see if table source, dest, or idx gets set twice indicating end. */
                                                       const auto rest_nodes = ast->main_block->visit_rest(node->address);
                                                       for (const auto &i : rest_nodes) {
-
+                                                           
                                                             /* Log routines */
                                                             routine_inc_basic(i, routine);
                                                             routine_dec_basic(i, routine);
-
+                                                         
                                                             /* Skip */
                                                             if (routine) {
                                                                   continue;
                                                             }
 
+                                                            if (!hit_nested) {
+                                                                  hit_nested = i->lex->type == lexer_dec::inst_type::new_table;
+                                                            }
+
                                                             /* End (new/end nested table) */
-                                                            if (nested_count) {
+                                                            if (nested_count > 0) {
+
+                                                                  debug_line("Nested is greater then 0, %d.", nested_count);
 
                                                                   if (i->lex->type == lexer_dec::inst_type::set_table) {
 
                                                                         debug_line("Hit setlist for nested table set on %s", i->str().c_str());
 
                                                                         node->add_existance<ast_dec::expr_type::table_element>();
+                                                                        node->add_existance<ast_dec::expr_type::table_end>();
                                                                         last_set = node;
-                                                                        last_set = i;
-
                                                                         cache(false); /* Revert back cache. */
 
                                                                   } else if (i->has_expr(ast_dec::expr_type::table)) {
@@ -323,9 +335,33 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
                                                                         last_set = node;
                                                                   }
 
-                                                                  break;
-                                                            }
+                                                                  /* Normal */
+                                                                  if (!hit_nested && i->lex->type == lexer_dec::inst_type::table_set && table_reg != i->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg) {
+                                                                     
+                                                                        debug_line("Hit normal table element for %s", node->str().c_str());
 
+                                                                        node->add_existance<ast_dec::expr_type::table_element>();
+                                                                        last_set = node;
+
+                                                                        break;
+                                                                  }
+
+                                                                  /* New index */
+                                                                  if (!hit_nested && i->lex->type == lexer_dec::inst_type::table_set && table_reg != i->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg) {
+                                                                        
+                                                                        --nested_count;
+
+                                                                        node->add_existance<ast_dec::expr_type::table_element>();
+                                                                        node->add_existance<ast_dec::expr_type::table_end>();
+                                                                        last_set = node;
+                                                                        cache(false); /* Revert back cache. */
+
+                                                                        debug_line("New table was hit for nested and haven't hit a new table in analysis changed nested count %d on %s for %s", nested_count, i->str().c_str(), node->str().c_str());                                                            
+                                                                  } 
+
+                                                                  continue;
+                                                            }
+                                                       
                                                             if (i->lex->has_operand_expr<lexer_dec::operand_types::dest>() && predicted_size > node_size) {
 
                                                                   debug_line("Hit dest from predicted on %s for %s", i->str().c_str(), node->str().c_str());
@@ -341,7 +377,10 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
                                                                         goto node_end;
                                                                   }
 
-                                                            } else {
+                                                            } 
+                                                            else {
+                                                                 
+                                                                  debug_line("No dest and predicted size isnt bigger then node size on %s for %s", i->str().c_str(), node->str().c_str());
 
                                                                   /* Current is table Set. */
                                                                   if (i->lex->type == lexer_dec::inst_type::table_set) {
@@ -382,6 +421,7 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
 
                                                                                           /* Dec nested table */
                                                                                           --nested_count;
+                                                                                          --table_count;
                                                                                           debug_success("Added table end expr too %s", i->str().c_str());
                                                                                     }
 
@@ -406,7 +446,8 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
                                                                               break;
                                                                         }
 
-                                                                  } else if (no_dest(i)) {
+                                                                  } 
+                                                                  else if (no_dest(i)) {
                                                                         /* Something different */
 
                                                                         debug_warning("Jumping too end because of not table set or dest on %s", i->str().c_str());
@@ -416,28 +457,44 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
                                                                         node_size = 0;
                                                                         goto node_end;
                                                                   }
+
                                                             }
+
                                                       }
 
                                                       /* Fail case */
                                                       if (!node->has_expr(ast_dec::expr_type::table_element)) {
                                                             node->add_existance<ast_dec::expr_type::table_element>();
                                                             last_set = node;
+                                                            --node_size;
                                                       }
+
                                                 }
+
                                           }
 
                                     } else if (no_dest(node)) {
 
-                                          debug_warning("No dest adbrupt end for %s", node->str().c_str());
-                                          node = last_set;
+                                          debug_line("Current has no dest %s", node->str().c_str());
+
+                                          if (node->lex->type == lexer_dec::inst_type::set_global && node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg == table_reg && !regs::logical_dest_register(ast, last_set, table_reg)) {
+                                          
+                                                 debug_success("Next is setglobal with same table reg and isn't a locvar it is a valid table.");
+                                                 last_set->add_existance<ast_dec::expr_type::table_element>();
+
+                                          } else {
+                                          
+                                                debug_warning("No dest adbrupt end.");
+                                                node = last_set;
+
+                                          }
 
                                           goto node_end;
                                     }
-                              }
+                              } 
 
                               /* Found end, end anlysis. */
-                              if (!node_size && !array_size) {
+                              if (!node_size && !array_size && table_count == 1) {
                               node_end:
                                     debug_success("Adding table end expr too %s", node->str().c_str());
                                     node->add_expr<ast_dec::expr_type::table_end>();
@@ -455,8 +512,44 @@ void ast_funcs::tables::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
             } else {
                   throw std::runtime_error("Expected NEWTABLE or DUPTABLE instruction to init table.");
             }
+
       }
 
-      std::cout << "RET " << ast->tree_str() << std::endl;
+      std::cout << "tree  " << ast->tree_str() << std::endl;
+      return;
+}
+
+/* Sets every table end in every table routine node too address ending of table. */
+void ast_funcs::tables::set_node_end(const std::shared_ptr<ast_dec::ast> &ast) {
+
+      std::vector<std::uintptr_t> nodes_end;
+      auto table_starts = std::get<std::vector<std::shared_ptr<ast_dec::node>>>(ast->main_block->visit_expr<ast_dec::expr_type::table_start>(true));
+      std::reverse(table_starts.begin(), table_starts.end());
+
+      for (const auto &i : table_starts) {
+
+            /* No elements */
+            if (i->has_expr(ast_dec::expr_type::table_end)) {
+                  i->table_extra.end_table = i->address;
+                  nodes_end.emplace_back(i->address);
+                  continue;
+            }
+
+            const auto start_node = i->address;
+            const auto end_node = ast->main_block->visit_relative_next_expr_scope_current<ast_dec::expr_type::table_end>(i->address, {ast_dec::expr_type::table_start})->address;
+
+            const auto range = ast->main_block->visit_range_current(start_node, end_node);
+            for (const auto &node : range) {
+
+                  /* Not set */
+                  if (!node->table_extra.end_table) {
+                        node->table_extra.end_table = end_node;
+                  }
+
+            }
+
+            nodes_end.emplace_back(end_node);
+      }
+
       return;
 }

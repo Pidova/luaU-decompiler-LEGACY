@@ -186,43 +186,49 @@
     <ClCompile Include="decompiler\generic\generic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\call.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\call.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\locvars.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\locvars.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\tables.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\tables.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\arguements.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\arguements.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\loops.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\loops.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\scopes.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\scopes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\instructions.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\instructions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\regs.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\regs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\upvalues.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\upvalues.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\proto.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\proto.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\branches.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\branches.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="decompiler\ast\ast_functions\functions\concats.cpp">
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\concats.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="decompiler\ast\ast_functions\cache\global.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\optimize\optmize.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decompiler\ast\ast_functions\handlers\logical_expressions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -408,6 +414,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="decompiler\clean up\clean_macro.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="decompiler\ast\optimize\optimize.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="decompiler\ast\ast_functions\ast_functions_macros.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

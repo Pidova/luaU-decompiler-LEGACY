@@ -5,11 +5,12 @@ namespace ast_post {
 
       namespace table {
 
-            /* Sets every table end in every table routine node too address ending of table. */
-            void set_node_end(const std::shared_ptr<ast_dec::ast> &ast);
 
             /* Set indexs exprs for gettable instructions. */
             void set_indexs(const std::shared_ptr<ast_dec::ast> &ast);
+
+            /* Double checks that every settable opcode in table routine is an element. */
+            void fill_elements(const std::shared_ptr<ast_dec::ast> &ast);
 
       } // namespace table
 

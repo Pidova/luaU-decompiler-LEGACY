@@ -56,7 +56,7 @@ void ast_funcs::calls::set_routines(std::shared_ptr<ast_dec::ast> &ast) {
 /* Sets multret call routines **Only applies to variables/args initing variables will get handled by transpiler automatically** */
 void ast_funcs::calls::set_multret_routines(std::shared_ptr<ast_dec::ast> &ast) {
 
-      std::uint32_t routine = 0u;
+      std::intptr_t routine = 0;
 
       /* Checking for regs and vector reg. */
       bool first = false;

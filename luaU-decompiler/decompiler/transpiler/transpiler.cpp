@@ -722,11 +722,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
 
             std::stringstream str;
 
-#if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+      #if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
             str << "[transpiler.cpp] " << node->lex->dissassembly->data << std::endl;
-#elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+      #elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
             str << "[INSTRUCTION]: " << node->lex->dissassembly->data << std::endl;
-#endif
+      #endif
 
             for (auto i = 0u; i < node->lex->operands.size(); ++i) {
 
@@ -855,11 +855,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
             for (const auto &p : node->expr)
                   str << "*		" << node->expr_str(p) << std::endl;
 
-#if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+      #if !TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
             std::cout << str.str() << std::endl;
-#elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
+      #elif TANSPILER_DEBUG_OPERANDS_PRINT_OVERRIDE
             emitter::expandable_comment(decompilation, str.str() + std::string("\n"));
-#endif
+      #endif
 
 #endif
 
@@ -1359,14 +1359,14 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
 
                         /* Vararg.*/
                         if (dest->type == registers::type::var || dest->type == registers::type::arg) {
-
+                              
                               emitter::vararg_equal(decompilation, dest->data, source);
 
                         } else {
 
                               /* Create var. */
                               if (node->has_expr(ast_dec::expr_type::locvar)) {
-
+                                    
                                     dest->set<registers::type::var>(node->dest_loc.name);
                                     emitter::new_vararg_equal(decompilation, dest->data, source);
 
@@ -2018,7 +2018,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                                     throw std::runtime_error("Unkown instruction for set tables.");
                               }
                         }
-
+                        
                         std::string compiled = "";
                         if (legal) {
                               compiled = (node->has_expr(ast_dec::expr_type::table_element) ? std::string("") : std::string(".")) + idx;
@@ -2062,6 +2062,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                               const auto table_ends = node->count_expr<ast_dec::expr_type::table_end>();
                               for (auto i = 0u; i < table_ends; ++i)
                                     table->sub_data += " }";
+
                         }
 
                         auto source = table->sub_data;
@@ -2154,6 +2155,12 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                         /* Add ends */
                         for (auto i = 0u; i < end; ++i)
                               dest->sub_data += " }";
+
+                         /* More members? */
+                        const auto next = ast->main_block->visit_next(node);
+                        if (regs.back()[flag_compare]->special.inside_expr && next != nullptr && next->lex->type != lexer_dec::inst_type::set_table) {
+                              dest->sub_data += ", ";
+                        }
 
                         auto source = dest->sub_data;
 

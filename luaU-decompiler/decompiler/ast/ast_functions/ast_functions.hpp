@@ -2,8 +2,9 @@
 #include "../../emitter/emitter.hpp"
 #include "../../generic/generic.hpp"
 #include "../ast_dec.hpp"
-#include "../ast_macros.hpp"
 #include "../post_ast.hpp"
+#include "../ast_macros.hpp"
+#include "ast_functions_macros.hpp"
 #include <algorithm>
 
 namespace global_cache {
@@ -39,17 +40,110 @@ namespace ast_funcs {
 
       namespace scopes {
 
+            namespace scope_data {
+
+                /* Scoping vector */
+
+                template<typename t>
+                class scope_vector {
+
+                    public:
+
+                        std::vector<t> get() {
+                                return this->data;
+                        }
+
+
+
+                    private:
+                        std::vector<t> data;
+                };
+
+                /* Creates scopes based on idx, which is used by unordered map. (Start = next from jump, Jump target = previous from jump) */
+                class scope {
+
+                    public:
+
+                        std::size_t operator[](const std::shared_ptr<ast_dec::node>& start) {
+                            
+                            std::uintptr_t target = 0u;
+
+                            for (const auto &i : this->data) {
+                             
+                                if (std::get<0>(i)->address <= start->address && std::get<1>(i)->address >= start->address) {
+
+                                        target = (std::get<0>(i)->address >= target) ? std::get<0>(i)->address : target;
+
+                                }
+
+                            }
+
+
+                            return 0u;
+                        }
+
+                        void operator=(const std::vector<std::shared_ptr<ast_dec::node>>& dism /* All nodes in scope */) {
+                        
+                            std::size_t idx = 0u;
+                            std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Start */, std::uintptr_t /* Jump */>> addr_scopes;       
+
+                            for (const auto &node : dism) {
+
+                                  /* if (?? ?? ??) */
+                                  if (node->lex->type == lexer_dec::inst_type::branch_condition) {
+
+                                        /* Scope isnt jumpback? */
+                                        const auto jmp_addr = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+                                        if (!this->jump || (this->jump && jmp_addr > node->address)) {
+                                              ++idx;
+                                              addr_scopes.emplace_back(std::make_pair(((jmp_addr == (node->lex->dissassembly->len + node->address)) ? node : (*(&node + 1))), jmp_addr));
+                                        }
+
+                                  }
+
+                                  /* jump ?? */
+                                  if (node->lex->type == lexer_dec::inst_type::branch) {
+                                        ++idx;
+                                        const auto jmp_addr = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+                                        addr_scopes.emplace_back(std::make_pair(((jmp_addr == (node->lex->dissassembly->len + node->address)) ? node : (*(&node + 1))), jmp_addr));
+                                  }
+                                  
+                                  for (auto &i : addr_scopes) {
+                                  
+                                       if (std::get<1>(i) == (node->lex->dissassembly->len + node->address)) {
+                                           
+                                           this->data.emplace_back(std::make_tuple(std::get<0>(i), std::get<1>(i), idx));
+
+                                       }
+
+                                  }
+
+                            }
+
+                            return;
+                        }
+
+                        scope(const bool jumps = false/* Includes when analyzing jumps/jumpbacks. */) {
+                            this->jump = jumps;
+                        }
+
+                        std::size_t get() {
+                             return this->max_idx;
+                        }
+
+                    private:
+                       std::vector<std::tuple<std::shared_ptr<ast_dec::node> /* Begin */, std::shared_ptr<ast_dec::node> /* End */, std::size_t /* idx */>> data;
+                       bool jump;
+                       std::size_t max_idx;
+
+                };
+
+            }
+
             /* Gets end of scope node. (Doesn't count for current, looks for ends/jumps/returns) */
             std::shared_ptr<ast_dec::node> end_of_scope(std::shared_ptr<ast_dec::ast> &ast, const std::shared_ptr<ast_dec::node> &start);
 
       } // namespace scopes
-
-      namespace instructions {
-
-            /* Set return exprs for return opcode(s). */
-            void set_return_exprs(std::shared_ptr<ast_dec::ast> &ast);
-
-      } // namespace instructions
 
       namespace regs {
 
@@ -137,6 +231,13 @@ namespace ast_funcs {
 
       } // namespace loops
 
+      namespace logical {
+
+            /* Sets logical expressions. */
+            void set_logical_expression(std::shared_ptr<ast_dec::ast> &ast);
+
+      } // namespace logical
+
       namespace arguments {
 
             /*
@@ -160,6 +261,9 @@ namespace ast_funcs {
             /* Sets table exprs. */
             void set_table_exprs(std::shared_ptr<ast_dec::ast> &ast);
 
+            /* Sets every table end in every table routine node too address ending of table. */
+            void set_node_end(const std::shared_ptr<ast_dec::ast> &ast);
+
       } // namespace tables
 
       namespace locvars {
@@ -172,7 +276,7 @@ namespace ast_funcs {
 			Depending on how the code is decompiled as of this version of luaU debug information contains stuff about variables (names, etc) but there isn't
 			a garunteed it will be present or not so this will try to recreat that.
 
-		*/
+		    */
             void set_lv(std::shared_ptr<ast_dec::ast> &ast, const std::uint16_t start_reg);
 
             /*
@@ -194,12 +298,13 @@ namespace ast_funcs {
 						
 			Sets logical operations. (Can be used for if/elseif statements).
 
-		*/
-
+		    */
             void set_logical_operations(std::shared_ptr<ast_dec::ast> &ast);
 
-            /* Sets logical expressions. */
-            void set_logical_expression(std::shared_ptr<ast_dec::ast> &ast);
-
       } // namespace locvars
+
+      namespace instructions {
+
+      } // namespace instructions
+
 } // namespace ast_funcs

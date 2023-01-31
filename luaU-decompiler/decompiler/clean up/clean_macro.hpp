@@ -1,3 +1,3 @@
 #pragma once
 
-#define buetify_table false /* Buetifys table */
+#define buetify_indent_table false

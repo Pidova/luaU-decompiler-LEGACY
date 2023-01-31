@@ -296,6 +296,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                                     if (std::find(dests.back().begin(), dests.back().end(), reg) != dests.back().end()) {
                                           node->sub_node = dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), reg) - dests.back().begin()];
                                     }
+
                               }
 
                               break;
@@ -383,7 +384,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                         }
                   }
             }
-
+            
             /* Set args (fill stack) */
             for (auto reg = min; reg <= max; reg++)
                   proto->arg_regs.emplace_back(std::make_pair(reg, emitter::create::locvar_name(ast->transpiler_config->arg_prefix, reg, ast->transpiler_config->arg_suffix_char)));
