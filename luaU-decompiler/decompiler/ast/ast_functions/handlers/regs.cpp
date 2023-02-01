@@ -221,4 +221,131 @@ void ast_funcs::regs::set_statements(std::shared_ptr<ast_dec::ast> &ast) {
       }
 }
 
+/* Gets list of all dests registers being set.  **Dependent on for loop data** */
+std::vector<std::uint16_t> ast_funcs::regs::get_dest_list(std::shared_ptr<ast_dec::ast> &ast, const std::shared_ptr<ast_dec::node> &node) {
 
+    std::vector<std::uint16_t> retn;
+
+    /* Loops */
+    const auto for_node = node->loop_extra.end_node;
+    if (for_node != nullptr && node->loop_extra.start_node == node) {
+
+          for (auto i = node->loop_extra.end_node->loop_extra.start_reg; i <= node->loop_extra.end_node->loop_extra.end_reg; ++i) 
+                  retn.emplace_back(i);
+          
+    }
+
+     switch (node->lex->dissassembly->op) {
+
+           case LuauOpcode::LOP_RETURN: {
+
+                 const auto dest = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+                 auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+                 if (amt) {
+
+                       if (amt == -1)
+                             amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
+
+                       for (auto a = dest; a < (dest + amt); ++a)
+                             retn.emplace_back(a);
+                 }
+
+                 break;
+           }
+
+           case LuauOpcode::LOP_GETVARARGS: {
+
+                 const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+                 auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+                 if (amt == LUA_MULTRET) {
+                       amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
+                 }
+
+                 if (amt == 0) {
+                       amt = 1u;
+                 }
+
+                 for (auto a = dest; a < (dest + amt); ++a) 
+                     retn.emplace_back(a);            
+
+                 break;
+           }
+
+           case LuauOpcode::LOP_CALL: {
+
+                 auto call_retn = node->lex->operand_expr<lexer_dec::operand_types::integer>().back()->val;
+                 const auto start = node->lex->dissassembly->operands.front()->reg;
+
+                 if (call_retn == LUA_MULTRET) {
+                       call_retn = generic::fix_mulret(ast, node->address);
+                 }
+
+                 /* Fix with namecall. */
+                 bool namecall = false;
+                 const auto prev = ast->main_block->visit_previous_addr(node->address);
+
+                 if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
+
+                       namecall = (start == prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
+         
+                 }
+
+                 /* Append to dest. (Fill for multiple retn) */
+                 for (auto i = start; i < (start + call_retn); ++i) {
+
+                      /* Skip this */
+                       if (!i && namecall) {
+                             retn.emplace_back(i + 1u);
+                             continue;
+                       }
+                 
+                       retn.emplace_back(i);
+                 }
+                     
+                 break;
+           }
+
+           default: {
+
+                 /* Append dest */
+                 if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+
+                       retn.emplace_back(node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
+
+                 }
+
+                 break;
+           }
+     }
+
+     return retn;
+}
+
+/* Sets register_scope_dest expr. */
+void ast_funcs::regs::set_register_scope_dest_expr(std::shared_ptr<ast_dec::ast> &ast) {
+
+    const auto all = ast->main_block->visit_all();
+
+    ast_funcs::scopes::scope_data::scope scope (ast, true);
+    scope = all;
+
+    ast_funcs::scopes::scope_data::scope_vector<std::uint16_t> regs (scope);
+
+    for (const auto &i : all) {
+    
+        regs[i];
+
+        for (const auto d : ast_funcs::regs::get_dest_list(ast, i)) 
+              regs.push_back(d);
+
+        i->debug_print_dissassembly("ON");
+
+        for (const auto o : regs.vector())
+              std::cout << "REG " << o << std::endl;
+
+    }
+
+    return;
+}

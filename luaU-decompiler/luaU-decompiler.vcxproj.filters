@@ -231,6 +231,9 @@
     <ClCompile Include="decompiler\ast\ast_functions\handlers\logical_expressions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="decompiler\ir\ir.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="luau-master\Ast\include\Luau\Ast.h">
@@ -420,6 +423,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="decompiler\ast\ast_functions\ast_functions_macros.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="decompiler\ir\ir.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

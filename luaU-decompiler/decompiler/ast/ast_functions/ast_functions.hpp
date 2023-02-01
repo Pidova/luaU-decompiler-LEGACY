@@ -44,48 +44,35 @@ namespace ast_funcs {
 
                 /* Scoping vector */
 
-                template<typename t>
-                class scope_vector {
-
-                    public:
-
-                        std::vector<t> get() {
-                                return this->data;
-                        }
-
-
-
-                    private:
-                        std::vector<t> data;
-                };
-
                 /* Creates scopes based on idx, which is used by unordered map. (Start = next from jump, Jump target = previous from jump) */
                 class scope {
 
                     public:
 
-                        std::size_t operator[](const std::shared_ptr<ast_dec::node>& start) {
-                            
-                            std::uintptr_t target = 0u;
-
+                         std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Begin */, std::shared_ptr<ast_dec::node> /* End */>> operator[](const std::shared_ptr<ast_dec::node> &start) {
+                          
+                            std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Begin */, std::shared_ptr<ast_dec::node> /* End */>> retn;
+                           
                             for (const auto &i : this->data) {
-                             
+                                  std::cout << "start->address " << start->address << std::endl;
                                 if (std::get<0>(i)->address <= start->address && std::get<1>(i)->address >= start->address) {
-
-                                        target = (std::get<0>(i)->address >= target) ? std::get<0>(i)->address : target;
+                                        std::cout << "I " << start->address << " : " << std::get<0>(i)->address << " : " << std::get<1>(i)->address << std::endl;
+                                      retn.emplace_back(i);
 
                                 }
 
                             }
 
+                            return retn;
+                         }
 
-                            return 0u;
-                        }
-
-                        void operator=(const std::vector<std::shared_ptr<ast_dec::node>>& dism /* All nodes in scope */) {
+                        void operator=(const std::vector<std::shared_ptr<ast_dec::node>> &dism /* All nodes in scope */) {
                         
-                            std::size_t idx = 0u;
-                            std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Start */, std::uintptr_t /* Jump */>> addr_scopes;       
+                            if (this->linked_ast == nullptr) {
+                                throw std::runtime_error("No linked ast present.");
+                            }
+
+                            std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Start */, std::shared_ptr<ast_dec::node> /* Jump */>> addr_scopes;       
 
                             for (const auto &node : dism) {
 
@@ -95,24 +82,22 @@ namespace ast_funcs {
                                         /* Scope isnt jumpback? */
                                         const auto jmp_addr = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
                                         if (!this->jump || (this->jump && jmp_addr > node->address)) {
-                                              ++idx;
-                                              addr_scopes.emplace_back(std::make_pair(((jmp_addr == (node->lex->dissassembly->len + node->address)) ? node : (*(&node + 1))), jmp_addr));
+                                              addr_scopes.emplace_back(std::make_pair(((jmp_addr == (node->lex->dissassembly->len + node->address)) ? node : (*(&node + 1))), this->linked_ast->main_block->visit_addr(jmp_addr)));
                                         }
 
                                   }
 
                                   /* jump ?? */
                                   if (node->lex->type == lexer_dec::inst_type::branch) {
-                                        ++idx;
                                         const auto jmp_addr = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
-                                        addr_scopes.emplace_back(std::make_pair(((jmp_addr == (node->lex->dissassembly->len + node->address)) ? node : (*(&node + 1))), jmp_addr));
+                                        addr_scopes.emplace_back(std::make_pair(((jmp_addr == (node->lex->dissassembly->len + node->address)) ? node : (*(&node + 1))), this->linked_ast->main_block->visit_addr(jmp_addr)));
                                   }
                                   
                                   for (auto &i : addr_scopes) {
                                   
-                                       if (std::get<1>(i) == (node->lex->dissassembly->len + node->address)) {
+                                       if (i.second->address == (node->lex->dissassembly->len + node->address)) {
                                            
-                                           this->data.emplace_back(std::make_tuple(std::get<0>(i), std::get<1>(i), idx));
+                                           this->data.emplace_back(std::make_pair(i.first, i.second));
 
                                        }
 
@@ -120,21 +105,105 @@ namespace ast_funcs {
 
                             }
 
+                            this->data.emplace_back(std::make_pair(dism.front(), dism.back()));
+
                             return;
                         }
 
-                        scope(const bool jumps = false/* Includes when analyzing jumps/jumpbacks. */) {
+                        scope(std::shared_ptr<ast_dec::ast> &ast, const bool jumps = false /* Includes when analyzing jumps/jumpbacks. */) {
                             this->jump = jumps;
+                            this->linked_ast = ast;
+                            return;
                         }
 
-                        std::size_t get() {
-                             return this->max_idx;
+                        std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Begin */, std::shared_ptr<ast_dec::node> /* End */>> get() {
+                             return this->data;
                         }
 
                     private:
-                       std::vector<std::tuple<std::shared_ptr<ast_dec::node> /* Begin */, std::shared_ptr<ast_dec::node> /* End */, std::size_t /* idx */>> data;
-                       bool jump;
-                       std::size_t max_idx;
+                       std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Begin */, std::shared_ptr<ast_dec::node> /* End */>> data;
+                       bool jump = false;
+                       std::shared_ptr<ast_dec::ast> linked_ast = nullptr;
+
+                };
+
+                template <typename t>
+                class scope_vector {
+
+                    public:
+
+                      std::vector<t> get() {
+                            return this->data;
+                      }
+
+                      scope_vector(class scope &s)
+                      : linked(s)
+                      {
+
+                            for (const auto &i : this->linked.get())                            
+                                this->data.insert(std::make_pair(i.first, std::vector<t>( )));                            
+
+                            return;
+                      }
+
+                      /* Sets scope */
+                      void operator[](const std::shared_ptr<ast_dec::node> &node) {
+                      
+                          this->scopes.clear();
+
+                          const auto index = this->linked[node];
+                          for (const auto &i : index) 
+                                 this->scopes.push_back(i.first);
+                          
+                          return;
+                      }
+
+                      void push_back(const t data) {
+                        
+                          for (const auto &i : this->scopes) {
+                                  this->data[i].push_back(data);
+                          }
+                      
+                      }
+
+                      void find(const t target) {
+
+                            for (const auto &i : this->scopes) {
+
+                                  const auto vect = this->data[i];
+
+                                  if (std::find(vect.begin(), vect.end(), target) != vect.end()) {
+                                        return true;
+                                  }
+
+                            }
+
+                            return false;
+                      }
+
+                      /* Remove dupes */
+                      std::vector<t> vector() {
+
+                            std::vector<t> retn;
+
+                            for (const auto &i : this->scopes) {
+
+                                  const auto vect = this->data[i];
+
+                                  retn.insert(retn.end(), vect.begin(), vect.end());
+                              
+                            }
+
+                            std::sort(retn.begin(), retn.end());
+                            retn.erase(std::unique(retn.begin(), retn.end()), retn.end());
+
+                            return retn;
+                      }
+
+                    private:
+                      std::vector<std::shared_ptr<ast_dec::node> /* Begin*/> scopes;
+                      std::unordered_map<std::shared_ptr<ast_dec::node> /* Begin */, std::vector<t> /* Data */> data;
+                      class scope& linked;
 
                 };
 
@@ -152,6 +221,12 @@ namespace ast_funcs {
 
             /* Sets statements based on register stack. */
             void set_statements(std::shared_ptr<ast_dec::ast> &ast);
+
+            /* Gets list of all dests registers being set. **Dependent on for loop data** */
+            std::vector<std::uint16_t> get_dest_list(std::shared_ptr<ast_dec::ast> &ast, const std::shared_ptr<ast_dec::node> &node);
+
+            /* Sets register_scope_dest expr. */
+            void set_register_scope_dest_expr(std::shared_ptr<ast_dec::ast> &ast);
 
       } // namespace regs
 

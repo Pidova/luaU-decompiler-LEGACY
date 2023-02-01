@@ -161,6 +161,7 @@
     <ClCompile Include="decompiler\decompiler.cpp" />
     <ClCompile Include="decompiler\emitter\emitter.cpp" />
     <ClCompile Include="decompiler\generic\generic.cpp" />
+    <ClCompile Include="decompiler\ir\ir.cpp" />
     <ClCompile Include="decompiler\loss\loss.cpp" />
     <ClCompile Include="decompiler\transpiler\transpiler.cpp" />
     <ClCompile Include="dissassembler\Dissassembler.cpp" />
@@ -226,6 +227,7 @@
     <ClInclude Include="decompiler\decompiler.hpp" />
     <ClInclude Include="decompiler\emitter\emitter.hpp" />
     <ClInclude Include="decompiler\generic\generic.hpp" />
+    <ClInclude Include="decompiler\ir\ir.hpp" />
     <ClInclude Include="decompiler\loss\loss.hpp" />
     <ClInclude Include="decompiler\transpiler\transpiler.hpp" />
     <ClInclude Include="decompiler\debug.hpp" />

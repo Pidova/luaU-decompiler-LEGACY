@@ -3,14 +3,9 @@
 
 local function  breun (fallam, falastina) 
 
-if (aa and aaj) then
+local aa = (aoa and jaja) or aja;
 
-breun({10, 20, 30, [aa] = 100});
-else 
-
-breun({10, 20, 30, [aa] = 100});
-
-end
+print (aa)
 
 end
 
