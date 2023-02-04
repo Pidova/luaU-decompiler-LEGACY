@@ -66,7 +66,7 @@ namespace ast_dec {
 
             /* Goes by order */
             source_outside_scope, /* Source register set outside of scope that isn't an argument. [ALL] */
-            source_inside_scope, /* Source register set inside of scope. (Can also mean arg) [ALL] */
+            source_inside_scope, /* Source register set inside of scope. [ALL] */
 
             repeat_,   /* repeat [ALL] */
             while_,    /* while () follows condition(not jumpback). [ALL] */

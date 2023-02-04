@@ -1,5 +1,5 @@
 * Fix table issues.
 * Fix branch compare issues
-* Add register_scope_dest 
+* Implement arg set with dest/sources ast funcs
 * Add IR
 * Finish scope indexes make everything respect that

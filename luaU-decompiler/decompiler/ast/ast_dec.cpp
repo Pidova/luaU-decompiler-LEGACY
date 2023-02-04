@@ -24,8 +24,11 @@ namespace ast_init {
 #endif
             ast_funcs::loops::set_for_routines(ast);
 
+#if display_analysis
+            std::printf("[AST] Setting source scope exprs.\n");
+#endif
+            ast_funcs::regs::set_source_scope_expr(ast);
 
-            ast_funcs::regs::set_register_scope_dest_expr(ast);
 #if display_analysis
             std::printf("[AST] Setting call routines.\n");
 #endif
