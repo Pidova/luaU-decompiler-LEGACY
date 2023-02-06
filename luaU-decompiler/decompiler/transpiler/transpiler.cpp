@@ -238,8 +238,8 @@ namespace registers {
 
 namespace lv {
 
-      std::string smart_name(std::vector<registers::reg_scope> &regs, const std::shared_ptr<ast_dec::node> &node, const std::string &def) {
-
+      std::string smart_name(std::vector<registers::reg_scope> &regs, const std::shared_ptr<ast_dec::node> &node, const std::string &def, const bool smart_name) {
+           
             /* Go through exprs and decide. */
             for (const auto &expr : node->expr) {
 
@@ -260,27 +260,33 @@ namespace lv {
                               /* Compiled var name */
                               std::string compiled = "";
 
-                              /* example.example1 = example, **example1** */
-                              if (str::find<'.'>(str)) {
-                                    compiled = str::split<'.'>(str).back();
-                              }
+                              if (smart_name) {
 
-                              if (!compiled.empty()) { /* First so add : if any. */
+                                    /* example.example1 = example, **example1** */
+                                    if (str::find<'.'>(str)) {
+                                          compiled = str::split<'.'>(str).back();
+                                    }
 
-                                    if (str::find<':'>(str)) { /* example.example1:example2, example1_example2_??  */
-                                          compiled += "_" + str::split<':'>(str).back() + "_";
-                                    } else { /* No, ":" example.example1 example1_?? */
-                                          compiled += "_";
+                                    if (!compiled.empty()) { /* First so add : if any. */
+
+                                          if (str::find<':'>(str)) { /* example.example1:example2, example1_example2_??  */
+                                                compiled += "_" + str::split<':'>(str).back() + "_";
+                                          } else { /* No, ":" example.example1 example1_?? */
+                                                compiled += "_";
+                                          }
+
+                                    } else {
+
+                                          if (str::find<':'>(str)) { /* Compiled = "" example:example1, example_example1_?? */
+                                                const auto split = str::split<':'>(str);
+                                                compiled += split[split.size() - 2u] + "_" + split.back() + "_";
+                                          } else { /* call_?? */
+                                                compiled = str + "_";
+                                          }
                                     }
 
                               } else {
-
-                                    if (str::find<':'>(str)) { /* Compiled = "" example:example1, example_example1_?? */
-                                          const auto split = str::split<':'>(str);
-                                          compiled += split[split.size() - 2u] + "_" + split.back() + "_";
-                                    } else { /* call_?? */
-                                          compiled = str + "_";
-                                    }
+                                    compiled = "call_";
                               }
 
                               return compiled + std::to_string(suffixes::smart_variable_prefix++);
@@ -294,10 +300,12 @@ namespace lv {
                         case ast_dec::expr_type::arith: {
                               return "arith_" + std::to_string(suffixes::smart_variable_prefix++);
                         }
+    
 
                         default: {
-                              return def;
+                              break;
                         }
+
                   }
             }
 
@@ -371,7 +379,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
 
             /* Fix lv name. */
             if (node->has_expr(ast_dec::expr_type::locvar) && (config->smart_variable || !node->dest_loc.set_prefix) && !node->has_expr(ast_dec::expr_type::locvar_upvalue) && !(config_char(config))) {
-                  node->dest_loc.name = ((config->smart_variable) ? lv::smart_name(regs, node, config->variable_prefix) : node->dest_loc.name);
+                  node->dest_loc.name = ((config->smart_variable) ? lv::smart_name(regs, node, config->variable_prefix, config->smart_variable_name) : node->dest_loc.name);
                   node->dest_loc.set_prefix = true;
             }
 
@@ -480,13 +488,13 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
 
                                     emitter::compare(node->lex->dissassembly->op, node->branch_extra.opposite, regs.back()[flag_compare]->special.inside_expr, decompilation, (expr.first == ast_dec::expr_type::elseif_) ? "elseif" : "if", regs.back()[flag_compare]->data + cmp_1, cmp_2, config->emit_no_parenth_compare);
 
+                                    /* Clear compare flag. */
+                                    regs.back()[flag_compare]->clear(true);
+
                                     /* Only scope for if, elseif gets handled speratly. */
                                     if (expr.first == ast_dec::expr_type::if_) {
                                           regs.emplace_back(regs.back().clone());
                                     }
-
-                                    /* Clear compare flag. */
-                                    regs.back()[flag_compare]->clear(true);
 
                                     /* Add break */
                                     if (node->has_expr(ast_dec::expr_type::condition_break)) {

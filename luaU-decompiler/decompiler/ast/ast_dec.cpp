@@ -20,6 +20,16 @@ namespace ast_init {
             ast_funcs::loops::set_for_prep_exprs(ast);
 
 #if display_analysis
+            std::printf("[AST] Setting conditional filled exprs.\n");
+#endif
+            ast_funcs::branches::set_conditional_filled_exprs(ast);
+
+#if display_analysis
+            std::printf("[AST] Setting jumpout exprs.\n");
+#endif
+            ast_funcs::branches::set_jumpout_exprs(ast);
+
+#if display_analysis
             std::printf("[AST] Setting for routines.\n");
 #endif
             ast_funcs::loops::set_for_routines(ast);

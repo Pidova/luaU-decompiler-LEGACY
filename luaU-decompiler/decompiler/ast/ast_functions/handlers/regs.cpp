@@ -27,8 +27,9 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
       std::int8_t used_next = -1; /* Set dest next used source repeat always. */
       std::shared_ptr<ast_dec::node> dest_node = start;
       std::shared_ptr<ast_dec::node> dest_node_nm = start; /* Dest node non mutable by sources. */
-      std::int32_t dest_scope = 0u;                        /* Scope where dest was set. (Can be reset by source) */
-      std::int32_t set_scope = 0u;                         /* Scope where dest was set. (Cannot be reset by source) */
+      std::int32_t dest_scope = 0;                        /* Scope where dest was set. (Can be reset by source) */
+      std::int32_t set_scope = 0;                         /* Scope where dest was set. (Cannot be reset by source) */
+      std::int32_t source_scope = 0;
 
       debug_success("Starting with: %s", start->str().c_str());
 
@@ -41,7 +42,9 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
             /* Checks operands if targets get used or not but if it does get used just resets target. */
             bool used_source_twice = false;   /* Used by source twice. */
             bool used_source_routine = false; /* Used by source in routine. */
+
             std::function<void(const std::shared_ptr<LuaU_dissassembler::operand> &, const lexer_dec::operand_types)> check_usage = [&](const std::shared_ptr<LuaU_dissassembler::operand> &operand, const lexer_dec::operand_types tt) mutable {
+                 
                   const auto val = operand->reg;
 
                   if (val == target_1) {
@@ -60,6 +63,7 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                               return;
                         }
 
+                        /* */
                         debug_line("Reset data.");
 
                         used_target_1_source = true;
@@ -70,6 +74,7 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
 
                         dest_scope = 0;
                         dest_node = nullptr;
+                        source_scope = scope;
                   }
 
                   return;
@@ -85,7 +90,7 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
             scope -= s_node->count_expr<ast_dec::expr_type::scope_end>();
 
             /* Set but now used outside of scope. */
-            if (dest_scope > scope && scope > 0) {
+            if (dest_scope > scope && scope >= 0) {
                   debug_success("Used outside of scope valid register on %s", s_node->str().c_str());
                   no_locvar = false;
                   break;
@@ -164,7 +169,8 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
 
                         debug_line("Dest was hit on %s", s_node->str().c_str());
 
-                        if (routine) { /* Used in routine not locvar. */
+                        /* Used in routine not locvar. */
+                        if (routine) {
                               debug_warning("Register used as dest inside routine on %s", s_node->str().c_str());
                               no_locvar = true;
                               break;
@@ -177,12 +183,20 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                               break;
                         }
 
+                        /* Source scope isn't current scope. */
+                        if (source_scope != scope) {
+                              debug_success("Source scope doesn't equal scope %s", s_node->str().c_str());
+                              no_locvar = false;
+                              break;
+                        }
+
                         used_target_1_dest = true;
                         used_target_1_source = false;
                         dest_node = s_node;
                         dest_node_nm = s_node;
                         set_scope = std::int32_t (scope);
                         dest_scope = std::int32_t (scope);
+                        source_scope = 0u;
                   }
             }
       }
@@ -394,7 +408,6 @@ std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_
       return retn;
 }
 
-
 /* Sets register_scope_dest expr. */
 void ast_funcs::regs::set_source_scope_expr(std::shared_ptr<ast_dec::ast> &ast) {
 
@@ -425,4 +438,61 @@ void ast_funcs::regs::set_source_scope_expr(std::shared_ptr<ast_dec::ast> &ast) 
     }
 
     return;
+}
+
+/* Register is used twice by either source or dest without being reset by either vice versa. */
+bool ast_funcs::regs::reg_used_twice(std::shared_ptr<ast_dec::ast> &ast, const std::shared_ptr<ast_dec::node> &start, const std::uint16_t target, const bool same_start /* Dest hit and start are the same? */) {
+
+    bool source = false;
+    bool dest = false;
+
+    std::shared_ptr<ast_dec::node> last_dest = nullptr;
+    const auto rest = ast->main_block->visit_rest_curr(start->address);
+
+    for (const auto &i : rest) {
+    
+        for (const auto reg : ast_funcs::regs::get_dest_list(ast, i)) {
+        
+            if (reg == target) {
+
+                    if (dest) {
+
+                          if (same_start) {
+                                return (last_dest == start) ? true : false;
+                          } else {
+                                return true;
+                          }
+                    }
+
+                    dest = true;
+                    source = false;
+                    last_dest = start;
+
+              }
+
+        }
+        
+        for (const auto reg : ast_funcs::regs::get_dest_list(ast, i)) {
+
+             if (reg == target) {
+
+                    if (source) {
+
+                          if (same_start) {
+                                return (last_dest == start) ? true : false;
+                          } else {
+                                return true;
+                          }
+                    }
+
+                    dest = false;
+                    source = true;
+
+              }
+
+        }
+
+    }
+
+    return false;
 }

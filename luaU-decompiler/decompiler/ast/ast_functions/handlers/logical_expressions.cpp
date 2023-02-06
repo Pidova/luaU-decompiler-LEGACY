@@ -27,7 +27,7 @@ void ast_funcs::logical::set_logical_expression(std::shared_ptr<ast_dec::ast> &a
                   i->remove_expr<ast_dec::expr_type::dead_instruction>();
 
                   /* Set logical operations. */
-                  ast_funcs::branches::set(ast, start_node->address, i->address, {target_cond->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr}, -1, true, true);
+                  ast_funcs::branches::set(ast, start_node->address, i->address, {target_cond->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr}, -1, true, true, true);
 
                   /* Remove emitted next */
                   target_cond->remove_expr<ast_dec::expr_type::condition_emit_next>();
@@ -123,6 +123,7 @@ void ast_funcs::logical::set_logical_expression(std::shared_ptr<ast_dec::ast> &a
                               throw std::runtime_error("target_cond returned nullptr.");
                         }
 
+                        --count;
                         set();
                   }
 

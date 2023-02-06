@@ -8,16 +8,13 @@
 #include <iostream>
 #include <sstream>
 
-#if _USRDLL
-
-#endif
-
 /* Throw any string as argument to compile */
 std::string compile(const char *const code) {
 
       /* Transpiler config */
       const auto config = std::make_shared<transpiler_data::transpiler_config>();
       config->post_loss = false;
+
 
       /* Compilation data */
       std::size_t size = 0u;

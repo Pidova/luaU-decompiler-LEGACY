@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include <optional>
 
 
 
@@ -65,8 +66,8 @@ namespace ast_dec {
             for_prep,     /* For preperation instruction [AST] */
 
             /* Goes by order */
-            source_outside_scope, /* Source register set outside of scope that isn't an argument. [ALL] */
-            source_inside_scope, /* Source register set inside of scope. (Can also mean arg) [ALL] */
+            source_outside_scope, /* Source register declared outside of scope that isn't an argument. [ALL] */
+            source_inside_scope, /* Source register declared inside of scope. (Can also mean arg) [ALL] */
 
             repeat_,   /* repeat [ALL] */
             while_,    /* while () follows condition(not jumpback). [ALL] */
@@ -85,6 +86,10 @@ namespace ast_dec {
             conditional_expression_start,     /* Conditional expression routine start. [AST] */
             conditional_expression_end,       /* Conditional expression routine end. (Compare flag gets sets in dest(Hard coded else for LOP_LOADB/LOP_GETIMPORT(no src reg))) [AST] */
             conditional_expression_end_emit,  /* Same as conditonal_expression_end but it emits data too the end of compare flag [TRANSPILER]*/
+
+            conditonal_filled_not_used,       /* Condition is, "filled" with no other registers besides the compares or ones that dont get used outside of condition scope without being set **Doesn't garunteed anything**. [AST] */
+            conditonal_jumps_out,       /* Condition jumps out of current scope (Ignores break). [AST] */
+            conditional_break, /* Condition breaks out of loop but doesn't garunteed a break. [AST] */
 
             if_,                     /* if () [ALL] */
             elseif_,                 /* elseif () [ALL] */
@@ -145,7 +150,7 @@ namespace ast_dec {
 
       struct node {
 
-            std::uintptr_t address = 0u; /* Address. */
+            std::uintptr_t address = 0u; /* Address */
 
             std::vector<std::pair<expr_type, std::size_t /* Count usally used for ends, repeat, etc. */>> expr = {{expr_type::lex, 0u}}; /* Expression types. (Follows order) *All will get emmited(str). */
 
@@ -159,7 +164,7 @@ namespace ast_dec {
 
             /* Extra information for branch. */
             struct branch_extra {
-                  bool opposite = false; /* Opposite compare from opcode. */
+                  bool opposite = false; /* Aka truth, opposite compare from opcode. */
             } branch_extra;
 
             /* Extra information for tables. */
@@ -562,6 +567,19 @@ namespace ast_dec {
                               break;
                         }
 
+                        case expr_type::conditonal_filled_not_used: {
+                              retn += "conditonal_filled_not_used";
+                              break;
+                        }
+                        case expr_type::conditonal_jumps_out: {
+                            retn += "conditonal_jumps_out";
+                            break;
+                        }
+                        case expr_type::conditional_break: {
+                              retn += "conditional_break";
+                              break;
+                        }
+
                         case expr_type::if_: {
                               retn += "if";
                               break;
@@ -896,6 +914,51 @@ namespace ast_dec {
                   return retn;
             }
 
+            /* Visits first/all types in a scope. */
+            template <lexer_dec::inst_type type>
+            std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_type_scope(const bool all /* All nodes with instruction. */, const bool ignore_branch = true /* Ignores branches not compare */) {
+
+                  std::uintptr_t ignore_till = 0u;
+                  std::vector<std::shared_ptr<node>> retn;
+
+                  /* Iterate through all nodes and find given type. */
+                  const auto all_nodes = this->visit_all();
+                  for (const auto &i : all_nodes) {
+
+                        if (i->address >= ignore_till) {
+
+                              ignore_till = 0u;
+
+                              if (i->lex->type == type) {
+
+                                    if (all) { /* Passed all so emplace node. */
+                                          retn.emplace_back(i);
+                                    } else { /* Not all so return node. */
+                                          return i;
+                                    }
+                              }
+
+                        }
+                        
+                        if (!ignore_till && i->lex->type == lexer_dec::inst_type::branch_condition) {
+                              ignore_till = i->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+                        }
+
+                        if (!ignore_till && i->lex->type == lexer_dec::inst_type::branch && !ignore_branch) {
+                              ignore_till = i->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+                        }
+
+                  }
+
+#if display_warnings
+                  if (retn.empty()) {
+                        std::printf("[WARNING] Visit_type returned empty for all.\n");
+                  }
+#endif
+
+                  return retn;
+            }
+
             /* Visits next/all types in a block. (Ignores current) */
             template <lexer_dec::inst_type type>
             std::variant<std::vector<std::shared_ptr<node>>, std::shared_ptr<node>> visit_type_next_addr(const bool all /* All nodes with instruction. */, const std::uintptr_t addr) {
@@ -936,6 +999,24 @@ namespace ast_dec {
                   for (const auto &i : all_nodes) {
 
                         if (i->lex->type == type && i->address <= target) {
+                              retn = i;
+                        }
+                  }
+
+                  return retn;
+            }
+
+            /* Visits previous type from an address. (Ignores current) */
+            template <lexer_dec::inst_type type>
+            std::shared_ptr<node> visit_prev_type(const std::uintptr_t target) {
+
+                  std::shared_ptr<node> retn = nullptr;
+
+                  /* Iterate through all nodes and find given type. */
+                  const auto all_nodes = this->visit_all();
+                  for (const auto &i : all_nodes) {
+
+                        if (i->lex->type == type && i->address < target) {
                               retn = i;
                         }
                   }
@@ -1173,7 +1254,7 @@ namespace ast_dec {
 
             /* Visits all inst type in range. (Includes being, end) */
             template <lexer_dec::inst_type inst>
-            std::vector<std::shared_ptr<node>> visit_range_type(const std::uintptr_t begin, const std::uintptr_t end) {
+            std::vector<std::shared_ptr<node>> visit_range_type_current(const std::uintptr_t begin, const std::uintptr_t end) {
 
                   std::vector<std::shared_ptr<node>> retn;
 
@@ -1182,6 +1263,24 @@ namespace ast_dec {
                   for (const auto &i : all_nodes) {
 
                         if (i->address >= begin && i->address <= end && i->lex->type == inst) {
+                              retn.emplace_back(i);
+                        }
+                  }
+
+                  return retn;
+            }
+
+             /* Visits all inst type in range. (Ignores being, end) */
+            template <lexer_dec::inst_type inst>
+            std::vector<std::shared_ptr<node>> visit_range_type(const std::uintptr_t begin, const std::uintptr_t end) {
+
+                  std::vector<std::shared_ptr<node>> retn;
+
+                  /* Iterate through block nodes and find given instruction. */
+                  const auto all_nodes = this->visit_all();
+                  for (const auto &i : all_nodes) {
+
+                        if (i->address > begin && i->address < end && i->lex->type == inst) {
                               retn.emplace_back(i);
                         }
                   }
@@ -1642,7 +1741,7 @@ namespace ast_dec {
                   return retn;
             }
 
-            /* Visits all nodes between addresses (Includes curren, end) */
+            /* Visits all nodes between addresses (Includes current, end) */
             std::vector<std::shared_ptr<node>> visit_range_current(const std::uintptr_t start, const std::uintptr_t end) {
 
                   std::vector<std::shared_ptr<node>> retn;
@@ -1658,7 +1757,7 @@ namespace ast_dec {
 
                   /* Nothing. */
                   if (retn.empty()) {
-                        throw std::runtime_error("Returning no data for visit_range.");
+                        throw std::runtime_error("Returning no data for visit_range_current.");
                   }
 
                   return retn;
@@ -1756,6 +1855,11 @@ namespace ast_dec {
                         return sources->lex->has_operand_expr<lexer_dec::operand_types::dest>();
                   }
 
+                   /* Same for source */
+                  if (start->address == sources->address) {
+                        return true;
+                  }
+
                   /* No dest */
                   if (!start->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
                         return false;
@@ -1763,7 +1867,7 @@ namespace ast_dec {
 
                   /* Go through each source too see if they fill wil single instruction. */
                   if (!sources->source_nodes.empty()) {
-
+                       
                         vect.insert(vect.begin(), sources->source_nodes.begin(), sources->source_nodes.end());
 
                         do {
@@ -1802,7 +1906,7 @@ namespace ast_dec {
                         } while (vect.size());
 
                   }
-
+                  
                   /* Check all anlyzed addresses make sure they fill. */
                   bool fill = false;
                   auto on = start;
@@ -2094,8 +2198,18 @@ namespace ast_dec {
 
                   return retn;
             }
-
 #endif
+        
+          std::string str() {
+
+                std::string retn = "";
+
+                const auto all = this->main_block->visit_all();
+                for (const auto &node : all)
+                      retn += node->str<ast_dec::str_type::all>() + "\n";
+
+                return retn;
+          }
 
           private:
             std::map<std::uintptr_t /* Start */, std::shared_ptr<block>> block_map;

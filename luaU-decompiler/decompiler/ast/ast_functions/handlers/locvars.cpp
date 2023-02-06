@@ -254,6 +254,7 @@ void ast_funcs::locvars::set_lv(std::shared_ptr<ast_dec::ast> &ast, const std::u
 */
 void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &ast) {
 
+
       /* Max jump out of jump compare with not being break(pre). */
       auto jump_out = [&](const std::uintptr_t start, const std::uintptr_t end) mutable -> std::shared_ptr<ast_dec::node> {
             /* See if jump inside jump jumps out. */
@@ -313,7 +314,9 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
 
                         do {
 
+
                               debug_success("Starting with node %s", i->str().c_str());
+
 
                               /* Attempts to prevent bugs. */
                               if (node_hit != i) {
@@ -333,11 +336,15 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                     node_nit_b = true;
                               }
 
-                              /* Get next branch jump. */
+
+
+                              /* Get next branch jump */
                               if (i->lex->dissassembly->op == LuauOpcode::LOP_LOADB) {
                                     i = ast->main_block->visit_next(i);
                                     debug_line("Mutated loadb i node too %s", i->str().c_str());
                               }
+
+
 
                               /* No compare routine */
                               if (!i->has_expr(ast_dec::expr_type::condition_routine_start) && !i->has_expr(ast_dec::expr_type::condition_routine_end) && !i->has_expr(ast_dec::expr_type::condition_routine)) {
@@ -345,11 +352,15 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                     break;
                               }
 
+
+
                               /* Get next compare jump if current isnt one. */
                               if (i->lex->type != lexer_dec::inst_type::branch_condition) {
                                     i = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type_addr<lexer_dec::inst_type::branch_condition>(i->address, false));
                                     debug_line("Current wasn't compare changed too %s", i->str().c_str());
                               }
+
+
 
                               /* Not a compare branch something went wrong. */
                               if (i == nullptr || i->lex->type != lexer_dec::inst_type::branch_condition) {
@@ -357,7 +368,9 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                     break;
                               }
 
-                              auto current_jmp = i->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
+
+                              auto current_jmp = i->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr; /* Current jump target address. */
+
 
                               /* Check range for return if there is a return if else return not also if concat. */
                               bool retn = false;
@@ -368,11 +381,12 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                           break;
                                     }
                               }
-                              /* Not concat */
-                              if (retn) {
+                              if (retn) { /* Not concat */
                                     debug_warning("Has return, not concat.");
                                     break;
                               }
+
+
 
                               /* Check next jump and current for different breaks. */
                               const auto next_jmp = std::get<std::shared_ptr<ast_dec::node>>(ast->main_block->visit_next_type_addr<lexer_dec::inst_type::branch_condition>(i->address, false));
@@ -390,6 +404,7 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                           }
                                     }
                               }
+
 
                               /* Get any jumps that jumps out of current jump and isnt a break. */
                               std::shared_ptr<ast_dec::node> jump_out_n = nullptr;
@@ -446,7 +461,9 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                                 if (!compares_double.empty() && compares_double.front() == t_vect.front() && compares_double.back() == t_vect.back()) {
                                                       compares_double.clear(); /* Hit */
                                                 }
+
                                           }
+
                                     }
 
                                     /* Make sure compare has 2 compares. */
@@ -466,6 +483,7 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                                 debug_line("Next is loadb.");
                                                 continue;
                                           }
+
                                     }
 
                                     const auto next = ast->main_block->visit_next(i);
@@ -536,7 +554,6 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                                       break;
                                                 }
 
-                                          } else {
                                           }
 
                                     } else {
@@ -549,7 +566,8 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                           if (next_inst == nullptr) {
                                                 debug_warning("Next instruction is nullptr.");
                                                 break;
-                                          } else if (next_jmp == nullptr) {
+                                          }  
+                                          if (next_jmp == nullptr) {
 
                                                 debug_warning("Next jump is nullptr.");
 
@@ -677,12 +695,15 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                           /* Next leads too routine */
                                           if (next_inst->has_expr(ast_dec::expr_type::condition_routine_start) || next_inst->has_expr(ast_dec::expr_type::condition_routine_end) || next_inst->has_expr(ast_dec::expr_type::condition_routine)) {
 
+                                                debug_line("Next leads to condition for %s", next_inst->str().c_str());
+
                                                 /* Check loadbs */
 
                                                 const auto next = ast->main_block->visit_addr(i->address + i->lex->dissassembly->len);
 
                                                 /* Nothing */
                                                 if (next == nullptr) {
+                                                      debug_warning("Next is nullptr.");
                                                       break;
                                                 }
 
@@ -736,6 +757,8 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                                             }
                                                       }
                                                 }
+
+
                                           }
 
                                           /* Check all jump conditions within jump and see if any hit jump to current jump target and all conditions are all filled. */
@@ -751,6 +774,24 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                                                 }
                                           }
 
+                                          /* Next conditional */
+                                          if (next_inst->has_expr(ast_dec::expr_type::conditonal_filled_not_used)) {
+                                                debug_result("Next inst is filled for %s", next_inst->str().c_str());
+                                                i = next_jmp;
+                                                continue;
+                                          }
+
+                                          /* Check next jump loc previous for jumpout. */
+                                          const auto next_loc_prev_jmp = ast->main_block->visit_previous_addr(next_jmp->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
+                                          if (next_loc_prev_jmp->has_expr(ast_dec::expr_type::conditonal_jumps_out)) {
+
+                                                debug_result("Next jump loc previous jumps out for %s", next_jmp->str().c_str());                    
+                                                i = ast->main_block->visit_prev_type<lexer_dec::inst_type::branch_condition>(next_loc_prev_jmp->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr);
+                                                
+                                                continue;
+                                          }
+
+                                          debug_warning("Couldn't find anything, breaking for %s", i->str().c_str());
                                           break;
                                     }
                               }
@@ -771,6 +812,7 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
 
                                     i = prev;
                                     debug_result("Mutated current too %s", i->str().c_str());
+
                               }
                         }
 
@@ -790,7 +832,7 @@ void ast_funcs::locvars::set_logical_operations(std::shared_ptr<ast_dec::ast> &a
                               }
                         }
 
-                        debug_line("Adding condition logical exprs too members range from %s - %s", cached_init->str().c_str(), i->str().c_str());
+                        debug_line("Adding condition logical exprs too members range from %s -  %s", cached_init->str().c_str(), i->str().c_str());
 
                         /* Members */
                         const auto range = ast->main_block->visit_range(cached_init->address, i->address);

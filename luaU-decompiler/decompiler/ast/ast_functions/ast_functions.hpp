@@ -274,6 +274,9 @@ namespace ast_funcs {
             /* Sets source scope exprs. */
             void set_source_scope_expr(std::shared_ptr<ast_dec::ast> &ast);
 
+            /* Register is used twice by either source or dest without being reset by either vice versa. */
+            bool reg_used_twice(std::shared_ptr<ast_dec::ast> &ast, const std::shared_ptr<ast_dec::node> &start, const std::uint16_t target, const bool same_start = false /* Dest hit and start are the same? */);
+
       } // namespace regs
 
       namespace upvalues {
@@ -291,7 +294,7 @@ namespace ast_funcs {
       namespace branches {
 
             /* Set logical operations in routine with given range. */
-            void set(std::shared_ptr<ast_dec::ast> &ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector<std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */, const bool check_loops = false /* Checks jumps too see if they lead too loop by expr and preform opposite. */, const bool last_include = false /* Includes last compare as or. */);
+            void set(std::shared_ptr<ast_dec::ast> &ast, const std::uintptr_t begin, const std::uintptr_t end, const std::vector<std::uintptr_t> dead /* Always opposite and when hit. */, const std::int16_t logical_operation_target = -1 /* Used for ignoring ands/ors. */, const bool check_loops = false /* Checks jumps too see if they lead too loop by expr and preform opposite. */, const bool last_include = false /* Includes last compare as or. */, const bool logical_operation = false /* ??? */);
 
             /* Sets valid branch routines for a range with expr: "condition_routine" */
             void set_valid_branch_routine(std::shared_ptr<ast_dec::ast> &ast);
@@ -305,6 +308,12 @@ namespace ast_funcs {
 			 * Sets breaks too if not there.
 		*/
             void set_branch_statements(std::shared_ptr<ast_dec::ast> &ast);
+
+            /* Sets conditional filled expr. */
+            void set_conditional_filled_exprs(std::shared_ptr<ast_dec::ast> &ast);
+
+            /* Sets jumpout exprs. */
+            void set_jumpout_exprs(std::shared_ptr<ast_dec::ast> &ast);
 
       } // namespace branches
 

@@ -31,7 +31,8 @@ namespace transpiler_data {
             bool include_data = false;   /* Includes bytecode, disasm per line */
 
             /* Misc */
-            bool smart_variable = false; /* "Smart" variable names. **Ignores prefix(unless unkown) but keeps suffix** */
+            bool smart_variable = false; /* "Smart" variable names. **Ignores prefix(unless unkown) but keeps suffix as integer** (Won't do anything if suffixs chars config are enabled) */
+            bool smart_variable_name = false; /* Same as smart variable but both must be true for suffix names. */
 
             /* Calculates loss of original and current decompilation. */
             bool post_loss = false;

@@ -3,10 +3,18 @@
 
 #define debug_name "TRANSPILER-DEBUG"
 
-/* Flag */
+
+#pragma region flags
+
 #define flag_first -1
 #define flag_compare -1
 #define flag_mulret -2
+
+#pragma endregion Flags 
+
+
+
+#pragma region strings
 
 /* Macros */
 #define char_valid(ch) ((ch >= 0x30 /* '0' */ && ch <= 0x39 /* '9' */) || (ch >= 0x41 /* 'A' */ && ch <= 0x5A /* 'Z' */) || (ch >= 0x61 /* 'a' */ && ch <= 0x7A /* 'z' */) || ch == 0x5F /* _ */)
@@ -16,6 +24,12 @@
 
 /* Config has char suffix? */
 #define config_char(config) config->upvalue_suffix_char || config->arg_suffix_char || config->function_suffix_char || config->iteration_suffix_char || config->var_suffix_char
+
+#pragma endregion String macros
+
+
+
+#pragma region code 
 
 /* Appends source too compare flag or sets compare flag for source. */
 #define logical_expression_dest(node, regs, str)                                  \
@@ -34,3 +48,5 @@
                   regs.back()[flag_compare]->clear(true);                         \
             }                                                                     \
       };
+
+#pragma endregion Code used often by transpiler

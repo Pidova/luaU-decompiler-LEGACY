@@ -330,12 +330,21 @@ void ast_funcs::loops::set_whilerep_routines(std::shared_ptr<ast_dec::ast> &ast)
             for (const auto &node : nodes_routine) {
 
                   /* Break **Not definite jump to end of until routine or end of while can mean break of any conditional** */
-                  if (node->lex->dissassembly->op == LuauOpcode::LOP_JUMP || node->lex->dissassembly->op == LuauOpcode::LOP_JUMPX) {
+                  if (node->lex->type == lexer_dec::inst_type::branch) {
 
                         if (!node->has_expr(ast_dec::expr_type::break_) /* No break */ && node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
                               node->add_expr<ast_dec::expr_type::break_>();
                         }
                   }
+
+                  if (node->lex->type == lexer_dec::inst_type::branch_condition) {
+                  
+                      if (node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr > jumpback->address) {
+                              node->add_expr<ast_dec::expr_type::conditional_break>();
+                      }
+                      
+                  }
+
             }
       }
 
