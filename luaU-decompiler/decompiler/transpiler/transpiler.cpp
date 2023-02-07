@@ -716,6 +716,10 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                                     break;
                               }
 
+                              case ast_dec::expr_type::exit_pre: {
+                                    return decompilation;
+                              }
+
                               default: {
                                     break;
                               }
@@ -2204,6 +2208,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
 #if TANSPILER_DEBUG_POSTDECOMPILATION
             std::cout << "[transpiler.cpp] (post-decompilation): " << decompilation << std::endl;
 #endif
+
+            if (node->has_expr(ast_dec::expr_type::exit_post)) {
+                  return decompilation;
+            }
+
       }
 
       return decompilation;

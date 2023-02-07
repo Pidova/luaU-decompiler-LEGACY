@@ -10,6 +10,11 @@ namespace ast_init {
       void init_ast(std::shared_ptr<ast_dec::ast> &ast) {
 
 #if display_analysis
+            std::printf("[AST] Setting exit exprs.\n");
+#endif
+            ast_funcs::instructions::set_exit_exprs(ast);
+
+#if display_analysis
             std::printf("[AST] Setting table exprs.\n");
 #endif
             ast_funcs::tables::set_table_exprs(ast);

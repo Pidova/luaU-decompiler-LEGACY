@@ -435,6 +435,9 @@ namespace ast_funcs {
 
       namespace instructions {
 
+            /* Sets exit exprs. */
+            void set_exit_exprs(std::shared_ptr<ast_dec::ast> &ast);
+
       } // namespace instructions
 
 } // namespace ast_funcs

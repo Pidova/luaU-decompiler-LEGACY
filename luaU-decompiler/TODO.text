@@ -2,4 +2,4 @@
 * Fix branch compare issues
 * Implement arg set with dest/sources ast funcs
 * Add IR
-* Finish scope indexes make everything respect that
+* Fix arg issue

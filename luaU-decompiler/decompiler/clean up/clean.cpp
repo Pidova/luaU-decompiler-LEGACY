@@ -40,6 +40,7 @@ static const char *const prev_scope_expr[] = {
     "else"};
 
 static const char *const end_scope[] = {
+    "end)",
     "end",
     "until",
     "]]"};
@@ -150,7 +151,26 @@ void clean_up::buetify(std::string &decom) {
                               decom.insert(pos + 1, indent);
                   }
 
+            } else if (ch != '\n') {
+            
+                   /* Fix some stuff. */
+                   /* end) */
+                  if (!decom.compare(pos + 1u, std::strlen(end_scope[0]), end_scope[0])) {
+
+                         --multiplier;
+                         --table_multiplier;
+
+                          /* Fix mul */
+                         if (multiplier < 0)
+                               multiplier = 0;
+
+                         for (auto o = 0u; o < multiplier; ++o)
+                               decom.insert(pos + 1, indent);
+
+                  }
+
             }
+
       }
 
       return;

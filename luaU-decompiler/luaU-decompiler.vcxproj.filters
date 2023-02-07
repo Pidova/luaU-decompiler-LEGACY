@@ -435,7 +435,6 @@
   <ItemGroup>
     <None Include="..\README.md" />
     <None Include="..\Known Issues.text" />
-    <None Include="..\Internals.md" />
     <None Include="decompiler\ast\ast_functions\ast_functions.hpp" />
     <None Include="TODO.text" />
     <None Include=".clang-format" />

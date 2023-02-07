@@ -39,6 +39,11 @@ namespace ast_dec {
       enum class expr_type : std::uint8_t {
             lex, /* Specific type refer to lexer. [PLACEHOLDER] */
 
+            /* Set following return. */
+            exit_post, /* Exits decompilation after instruction. [TRANSPILER] */
+            exit_pre, /* Exits decompilation after instruction. [TRANSPILER] */
+            exit_dead, /* Instruction exits because of a return. [AST] */
+
             arith,  /* r1 += r1 + r1 [AST] */
             arithK, /* r1 += r1 + 1 [AST] */
 
@@ -136,6 +141,7 @@ namespace ast_dec {
             bad_instruction,  /* Instruction will never get executed no matter watch branch is taken or not. [AST] */
             dead_instruction, /* Instruction gets ignored. *Will run exprs but not instruction in transpiler. [TRANSPILER] */
             conditional       /* Condition flag will get written too dest. (Used for branching opcodes including loadb +jmp **Will clear compare flag if conditional is not loadb) [ALL] */
+     
       };
 
       enum class element {
@@ -417,6 +423,19 @@ namespace ast_dec {
 
                         case expr_type::lex: {
                               retn += "lex";
+                              break;
+                        }
+
+                        case expr_type::exit_post: {
+                              retn += "exit_post";
+                              break;
+                        }
+                        case expr_type::exit_pre: {
+                              retn += "exit_pre";
+                              break;
+                        }
+                        case expr_type::exit_dead: {
+                              retn += "exit_dead";
                               break;
                         }
 
@@ -817,7 +836,7 @@ namespace ast_dec {
 
                         /* Add nested blocks. */
                         for (const auto &i : current_block->branches)
-                              scopes.emplace_back(i.get());
+                              scopes.emplace_back(i.get());                  
 
                         /* Remove current. */
                         scopes.erase(std::remove(scopes.begin(), scopes.end(), current_block), scopes.end());

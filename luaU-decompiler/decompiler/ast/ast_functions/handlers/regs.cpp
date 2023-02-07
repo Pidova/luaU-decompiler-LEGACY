@@ -24,12 +24,12 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
       bool used_target_1_dest = true;
       bool used_target_1_source = false;
       bool no_locvar = true;
+      bool return_ = false; /* Analysys ended on return? */
       std::int8_t used_next = -1; /* Set dest next used source repeat always. */
       std::shared_ptr<ast_dec::node> dest_node = start;
       std::shared_ptr<ast_dec::node> dest_node_nm = start; /* Dest node non mutable by sources. */
       std::int32_t dest_scope = 0;                        /* Scope where dest was set. (Can be reset by source) */
       std::int32_t set_scope = 0;                         /* Scope where dest was set. (Cannot be reset by source) */
-      std::int32_t source_scope = 0;
 
       debug_success("Starting with: %s", start->str().c_str());
 
@@ -63,7 +63,7 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                               return;
                         }
 
-                        /* */
+                        /* Reset data */
                         debug_line("Reset data.");
 
                         used_target_1_source = true;
@@ -74,7 +74,6 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
 
                         dest_scope = 0;
                         dest_node = nullptr;
-                        source_scope = scope;
                   }
 
                   return;
@@ -98,7 +97,12 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
 
             /* Out of scope or last scope and hit return. */
             if (scope < 0 || (!scope && s_node->lex->type == lexer_dec::inst_type::return_)) {
-                  debug_line("Register use out of scope or hit return without scoped.");
+
+                  debug_line("Register use out of scope or hit return without scoped on %s", s_node->str().c_str());
+
+                  const auto source = ast_funcs::regs::get_source_list(ast, s_node);
+                  return_ = std::find(source.begin(), source.end(), target) != source.end();
+
                   break;
             }
 
@@ -179,14 +183,7 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                         /* Set twice without used. Locvar */
                         if (used_target_1_dest && set_scope == scope) {
                               debug_warning("Register was set twice without being used on %s", s_node->str().c_str());
-                              no_locvar = (dest_node != start);
-                              break;
-                        }
-
-                        /* Source scope isn't current scope. */
-                        if (source_scope != scope) {
-                              debug_success("Source scope doesn't equal scope %s", s_node->str().c_str());
-                              no_locvar = false;
+                              no_locvar = (dest_node != start && dest_scope > scope && scope >= 0);
                               break;
                         }
 
@@ -196,9 +193,14 @@ bool ast_funcs::regs::logical_dest_register(std::shared_ptr<ast_dec::ast> &ast, 
                         dest_node_nm = s_node;
                         set_scope = std::int32_t (scope);
                         dest_scope = std::int32_t (scope);
-                        source_scope = 0u;
                   }
             }
+      }
+
+      /* Ended used on return. */
+      if (return_) {
+            debug_warning("Not locvar used in return for end.");
+            return false;
       }
 
       /* Not used at all. */
@@ -340,6 +342,7 @@ std::vector<std::uint16_t> ast_funcs::regs::get_dest_list(std::shared_ptr<ast_de
 /* Gets list of all source registers being set. */
 std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_dec::ast> &ast, const std::shared_ptr<ast_dec::node> &node) {
 
+      bool ignore = false;
       std::vector<std::uint16_t> retn;
 
       /* Loops */
@@ -352,6 +355,24 @@ std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_
 
       switch (node->lex->dissassembly->op) {
 
+            case LuauOpcode::LOP_RETURN: {
+
+                  const auto dest = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
+                  auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+
+                  if (amt) {
+
+                        if (amt == -1)
+                              amt = node->lex->dissassembly->operands.front()->reg;
+
+                        for (auto a = dest; a < (dest + amt); ++a)
+                              retn.emplace_back(a);
+                  }
+
+                  ignore = true;
+
+                  break;
+            }
 
             case LuauOpcode::LOP_CALL: {
 
@@ -366,6 +387,8 @@ std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_
                   for (auto i = 0; i < args; ++i)         
                         retn.emplace_back(i + start + 1u);
 
+                  ignore = true;
+
                   break;
             }
 
@@ -373,6 +396,11 @@ std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_
                   break;
             }
 
+      }
+
+      /* Done */
+      if (ignore) {
+            return retn;
       }
 
       /* Append source */

@@ -8,8 +8,8 @@
 # Usage
 
     Code:
-        * If you wan't to test it out with code just go to main.cpp where it'll get compiled and decompiled and you can compare results.
-  
+        * If you wan't to test it out with code just go to compile_me.lua (MUST BE UTF-8) where it'll get compiled and decompiled and you can compare results.
+          
     Bytecode:
         * If you have something that has already been compiled just create a char point for it and pass it through luau_load get proto and make ast from it with     config. Just refer to main.cpp.
 
