@@ -315,6 +315,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                               dest_nodes_map.emplace_back(dest_nodes_map.back());
                         }
                   }
+
             }
 
             /* Used for main skips arguments set. */
@@ -358,7 +359,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                   }
 
                   /* Nothing */
-                  if (!hole_target) {
+                  if (hole_target < 0) {
                         return;
                   }
 
