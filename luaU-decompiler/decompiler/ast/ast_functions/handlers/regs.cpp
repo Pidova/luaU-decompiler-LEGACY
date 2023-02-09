@@ -302,7 +302,7 @@ std::vector<std::uint16_t> ast_funcs::regs::get_dest_list(std::shared_ptr<ast_de
                  bool namecall = false;
                  const auto prev = ast->main_block->visit_previous_addr(node->address);
 
-                 if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
+                 if (prev != nullptr && prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
 
                        namecall = (start == prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg);
          

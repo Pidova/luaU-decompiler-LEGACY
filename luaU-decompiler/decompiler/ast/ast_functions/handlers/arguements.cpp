@@ -11,18 +11,7 @@
 */
 void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
 
-      auto set_args = [&](const std::shared_ptr<ast_dec::ast> &proto, const bool dont_set = false /* Used for main moves. */) mutable {
-            std::vector<std::vector<std::uint32_t>> dests;                                                                      /* (Scoped) Registers used in dest. **getting written too** */
-            std::vector<std::uint32_t> dests_ns;                                                                                /* (NOT-Scoped) Registers used in dest. */
-            std::vector<std::vector<std::shared_ptr<ast_dec::node>>> dests_nodes;                                               /* (INIT) Dest nodes relative to dests (Can't be pair as too this is used for something entirely different from arguments) */
-            std::vector<std::unordered_map<std::uint16_t /* Reg */, std::shared_ptr<ast_dec::node> /* Node */>> dest_nodes_map; /* When reg was last set. */
-            std::vector<std::uint32_t> source_no_dest;                                                                          /* Registers used in source, value but not dest. **Not written too yet but been used** */
-            std::vector<std::uintptr_t> addr_scopes;                                                                            /* Scopes */
-
-            /* Emblace first */
-            dests.emplace_back(std::vector<std::uint32_t>({}));
-            dests_nodes.emplace_back(std::vector<std::shared_ptr<ast_dec::node>>({}));
-            dest_nodes_map.emplace_back(std::unordered_map<std::uint16_t /* Reg */, std::shared_ptr<ast_dec::node> /* Node */>({}));
+      auto set_args = [&](std::shared_ptr<ast_dec::ast> &proto, const bool dont_set = false /* Used for main moves. */) mutable {
 
             /* Already been analyzed. */
             if (!proto->arg_regs.empty()) {
@@ -30,292 +19,110 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
             }
 
             const auto all = proto->main_block->visit_all();
+            ast_funcs::scopes::scope_data::scope scope(proto, true);
+            scope = all;
+  
+            ast_funcs::scopes::scope_data::scope_vector<std::uint32_t> dests (scope);                                                                    /* (Scoped) Registers used in dest. **getting written too** */
+            ast_funcs::scopes::scope_data::scope_vector<std::shared_ptr<ast_dec::node>> dests_nodes (scope);                                              /* (INIT) Dest nodes relative to dests (Can't be pair as too this is used for something entirely different from arguments) */
+            ast_funcs::scopes::scope_data::scope_umap<std::uint16_t /* Reg */, std::shared_ptr<ast_dec::node> /* Node */> dests_nodes_map (scope); /* When reg was last set. */
+            std::vector<std::uint32_t> source_no_dest;                                                                          /* Registers used in source, value but not dest. **Not written too yet but been used** */
+            std::vector<std::uint32_t> dests_ns;                                                                                                                  /* (NOT-Scoped) Registers used in dest. */
+
+
             for (const auto &node : all) {
-
+                 
                   /* Fix scope */
-                  if (std::find(addr_scopes.begin(), addr_scopes.end(), node->address) != addr_scopes.end()) {
+                  dests[node];
+                  dests_nodes[node];
+                  dests_nodes_map[node];
+                  
+                  /* See if theres prep for for loop then add if so. */
+                  bool mutated = false;
+                  auto target_node = node;
+                  if (!target_node->has_expr(ast_dec::expr_type::for_prep)) {
 
-                        for (auto i = 0u; i < std::count(addr_scopes.begin(), addr_scopes.end(), node->address); ++i) {
-                              dests.pop_back();
-                              dests_nodes.pop_back();
-                              addr_scopes.pop_back();
-                              dest_nodes_map.pop_back();
+                        const auto prev = ast->main_block->visit_previous_addr(target_node->address);
+                        if (prev != nullptr && prev->has_expr(ast_dec::expr_type::for_prep)) {
+                                    target_node = prev;
+                                    mutated = true;
                         }
+                                    
                   }
-
-                  /* Loops are handled ahead of time as for child proto see if it has for loop and its start. */
-                  const auto for_node = node->loop_extra.end_node;
-                  if (for_node != nullptr && node->loop_extra.start_node == node) {
-
-                        /* Loop jumpback */
-                        addr_scopes.emplace_back(for_node->address);
-                        dests.emplace_back(dests.back());
-                        dests_nodes.emplace_back(dests_nodes.back());
-                        dest_nodes_map.emplace_back(dest_nodes_map.back());
-
-                        /* See if theres prep for for loop then add if so. */
-                        auto for_dest = node;
-                        if (!for_dest->has_expr(ast_dec::expr_type::for_prep)) {
-
-                              const auto prev = ast->main_block->visit_previous_addr(for_dest->address);
-                              if (prev->has_expr(ast_dec::expr_type::for_prep))
-                                    for_dest = prev;
-                        }
-
-                        /* Add vars from those loops. */
-                        for (auto i = node->loop_extra.end_node->loop_extra.start_reg; i <= node->loop_extra.end_node->loop_extra.end_reg; ++i) {
+                 
+                  /* Append dests */
+                  for (const auto dest : ast_funcs::regs::get_dest_list(ast, node)) {
 
                               /* Add node too dest_nodes_map. */
-                              if (dest_nodes_map.back().find(i) != dest_nodes_map.back().end()) {
-                                    dest_nodes_map.back()[i] = node;
+                              if (dests_nodes_map.find(dest)) {
+
+                                    for (auto &i : dests_nodes_map.get())
+                                          i[dest] = node;
                               } else {
-                                    dest_nodes_map.back().insert(std::make_pair(i, node));
+
+                                     dests_nodes_map.insert(std::make_pair(dest, node));
+
                               }
 
-                              if (std::find(dests.back().begin(), dests.back().end(), i) == dests.back().end()) { /* Didnt find dest */
-                                    dests.back().emplace_back(i);
-                                    dests_ns.emplace_back(i);
-                                    dests_nodes.back().emplace_back(for_dest);
+                              /* Set target nodes. */
+                              if (!dests.find(dest)) { /* Didn't find. */
+
+                                    /* Assign */
+                                    dests.push_back(dest);
+
+                                    dests_ns.emplace_back(dest);
+
+                                    dests_nodes.push_back(target_node);
+
                               } else { /* Found dest, mutate dest node. */
-                                    dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), i) - dests.back().begin()] = for_dest;
+
+                                    if (mutated) {
+
+                                          dests_nodes.idx_set(dests.index(dest), target_node);
+
+                                    } else {
+
+                                          node->dest_nodes_init.emplace_back(dests_nodes.idx_get(dests.index (dest)));
+                              
+                                    }
+
                               }
+
+                  }              
+
+                  /* Append sources */
+                  for (const auto source : ast_funcs::regs::get_source_list(ast, node)) {
+
+                        if (dests_nodes_map.find(source)) {
+
+                            node->source_nodes.emplace_back(dests_nodes_map.get().front()[source]);
+
                         }
+
+                        /* Append unused reg. */
+                        if (!dests.find(source) && std::find(source_no_dest.begin(), source_no_dest.end(), source) == source_no_dest.end()) {
+                              
+                              source_no_dest.emplace_back(source);
+
+                        } else if (dests.find(source)) {
+
+                              node->source_nodes_init.emplace_back(dests_nodes.idx_get(dests.index(source)));
+                        
+                        }
+
                   }
 
-                  switch (node->lex->dissassembly->op) {
+                  /* Add for move */
+                  if (node->lex->dissassembly->op == LuauOpcode::LOP_MOVE) {
 
-                        case LuauOpcode::LOP_RETURN: {
+                        const auto reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+                        if (dests.find(reg)) {
 
-                              const auto dest = node->lex->operand_expr<lexer_dec::operand_types::reg>().front()->reg;
-                              auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
+                              node->sub_node = dests_nodes.idx_get(dests.index(reg));
 
-                              if (amt) {
-
-                                    if (amt == -1)
-                                          amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
-
-                                    for (auto a = dest; a < (dest + amt); ++a)
-                                          if (std::find(dests.back().begin(), dests.back().end(), a) == dests.back().end()) {
-                                                dests.back().emplace_back(a);
-                                                dests_nodes.back().emplace_back(node);
-                                          } else {
-                                                node->dest_nodes_init.emplace_back(dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), a) - dests.back().begin()]);
-                                          }
-                              }
-
-                              break;
                         }
 
-                        case LuauOpcode::LOP_GETVARARGS: {
-
-                              const auto dest = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-                              auto amt = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
-
-                              if (amt == LUA_MULTRET) {
-                                    amt = (*(&node - 1u))->lex->dissassembly->operands.front()->reg;
-                              }
-
-                              if (amt == 0) {
-                                    amt = 1u;
-                              }
-
-                              for (auto a = dest; a < (dest + amt); ++a) {
-
-                                    /* Add node too dest_nodes_map. */
-                                    if (dest_nodes_map.back().find(a) != dest_nodes_map.back().end()) {
-                                          dest_nodes_map.back()[a] = node;
-                                    } else {
-                                          dest_nodes_map.back().insert(std::make_pair(a, node));
-                                    }
-
-                                    if (std::find(dests.back().begin(), dests.back().end(), a) == dests.back().end()) {
-                                          dests.back().emplace_back(a);
-                                          dests_ns.emplace_back(a);
-                                          dests_nodes.back().emplace_back(node);
-                                    } else {
-                                          node->dest_nodes_init.emplace_back(dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), a) - dests.back().begin()]);
-                                    }
-                              }
-
-                              break;
-                        }
-
-                        case LuauOpcode::LOP_CALL: {
-
-                              auto retn = node->lex->operand_expr<lexer_dec::operand_types::integer>().back()->val;
-                              auto args = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
-                              const auto start = node->lex->dissassembly->operands.front()->reg;
-
-                              /* Fix for multret. */
-                              if (args == LUA_MULTRET) {
-                                    args = (generic::fix_mulret(proto, node->address) - start);
-                              }
-
-                              if (retn == LUA_MULTRET) {
-                                    retn = generic::fix_mulret(proto, node->address);
-                              }
-
-                              /* Fix with namecall. */
-                              bool namecall = false;
-                              const auto prev = proto->main_block->visit_previous_addr(node->address);
-
-                              if (prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
-
-                                    const auto data = prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-
-                                    if (start == data) {
-                                          namecall = true;
-                                    }
-                              }
-
-                              /* Iterate through args and see if arg is not getting used in dest. */
-                              for (auto i = 0; i < args; ++i) {
-
-                                    /* Skip this */
-                                    if (!i && namecall) {
-                                          dests.back().emplace_back(i + 1u);
-                                          dests_nodes.back().emplace_back(prev);
-                                          continue;
-                                    }
-
-                                    const auto arg = (i + start + 1u);
-
-                                    if (std::find(dests.back().begin(), dests.back().end(), arg) == dests.back().end() &&
-                                        std::find(source_no_dest.begin(), source_no_dest.end(), arg) == source_no_dest.end()) {
-                                          source_no_dest.emplace_back(arg);
-                                    }
-                              }
-
-                              /* Append placement for call. */
-                              if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>() && std::find(dests.back().begin(), dests.back().end(), start) == dests.back().end() &&
-                                  std::find(source_no_dest.begin(), source_no_dest.end(), start) == source_no_dest.end()) {
-                                    source_no_dest.emplace_back(start);
-                              }
-
-                              /* Append to dest. (Fill for multiple retn) */
-                              for (auto i = start; i < (start + retn); ++i) {
-
-                                    /* Add node too dest_nodes_map. */
-                                    if (dest_nodes_map.back().find(i) != dest_nodes_map.back().end()) {
-                                          dest_nodes_map.back()[i] = node;
-                                    } else {
-                                          dest_nodes_map.back().insert(std::make_pair(i, node));
-                                    }
-
-                                    dests_ns.emplace_back(i);
-
-                                    if (std::find(dests.back().begin(), dests.back().end(), i) == dests.back().end()) {
-                                          dests.back().emplace_back(i);
-                                          dests_nodes.back().emplace_back(node);
-                                    }
-                              }
-
-                              break;
-                        }
-
-                        default: {
-
-                              /* Append source. */
-                              if (node->lex->has_operand_expr<lexer_dec::operand_types::source>()) {
-
-                                    const auto regz = node->lex->operand_expr<lexer_dec::operand_types::source>();
-
-                                    for (const auto &operand : regz) {
-
-                                          if (dest_nodes_map.back().find(operand->reg) != dest_nodes_map.back().end()) {
-                                                node->source_nodes.emplace_back(dest_nodes_map.back()[operand->reg]);
-                                          }
-
-                                          /* Append unused reg. */
-                                          if (std::find(dests.back().begin(), dests.back().end(), operand->reg) == dests.back().end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end()) {
-                                                source_no_dest.emplace_back(operand->reg);
-                                          } else if (std::find(dests.back().begin(), dests.back().end(), operand->reg) != dests.back().end()) {
-                                                node->source_nodes_init.emplace_back(dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), operand->reg) - dests.back().begin()]);
-                                          }
-                                    }
-                              }
-
-                              /* Append reg. */
-                              if (node->lex->has_operand_expr<lexer_dec::operand_types::reg>()) {
-
-                                    const auto regz = node->lex->operand_expr<lexer_dec::operand_types::reg>();
-
-                                    for (const auto &operand : regz) {
-
-                                          if (dest_nodes_map.back().find(operand->reg) != dest_nodes_map.back().end()) {
-                                                node->source_nodes.emplace_back(dest_nodes_map.back()[operand->reg]);
-                                          }
-
-                                          /* Append unused reg. */
-                                          if (std::find(dests.back().begin(), dests.back().end(), operand->reg) == dests.back().end() && std::find(source_no_dest.begin(), source_no_dest.end(), operand->reg) == source_no_dest.end()) {
-                                                source_no_dest.emplace_back(operand->reg);
-
-                                          } else if (std::find(dests.back().begin(), dests.back().end(), operand->reg) != dests.back().end()) {
-                                                node->source_nodes_init.emplace_back(dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), operand->reg) - dests.back().begin()]);
-                                          }
-                                    }
-                              }
-
-                              /* Append dest. */
-                              if (node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
-
-                                    const auto reg = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
-
-                                    /* Add node too dest_nodes_map. */
-                                    if (dest_nodes_map.back().find(reg) != dest_nodes_map.back().end()) {
-                                          dest_nodes_map.back()[reg] = node;
-                                    } else {
-                                          dest_nodes_map.back().insert(std::make_pair(reg, node));
-                                    }
-
-                                    dests_ns.emplace_back(reg);
-                                    if (node->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
-                                          dests_ns.emplace_back(reg + 1u);
-                                    }
-
-                                    if (std::find(dests.back().begin(), dests.back().end(), reg) == dests.back().end()) {
-
-                                          dests.back().emplace_back(reg);
-                                          dests_nodes.back().emplace_back(node);
-
-                                          /* Append this. */
-                                          if (node->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
-                                                dests.back().emplace_back(reg + 1u);
-                                                dests_nodes.back().emplace_back(node);
-                                          }
-
-                                    } else {
-                                          node->dest_nodes_init.emplace_back(dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), reg) - dests.back().begin()]);
-                                    }
-                              }
-
-                              /* Add for move */
-                              if (node->lex->dissassembly->op == LuauOpcode::LOP_MOVE) {
-
-                                    const auto reg = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
-                                    if (std::find(dests.back().begin(), dests.back().end(), reg) != dests.back().end()) {
-                                          node->sub_node = dests_nodes.back()[std::find(dests.back().begin(), dests.back().end(), reg) - dests.back().begin()];
-                                    }
-
-                              }
-
-                              break;
-                        }
                   }
-
-                  /* Append scope */
-                  if (node->lex->type == lexer_dec::inst_type::branch_condition) {
-
-                        /* Scope isnt jumpback? */
-                        const auto jmp_addr = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
-                        if (jmp_addr > node->address) {
-                              addr_scopes.emplace_back(jmp_addr);
-                              dests.emplace_back(dests.back());
-                              dests_nodes.emplace_back(dests_nodes.back());
-                              dest_nodes_map.emplace_back(dest_nodes_map.back());
-                        }
-                  }
-
+                  
             }
 
             /* Used for main skips arguments set. */
@@ -385,7 +192,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                         }
                   }
             }
-            
+
             /* Set args (fill stack) */
             for (auto reg = min; reg <= max; reg++)
                   proto->arg_regs.emplace_back(std::make_pair(reg, emitter::create::locvar_name(ast->transpiler_config->arg_prefix, reg, ast->transpiler_config->arg_suffix_char)));

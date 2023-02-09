@@ -4,3 +4,4 @@
 [ISSUE] - Compare issue opcodes, data
 [ISSUE] - Tables
 [TODO] - Add debug print too all ast functions
+[ISSUE] - no for loop for scope vector fix it
