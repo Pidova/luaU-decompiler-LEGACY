@@ -48,46 +48,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                         }
                                     
                   }
-                 
-                  /* Append dests */
-                  for (const auto dest : ast_funcs::regs::get_dest_list(ast, node)) {
-
-                              /* Add node too dest_nodes_map. */
-                              if (dests_nodes_map.find(dest)) {
-
-                                    for (auto &i : dests_nodes_map.get())
-                                          i[dest] = node;
-                              } else {
-
-                                     dests_nodes_map.insert(std::make_pair(dest, node));
-
-                              }
-
-                              /* Set target nodes. */
-                              if (!dests.find(dest)) { /* Didn't find. */
-
-                                    /* Assign */
-                                    dests.push_back(dest);
-
-                                    dests_ns.emplace_back(dest);
-
-                                    dests_nodes.push_back(target_node);
-
-                              } else { /* Found dest, mutate dest node. */
-
-                                    if (mutated) {
-
-                                          dests_nodes.idx_set(dests.index(dest), target_node);
-
-                                    } else {
-
-                                          node->dest_nodes_init.emplace_back(dests_nodes.idx_get(dests.index (dest)));
-                              
-                                    }
-
-                              }
-
-                  }              
+                         
 
                   /* Append sources */
                   for (const auto source : ast_funcs::regs::get_source_list(ast, node)) {
@@ -100,7 +61,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
 
                         /* Append unused reg. */
                         if (!dests.find(source) && std::find(source_no_dest.begin(), source_no_dest.end(), source) == source_no_dest.end()) {
-                              
+                              node->debug_print_dissassembly("NIGNOG");
                               source_no_dest.emplace_back(source);
 
                         } else if (dests.find(source)) {
@@ -110,6 +71,42 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                         }
 
                   }
+
+                                    /* Append dests */
+                  for (const auto dest : ast_funcs::regs::get_dest_list(ast, node)) {
+
+                        /* Add node too dest_nodes_map. */
+                        if (dests_nodes_map.find(dest)) {
+
+                              for (auto &i : dests_nodes_map.get())
+                                    i[dest] = node;
+                        } else {
+
+                              dests_nodes_map.insert(std::make_pair(dest, node));
+                        }
+
+                        /* Set target nodes. */
+                        if (!dests.find(dest)) { /* Didn't find. */
+
+                              /* Assign */
+                              dests.push_back(dest);
+
+                              dests_ns.emplace_back(dest);
+
+                              dests_nodes.push_back(target_node);
+
+                        } else { /* Found dest, mutate dest node. */
+
+                              if (mutated) {
+
+                                    dests_nodes.idx_set(dests.index(dest), target_node);
+
+                              } else {
+
+                                    node->dest_nodes_init.emplace_back(dests_nodes.idx_get(dests.index(dest)));
+                              }
+                        }
+                  }     
 
                   /* Add for move */
                   if (node->lex->dissassembly->op == LuauOpcode::LOP_MOVE) {
