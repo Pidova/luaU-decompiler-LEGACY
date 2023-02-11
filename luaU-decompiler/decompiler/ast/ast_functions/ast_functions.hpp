@@ -94,7 +94,18 @@ namespace ast_funcs {
                             std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Start */, std::shared_ptr<ast_dec::node> /* Jump */>> addr_scopes;       
 
                             for (const auto &node : dism) {
-                                 
+
+                                  /* Add for loop */
+                                  if (node->lex->dissassembly->op == LuauOpcode::LOP_FORGLOOP) {
+
+                                       addr_scopes.emplace_back(std::make_pair(this->linked_ast->main_block->visit_addr(node->address + node->lex->dissassembly->operands[1]->jmp /* Take exact jump */), node));
+
+                                  } else if (node->lex->dissassembly->op == LuauOpcode::LOP_FORNLOOP) {
+
+                                       addr_scopes.emplace_back(std::make_pair(this->linked_ast->main_block->visit_addr(node->lex->dissassembly->operands[1]->jmp_addr), node));
+
+                                  }
+                                  
                                   /* if (?? ?? ??) */
                                   if (node->lex->type == lexer_dec::inst_type::branch_condition) {
 
@@ -105,7 +116,7 @@ namespace ast_funcs {
                                         }
 
                                   }
-
+                                 
                                   /* jump ?? */
                                   if (node->lex->type == lexer_dec::inst_type::branch) {
                                         const auto jmp_addr = node->lex->operand_expr<lexer_dec::operand_types::memaddr>().front()->jmp_addr;
@@ -146,6 +157,7 @@ namespace ast_funcs {
 
                 };
 
+                /* Every vector is homogenous for repective scope. */
                 template <typename t>
                 class scope_vector {
 
@@ -177,13 +189,65 @@ namespace ast_funcs {
                           return;
                       }
 
-                      void push_back(const t data) {
+                      void push_back(const t& data) {
                         
-                          for (const auto &i : this->scopes)                               
-                              this->data[i].push_back(data);
+                          for (const auto &i : this->scopes) 
+                               this->data[i].push_back(data);
+                                             
                           
                           return;
                       }
+                      
+                      std::vector<std::vector<t>> raw() {
+                      
+                          std::vector<std::vector<t>> vect;
+
+                          for (const auto &i : this->scopes)
+                                vect.emplace_back(this->data[i]);
+
+                          return vect;
+                      }
+
+                      
+                      /* Find index of key. */
+                      std::size_t index(const t key) {
+                            const auto d_raw = this->raw().front();
+                            return std::find(d_raw.begin(), d_raw.end(), key) - d_raw.begin();
+                      }
+
+                      void idx_set(const std::size_t key, const t value) {
+                        
+                            auto d_raw = this->raw();
+                            for (auto &i : d_raw)
+                                  i[key] = value;
+                      }
+
+                      t idx_get(const std::size_t key) {
+                            const auto d_raw = this->raw().front();
+                            return d_raw[key];
+                      }
+
+                      std::vector<t> raw_collapse() {
+
+                            std::vector<t> vect;
+
+                            for (const auto &i : this->scopes)
+                                  for (const auto &d : this->data[i])
+                                        vect.emplace_back(d);
+
+                            return vect;
+                      }
+
+                      /* emblace_back */
+                      template<typename tt>
+                      void assign (const tt v) {
+
+                            for (const auto &i : this->scopes)
+                                  this->data[i].emblace_back(v);
+
+                            return;
+                      }
+
 
                       template <bool all = false /* all scopes */>
                       bool find(const t target) {
@@ -241,6 +305,100 @@ namespace ast_funcs {
                       std::unordered_map<std::shared_ptr<ast_dec::node> /* Begin */, std::vector<t> /* Data */> data;
                       class scope& linked;
 
+                };
+
+                /* Every unordered map is homogenous for repective scope. */
+                template <typename keyt, typename valuet>
+                class scope_umap {
+
+                    public:
+
+                      std::vector<std::unordered_map<keyt, valuet>> get() {
+
+                          std::vector<std::unordered_map<keyt, valuet>> retn;
+
+                          for (const auto &i : this->scopes)
+                                retn.emplace_back(this->data[i]);
+
+                          return retn;
+                      }
+
+                      scope_umap(class scope &s)
+                          : linked(s) {
+
+                            for (const auto &i : this->linked.get())
+                                  this->data.insert(std::make_pair(i.first, std::unordered_map<keyt /* Key */, valuet /* Value*/>()));
+
+                            return;
+                      }
+
+                      /* Sets scope */
+                      void operator[](const std::shared_ptr<ast_dec::node> &node) {
+
+                            this->scopes.clear();
+
+                            const auto index = this->linked[node];
+                            for (const auto &i : index)
+                                  this->scopes.push_back(i.first);
+
+                            return;
+                      }
+
+                      void insert(const std::pair<keyt, valuet>& p) {
+
+                            for (const auto &i : this->scopes)
+                                  this->data[i].insert(p);
+
+                            return;
+                      }
+
+                      std::vector<std::unordered_map<keyt, valuet>> raw() {
+
+                            std::vector<t> vect;
+
+                            for (const auto &i : this->scopes)
+                                  vect.emplace_back(this->data[i]);
+
+                            return vect;
+                      }
+
+                      template <bool all = false /* all scopes */>
+                      bool find(const keyt target) {
+
+                            if (!all) {
+
+                                  for (const auto &i : this->scopes) {
+
+                                        const auto map = this->data[i];
+
+                                        if (map.find(target) != map.end()) {
+                                              return true;
+                                        }
+
+                                  }
+
+                            } else {
+
+                                  for (const auto &i : this->linked.get()) {
+
+                                        const auto map = this->data[i.first];
+
+                                        if (map.find(target) != map.end()) {
+                                              return true;
+                                        }
+
+                                  }
+
+                            }
+
+                            return false;
+                      }
+
+
+                    private:
+                      std::vector<std::shared_ptr<ast_dec::node> /* Begin*/> scopes;
+                      std::unordered_map<std::shared_ptr<ast_dec::node> /* Begin */, std::unordered_map<keyt /* Key */, valuet /* Value*/> /* Data */> data;
+                      class scope &linked;
                 };
 
             }

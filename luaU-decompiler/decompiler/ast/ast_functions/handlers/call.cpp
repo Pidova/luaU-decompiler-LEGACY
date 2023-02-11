@@ -111,6 +111,14 @@ void ast_funcs::calls::set_multret_routines(std::shared_ptr<ast_dec::ast> &ast) 
                                     } else {
                                           node->add_expr<ast_dec::expr_type::call_mulret_member>();
                                     }
+
+                              }
+
+                              /* Adburpt end */
+                              if (!node->lex->has_operand_expr<lexer_dec::operand_types::dest>()) {
+                                    check_regs.clear();
+                                    node->add_expr<ast_dec::expr_type::call_mulret_end>();
+                                    break;
                               }
 
                               check_regs.erase(std::remove(check_regs.begin(), check_regs.end(), reg), check_regs.end());

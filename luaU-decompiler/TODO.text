@@ -1,5 +1,3 @@
 * Fix table issues.
 * Fix branch compare issues
-* Implement arg set with dest/sources ast funcs
 * Add IR
-* Fix arg issue
