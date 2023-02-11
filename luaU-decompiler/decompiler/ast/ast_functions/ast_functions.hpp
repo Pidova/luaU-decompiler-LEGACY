@@ -94,6 +94,17 @@ namespace ast_funcs {
                             std::vector<std::pair<std::shared_ptr<ast_dec::node> /* Start */, std::shared_ptr<ast_dec::node> /* Jump */>> addr_scopes;       
 
                             for (const auto &node : dism) {
+
+                                  /* Add for loop */
+                                  if (node->lex->dissassembly->op == LuauOpcode::LOP_FORGLOOP) {
+
+                                       addr_scopes.emplace_back(std::make_pair(this->linked_ast->main_block->visit_addr(node->address + node->lex->dissassembly->operands[1]->jmp /* Take exact jump */), node));
+
+                                  } else if (node->lex->dissassembly->op == LuauOpcode::LOP_FORNLOOP) {
+
+                                       addr_scopes.emplace_back(std::make_pair(this->linked_ast->main_block->visit_addr(node->lex->dissassembly->operands[1]->jmp_addr), node));
+
+                                  }
                                   
                                   /* if (?? ?? ??) */
                                   if (node->lex->type == lexer_dec::inst_type::branch_condition) {

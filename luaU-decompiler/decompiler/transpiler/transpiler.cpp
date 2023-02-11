@@ -1277,7 +1277,8 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                   case LuauOpcode::LOP_OR:
                   case LuauOpcode::LOP_AND: {
 
-                        const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+                        const auto dest_r = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+                        const auto dest = regs.back()[dest_r];
                         const auto sources = node->lex->operand_expr<lexer_dec::operand_types::source>();
 
                         const auto source_1 = regs.back()[sources.front()->reg]->data;
@@ -1290,7 +1291,16 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                         /* Vararg.*/
                         if (dest->type == registers::type::var || dest->type == registers::type::arg) {
 
-                              emitter::arith(node->lex->dissassembly->op, true, decompilation, source_1, source_2);
+                            if (dest_r == sources.front()->reg) {
+                                    emitter::arith(node->lex->dissassembly->op, true, decompilation, source_1, source_2);
+                            } else {
+
+                                  std::string compiled = "";
+
+                                  emitter::arith(node->lex->dissassembly->op, false, compiled, source_1, source_2);
+                                  emitter::vararg_equal(decompilation, dest->data, compiled);
+
+                            }
 
                         } else {
 
@@ -1309,6 +1319,7 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                                     dest->data.clear();
                                     emitter::arith(node->lex->dissassembly->op, false, dest->data, source_1, source_2);
                                     dest->set<registers::type::expr>(dest->data);
+
                               }
                         }
 
@@ -1324,9 +1335,11 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
                   case LuauOpcode::LOP_ORK:
                   case LuauOpcode::LOP_ANDK: {
 
-                        const auto dest = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg];
+                        const auto dest_r = node->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+                        const auto dest = regs.back()[dest_r];
 
-                        const auto source_1 = regs.back()[node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg]->data;
+                        const auto source_r = node->lex->operand_expr<lexer_dec::operand_types::source>().front()->reg;
+                        const auto source_1 = regs.back()[source_r]->data;
                         const auto source_2 = node->lex->operand_expr<lexer_dec::operand_types::kvalue>().front()->k_value;
 
                         std::string temp_compare = "";
@@ -1335,6 +1348,17 @@ std::string transpile_blocks(const std::shared_ptr<ast_dec::ast> &ast, const std
 
                         /* Vararg.*/
                         if (dest->type == registers::type::var || dest->type == registers::type::arg) {
+
+                               if (dest_r == source_r) {
+                                    emitter::arith(node->lex->dissassembly->op, true, decompilation, source_1, source_2);
+                              } else {
+
+                                    std::string compiled = "";
+
+                                    emitter::arith(node->lex->dissassembly->op, false, compiled, source_1, source_2);
+                                    emitter::vararg_equal(decompilation, dest->data, compiled);
+
+                              }
 
                               emitter::arith(node->lex->dissassembly->op, true, decompilation, source_1, source_2);
 

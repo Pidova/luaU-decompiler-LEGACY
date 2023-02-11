@@ -51,7 +51,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                          
 
                   /* Append sources */
-                  for (const auto source : ast_funcs::regs::get_source_list(ast, node)) {
+                  for (const auto source : ast_funcs::regs::get_source_list(proto, node)) {
 
                         if (dests_nodes_map.find(source)) {
 
@@ -61,7 +61,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
 
                         /* Append unused reg. */
                         if (!dests.find(source) && std::find(source_no_dest.begin(), source_no_dest.end(), source) == source_no_dest.end()) {
-                              node->debug_print_dissassembly("NIGNOG");
+                  
                               source_no_dest.emplace_back(source);
 
                         } else if (dests.find(source)) {
@@ -73,7 +73,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                   }
 
                                     /* Append dests */
-                  for (const auto dest : ast_funcs::regs::get_dest_list(ast, node)) {
+                  for (const auto dest : ast_funcs::regs::get_dest_list(proto, node)) {
 
                         /* Add node too dest_nodes_map. */
                         if (dests_nodes_map.find(dest)) {
@@ -87,7 +87,7 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
 
                         /* Set target nodes. */
                         if (!dests.find(dest)) { /* Didn't find. */
-
+                           
                               /* Assign */
                               dests.push_back(dest);
 
@@ -149,9 +149,8 @@ void ast_funcs::arguments::set(std::shared_ptr<ast_dec::ast> &ast) {
                         }
                   }
 
-                  if (start) {
-                        hole_target = start - 1;
-                  }
+                  hole_target = (start) ? (start - 1) : -1;
+
             }
 
             /* No dests->source */

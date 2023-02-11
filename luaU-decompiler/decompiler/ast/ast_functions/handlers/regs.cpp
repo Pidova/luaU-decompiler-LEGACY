@@ -345,12 +345,9 @@ std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_
       bool ignore = false;
       std::vector<std::uint16_t> retn;
 
-      /* Loops */
-      const auto for_node = node->loop_extra.end_node;
-      if (for_node != nullptr && node->loop_extra.start_node == node) {
-
-            for (auto i = node->loop_extra.end_node->loop_extra.start_reg; i <= node->loop_extra.end_node->loop_extra.end_reg; ++i)
-                  retn.emplace_back(i);
+      /* Ignore for. */
+      if (node->lex->type == lexer_dec::inst_type::for_) {
+            return retn;
       }
 
       switch (node->lex->dissassembly->op) {
@@ -375,7 +372,7 @@ std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_
             }
 
             case LuauOpcode::LOP_CALL: {
-
+               
                   auto args = node->lex->operand_expr<lexer_dec::operand_types::integer>().front()->val;
                   const auto start = node->lex->dissassembly->operands.front()->reg;
 
@@ -384,8 +381,31 @@ std::vector<std::uint16_t> ast_funcs::regs::get_source_list(std::shared_ptr<ast_
                         args = (generic::fix_mulret(ast, node->address) - start);
                   }
 
-                  for (auto i = 0; i < args; ++i)         
+                  
+                  /* Fix with namecall. */
+                  bool namecall = false;
+                  const auto prev = ast->main_block->visit_previous_addr(node->address);
+
+                  if (prev != nullptr && prev->lex->dissassembly->op == LuauOpcode::LOP_NAMECALL) {
+
+                        const auto data = prev->lex->operand_expr<lexer_dec::operand_types::dest>().front()->reg;
+
+                        if (start == data) {
+                              namecall = true;
+                        }
+
+                  }
+
+
+                  for (auto i = 0; i < args; ++i) {
+                  
+                        /* Skip this */
+                        if (!i && namecall) {
+                            continue;
+                        }
+
                         retn.emplace_back(i + start + 1u);
+                  }           
 
                   ignore = true;
 
