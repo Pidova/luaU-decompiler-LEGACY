@@ -1,9 +1,15 @@
 # luaU-decompiler
+As of 5/17/2026, it has been almost 5 years since I started working on decompiler design. 
+This project is one of my earliest attempts at building a full decompilation framework and was primarily used for me to learn how decompilers are made when I was around 15.
 
-As of 5/17/2026, it has been almost 5 years since I started making decompilers. This project is very poorly made and should only be referenced on how not to make a decompiler, somewhat.
-The only good aspect of this project is that the IL is really well made, and it is still used to this day in my newer decompiler. The idea of this project was to go from
-Bytecode -> IL -> AST -> IR -> Code gen, still kind of the same framework as my newer decompilers, just serves as mostly an attempt when I was around 15 and learning decompilers.
+The implementation is outdated compared to my current designs. However, it served an important role in the architecture I use today.
 
+The most valuable component of this project is the intermediate language (IL), 
+which was designed with a structured and reusable representation of program semantics. 
+This IL design has remained stable and continues to be reused in my newer decompiler project.
+
+The overall architecture follows a full translation pipeline: Bytecode -> IL -> AST -> IR -> Code generation. 
+While the early implementation of this pipeline was experimental, it directly informed the structure and design decisions of my current decompiler framework.
 
 
 # Description
