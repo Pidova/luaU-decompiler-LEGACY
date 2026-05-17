@@ -9,7 +9,7 @@ which was designed with a structured and reusable representation of program sema
 This IL design has remained stable and continues to be reused in my newer decompiler project.
 
 The overall architecture follows a full translation pipeline: Bytecode -> IL -> AST -> IR -> Code generation. 
-While the early implementation of this pipeline was experimental, it directly informed the structure and design decisions of my current decompiler framework.
+While the early implementation of this pipeline was experimental, it influenced the design of my current decompiler framework.
 
 
 # Description
